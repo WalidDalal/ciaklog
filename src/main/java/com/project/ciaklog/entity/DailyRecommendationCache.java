@@ -26,6 +26,7 @@ public class DailyRecommendationCache {
     @Column(name = "suggestions_json", nullable = false, columnDefinition = "TEXT")
     private String suggestionsJson;
 
+    // Aggiornato manualmente dal Service ad ogni rigenerazione (non @CreationTimestamp)
     @Column(name = "generated_at", nullable = false)
     private LocalDateTime generatedAt;
 }
