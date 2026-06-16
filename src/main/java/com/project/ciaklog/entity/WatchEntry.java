@@ -53,6 +53,7 @@ public class WatchEntry {
 
     private LocalDate watchedDate;
 
+    // Aggiornato manualmente dal Service ad ogni rigenerazione (non @CreationTimestamp)
     @Column(nullable = false)
     private LocalDateTime lastStatusUpdate;
 
