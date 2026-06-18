@@ -19,14 +19,14 @@ public class DailyRecommendationCache {
     @GeneratedValue(strategy = GenerationType.UUID)
     private UUID id;
 
-    @OneToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "user_id", nullable = false, unique = true)
-    private User user;
-
     @Column(name = "suggestions_json", nullable = false, columnDefinition = "TEXT")
     private String suggestionsJson;
 
     // Aggiornato manualmente dal Service ad ogni rigenerazione (non @CreationTimestamp)
     @Column(name = "generated_at", nullable = false)
     private LocalDateTime generatedAt;
+
+    @OneToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "user_id", nullable = false, unique = true)
+    private User user;
 }
