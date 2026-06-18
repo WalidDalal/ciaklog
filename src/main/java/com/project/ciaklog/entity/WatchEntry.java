@@ -23,10 +23,6 @@ public class WatchEntry {
     @GeneratedValue(strategy = GenerationType.UUID)
     private UUID id;
 
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "user_id", nullable = false)
-    private User user;
-
     @Column(name = "tmdb_id", nullable = false)
     private Long tmdbId;
 
@@ -39,10 +35,10 @@ public class WatchEntry {
 
     private String posterPath;
 
-    private Integer releaseYear;
-
     // CSV di generi, risolti dai genre id TMDB al momento dell'aggiunta
     private String genres;
+
+    private Integer releaseYear;
 
     @Column(nullable = false)
     @Enumerated(EnumType.STRING)
@@ -53,11 +49,15 @@ public class WatchEntry {
 
     private LocalDate watchedDate;
 
-    // Aggiornato manualmente dal Service ad ogni rigenerazione (non @CreationTimestamp)
+    // Aggiornato manualmente dal Service ad ogni cambio stato (non @CreationTimestamp)
     @Column(nullable = false)
     private LocalDateTime lastStatusUpdate;
 
     @CreationTimestamp
     @Column(nullable = false, updatable = false)
     private LocalDateTime createdAt;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "user_id", nullable = false)
+    private User user;
 }
