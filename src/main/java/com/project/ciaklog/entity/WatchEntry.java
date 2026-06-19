@@ -26,9 +26,9 @@ public class WatchEntry {
     @Column(name = "tmdb_id", nullable = false)
     private Long tmdbId;
 
-    @Column(nullable = false)
+    @Column(name = "media_type", nullable = false)
     @Enumerated(EnumType.STRING)
-    private MediaType mediaType;
+    private ContentType mediaType;
 
     @Column(nullable = false)
     private String title;
@@ -49,7 +49,6 @@ public class WatchEntry {
 
     private LocalDate watchedDate;
 
-    // Aggiornato manualmente dal Service ad ogni cambio stato (non @CreationTimestamp)
     @Column(nullable = false)
     private LocalDateTime lastStatusUpdate;
 
@@ -60,4 +59,13 @@ public class WatchEntry {
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "user_id", nullable = false)
     private User user;
+
+    // Garantisce che lastStatusUpdate non sia mai null al primo salvataggio,
+    // anche se il Service dimentica di impostarlo esplicitamente.
+    @PrePersist
+    private void prePersist() {
+        if (lastStatusUpdate == null) {
+            lastStatusUpdate = LocalDateTime.now();
+        }
+    }
 }
