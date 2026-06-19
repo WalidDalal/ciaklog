@@ -22,11 +22,19 @@ public class DailyRecommendationCache {
     @Column(name = "suggestions_json", nullable = false, columnDefinition = "TEXT")
     private String suggestionsJson;
 
-    // Aggiornato manualmente dal Service ad ogni rigenerazione (non @CreationTimestamp)
     @Column(name = "generated_at", nullable = false)
     private LocalDateTime generatedAt;
 
     @OneToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "user_id", nullable = false, unique = true)
     private User user;
+
+    // Garantisce che generatedAt non sia mai null al primo salvataggio,
+    // anche se il Service dimentica di impostarlo esplicitamente.
+    @PrePersist
+    private void prePersist() {
+        if (generatedAt == null) {
+            generatedAt = LocalDateTime.now();
+        }
+    }
 }
