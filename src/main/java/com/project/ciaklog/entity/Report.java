@@ -47,6 +47,13 @@ public class Report {
     @JoinColumn(name = "review_id", nullable = false)
     private Review review;
 
+    /**
+     * Admin che ha gestito la segnalazione. Contratto: resta {@code null} finché
+     * {@link #status} è {@link ReportStatus#PENDING}; viene valorizzato dal
+     * ReportService nel momento in cui un Admin risolve la segnalazione
+     * (APPROVED, REJECTED o PAUSED). Non validato a livello di entity/DB:
+     * la coerenza va garantita nel Service.
+     */
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "resolved_by_id")
     private User resolvedBy;
