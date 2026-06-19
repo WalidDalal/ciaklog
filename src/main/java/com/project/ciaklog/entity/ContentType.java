@@ -1,6 +1,6 @@
 package com.project.ciaklog.entity;
 
-public enum MediaType {
+public enum ContentType {
     MOVIE,
     TV,
 }

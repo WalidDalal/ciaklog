@@ -31,8 +31,10 @@ public class Review {
 
     @Enumerated(EnumType.STRING)
     @Column(name = "media_type", nullable = false)
-    private MediaType mediaType;
+    private ContentType mediaType;
 
+    // Vincolo 1-5 validato nel ReviewRequestDTO (@Min/@Max), non qui — coerente
+    // con la scelta di tenere le validazioni sui DTO e non sulle Entity.
     @Column(nullable = false)
     private Integer rating;
 
