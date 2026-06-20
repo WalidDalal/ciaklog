@@ -9,7 +9,7 @@ import java.util.List;
 
 @Getter
 @Builder
-public class DailyRecommendationResponseDTO {
-    private List<TmdbSearchResultDTO> suggestions;
+public class DailyRecommendationResponse {
+    private List<TmdbSearchResultResponse> suggestions;
     private LocalDateTime generatedAt;
 }
