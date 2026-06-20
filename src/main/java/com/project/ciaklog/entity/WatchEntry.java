@@ -16,7 +16,7 @@ import java.util.UUID;
 @Entity
 @Table(
         name = "watch_entries",
-        uniqueConstraints = @UniqueConstraint(columnNames = {"user_id", "tmdb_id", "media_type"})
+        uniqueConstraints = @UniqueConstraint(columnNames = {"user_id", "tmdb_id", "content_type"})
 )
 public class WatchEntry {
     @Id
@@ -26,9 +26,9 @@ public class WatchEntry {
     @Column(name = "tmdb_id", nullable = false)
     private Long tmdbId;
 
-    @Column(name = "media_type", nullable = false)
+    @Column(name = "content_type", nullable = false)
     @Enumerated(EnumType.STRING)
-    private ContentType mediaType;
+    private ContentType contentType;
 
     @Column(nullable = false)
     private String title;
@@ -44,7 +44,7 @@ public class WatchEntry {
     @Enumerated(EnumType.STRING)
     private WatchStatus status;
 
-    // Solo se mediaType = TV e status = WATCHING; null per i film
+    // Solo se contentType = TV e status = WATCHING; null per i film
     private Integer currentSeason;
 
     private LocalDate watchedDate;
@@ -60,8 +60,6 @@ public class WatchEntry {
     @JoinColumn(name = "user_id", nullable = false)
     private User user;
 
-    // Garantisce che lastStatusUpdate non sia mai null al primo salvataggio,
-    // anche se il Service dimentica di impostarlo esplicitamente.
     @PrePersist
     private void prePersist() {
         if (lastStatusUpdate == null) {
