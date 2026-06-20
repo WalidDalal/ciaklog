@@ -1,7 +1,7 @@
 // WatchEntryResponseDTO.java
 package com.project.ciaklog.dto.response;
 
-import com.project.ciaklog.entity.MediaType;
+import com.project.ciaklog.entity.ContentType;
 import com.project.ciaklog.entity.WatchStatus;
 import lombok.Builder;
 import lombok.Getter;
@@ -12,10 +12,10 @@ import java.util.UUID;
 
 @Getter
 @Builder
-public class WatchEntryResponseDTO {
+public class WatchEntryResponse {
     private UUID id;
     private Long tmdbId;
-    private MediaType mediaType;
+    private ContentType contentType;
     private String title;
     private String posterPath;
     private Integer releaseYear;

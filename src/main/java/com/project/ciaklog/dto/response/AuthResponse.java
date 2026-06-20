@@ -9,7 +9,7 @@ import lombok.Getter;
 @Getter
 @Builder
 @AllArgsConstructor
-public class AuthResponseDTO {
+public class AuthResponse {
     private String token;
     private String username;
     private Role role;
