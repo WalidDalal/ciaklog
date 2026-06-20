@@ -12,7 +12,7 @@ import java.util.UUID;
 @Repository
 public interface AiRecommendationLogRepository extends JpaRepository<AiRecommendationLog, UUID> {
 
-    // Per recuperare lo storico sessione AI di un utente (memoria conversazione)
+    // Un solo record per sessione — @UniqueConstraint su (user_id, session_id) nell'entity
     Optional<AiRecommendationLog> findByUserAndSessionId(User user, String sessionId);
 
     // Per eventuali pulizie o debug
