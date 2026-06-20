@@ -1,17 +1,15 @@
-// ChartItemDTO.java
 package com.project.ciaklog.dto.response;
 
-import com.project.ciaklog.entity.MediaType;
+import com.project.ciaklog.entity.ContentType;
 import lombok.Builder;
 import lombok.Getter;
 
 @Getter
 @Builder
-public class ChartItemDTO {
+public class TmdbSearchResultResponse {
     private Long tmdbId;
     private String title;
-    private MediaType mediaType;
+    private ContentType contentType;
     private String posterPath;
-    private Double votoMedio;
-    private Integer numeroVoti;
+    private Integer releaseYear;
 }

@@ -11,7 +11,7 @@ import java.util.UUID;
 
 @Getter
 @Builder
-public class ReportResponseDTO {
+public class ReportResponse {
     private UUID id;
     private UUID reviewId;
     private String reporterUsername;
