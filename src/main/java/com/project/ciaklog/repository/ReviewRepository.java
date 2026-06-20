@@ -1,6 +1,6 @@
 package com.project.ciaklog.repository;
 
-import com.project.ciaklog.entity.MediaType;
+import com.project.ciaklog.entity.ContentType;
 import com.project.ciaklog.entity.Review;
 import com.project.ciaklog.entity.ReviewStatus;
 import com.project.ciaklog.entity.User;
@@ -11,6 +11,7 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -18,19 +19,21 @@ import java.util.UUID;
 public interface ReviewRepository extends JpaRepository<Review, UUID> {
 
     // Recensioni pubbliche (VISIBLE) per un film/serie — paginata (UC3, pagina dettaglio)
-    Page<Review> findByTmdbIdAndMediaTypeAndStatus(Long tmdbId, MediaType mediaType, ReviewStatus status, Pageable pageable);
+    Page<Review> findByTmdbIdAndContentTypeAndStatus(Long tmdbId, ContentType contentType, ReviewStatus status, Pageable pageable);
 
     // Tutte le recensioni di un utente — paginata (profilo pubblico)
     Page<Review> findByUser(User user, Pageable pageable);
 
+    // Per la classifica utenti (score = numero recensioni)
+    long countByUser(User user);
+
     // Per verificare duplicati (UC6/FA2 — 409 se già recensito)
-    boolean existsByUserAndTmdbIdAndMediaType(User user, Long tmdbId, MediaType mediaType);
+    boolean existsByUserAndTmdbIdAndContentType(User user, Long tmdbId, ContentType contentType);
 
     // Per recuperare la recensione esistente (modifica, UC7)
-    Optional<Review> findByUserAndTmdbIdAndMediaType(User user, Long tmdbId, MediaType mediaType);
+    Optional<Review> findByUserAndTmdbIdAndContentType(User user, Long tmdbId, ContentType contentType);
 
     // Per la weighted average (classifiche) — query custom
-    @Query("SELECT r FROM Review r WHERE r.tmdbId = :tmdbId AND r.mediaType = :mediaType AND r.status = 'VISIBLE'")
-    java.util.List<Review> findVisibleByTmdbIdAndMediaType(@Param("tmdbId") Long tmdbId, @Param("mediaType") MediaType mediaType);
-    long countByUser(User user);
+    @Query("SELECT r FROM Review r WHERE r.tmdbId = :tmdbId AND r.contentType = :contentType AND r.status = 'VISIBLE'")
+    List<Review> findVisibleByTmdbIdAndContentType(@Param("tmdbId") Long tmdbId, @Param("contentType") ContentType contentType);
 }
