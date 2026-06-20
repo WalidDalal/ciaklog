@@ -17,7 +17,7 @@ import java.util.UUID;
 @Table(
         name = "reviews",
         uniqueConstraints = {
-                @UniqueConstraint(columnNames = {"user_id", "tmdb_id", "media_type"})
+                @UniqueConstraint(columnNames = {"user_id", "tmdb_id", "content_type"})
         }
 )
 public class Review {
@@ -30,15 +30,16 @@ public class Review {
     private Long tmdbId;
 
     @Enumerated(EnumType.STRING)
-    @Column(name = "media_type", nullable = false)
-    private ContentType mediaType;
+    @Column(name = "content_type", nullable = false)
+    private ContentType contentType;
 
-    // Vincolo 1-5 validato nel ReviewRequestDTO (@Min/@Max), non qui — coerente
+    // Vincolo 1-5 validato nel ReviewRequest (@Min/@Max), non qui — coerente
     // con la scelta di tenere le validazioni sui DTO e non sulle Entity.
     @Column(nullable = false)
     private Integer rating;
 
-    @Column(length = 1000)
+    // Obbligatorio (validato con @NotBlank in ReviewRequest)
+    @Column(nullable = false, length = 1000)
     private String text;
 
     @Enumerated(EnumType.STRING)
