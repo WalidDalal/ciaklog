@@ -1,7 +1,7 @@
-// AiChatRequestDTO.java
 package com.project.ciaklog.dto.request;
 
 import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.NotNull;
 import lombok.Getter;
 import lombok.Setter;
 
@@ -9,7 +9,7 @@ import java.util.List;
 
 @Getter
 @Setter
-public class AiChatRequestDTO {
+public class AiChatRequest {
 
     @NotBlank(message = "message obbligatorio")
     private String message;
@@ -18,10 +18,17 @@ public class AiChatRequestDTO {
 
     private List<MessageDTO> sessionHistory; // nullable alla prima richiesta
 
+    public enum MessageRole {
+        USER, ASSISTANT
+    }
+
     @Getter
     @Setter
     public static class MessageDTO {
-        private String role; // "user" o "assistant"
+        @NotNull(message = "role obbligatorio")
+        private MessageRole role;
+
+        @NotBlank(message = "content obbligatorio")
         private String content;
     }
 }
