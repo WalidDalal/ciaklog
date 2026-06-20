@@ -8,7 +8,7 @@ import java.util.List;
 
 @Getter
 @Builder
-public class AiChatResponseDTO {
-    private List<TmdbSearchResultDTO> suggestions;
+public class AiChatResponse {
+    private List<TmdbSearchResultResponse> suggestions;
     private String sessionId;
 }
