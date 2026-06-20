@@ -9,7 +9,7 @@ import lombok.Setter;
 
 @Getter
 @Setter
-public class ReportRequestDTO {
+public class ReportRequest {
 
     @NotNull(message = "reviewId obbligatorio")
     private java.util.UUID reviewId;
