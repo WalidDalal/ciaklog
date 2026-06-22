@@ -9,6 +9,7 @@ import java.util.List;
 @Getter
 @Builder
 public class AiChatResponse {
+    private String reply;
     private List<TmdbSearchResultResponse> suggestions;
     private String sessionId;
 }
