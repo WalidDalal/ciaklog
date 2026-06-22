@@ -30,5 +30,5 @@ public interface WatchEntryRepository extends JpaRepository<WatchEntry, UUID> {
     Optional<WatchEntry> findByUserAndTmdbIdAndContentType(User user, Long tmdbId, ContentType contentType);
 
     // Per il profilo pubblico — contenuti "Sta guardando" (max 3, solo WATCHING)
-    List<WatchEntry> findByUserAndStatus(User user, WatchStatus status);
+    List<WatchEntry> findAllByUserAndStatus(User user, WatchStatus status);
 }
