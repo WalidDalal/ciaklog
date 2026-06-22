@@ -51,7 +51,7 @@ public class Report {
      * Admin che ha gestito la segnalazione. Contratto: resta {@code null} finché
      * {@link #status} è {@link ReportStatus#PENDING}; viene valorizzato dal
      * ReportService nel momento in cui un Admin risolve la segnalazione
-     * (APPROVED, REJECTED o PAUSED). Non validato a livello di entity/DB:
+     * (APPROVED, REJECTED o PAUSED). Non validato application.properties livello di entity/DB:
      * la coerenza va garantita nel Service.
      */
     @ManyToOne(fetch = FetchType.LAZY)
