@@ -28,25 +28,21 @@ import java.net.http.HttpResponse;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 
-/**
- * Integrazione con Google Gemini API (free tier — 1.500 richieste/giorno).
- * Pattern di chiamata identico application.properties NominatimGeocodingService di LocalBrew:
- * HttpClient → chiamata REST → parsing JSON con ObjectMapper.
- */
 @Slf4j
 @Service
 @RequiredArgsConstructor
 public class AiServiceImpl implements AiService {
 
-    private static final String GEMINI_URL =
-            "https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-latest:generateContent";
+    private static final String GROQ_URL = "https://api.groq.com/openai/v1/chat/completions";
+    private static final String GROQ_MODEL = "llama-3.3-70b-versatile";
 
     private static final int MAX_HISTORY_MESSAGES = 10;
     private static final int CACHE_VALID_HOURS = 24;
 
-    @Value("${gemini.api.key}")
+    @Value("${groq.api.key}")
     private String apiKey;
 
     private final UserRepository userRepository;
@@ -81,14 +77,14 @@ public class AiServiceImpl implements AiService {
                 """.formatted(libraryProfile, historyText, request.getMessage());
 
         try {
-            String rawResponse = callGemini(prompt);
+            String rawResponse = callGroq(prompt);
             List<String> titles = parseTitlesFromResponse(rawResponse);
             List<TmdbSearchResultResponse> suggestions = resolveTitlesOnTmdb(titles);
 
             saveLog(user, sessionId, request.getMessage(), rawResponse);
 
             String reply = suggestions.isEmpty()
-                    ? "Non ho trovato suggerimenti validi, prova application.properties riformulare la richiesta."
+                    ? "Non ho trovato suggerimenti validi, prova a riformulare la richiesta."
                     : "Ecco alcuni titoli che potrebbero piacerti:";
 
             return AiChatResponse.builder()
@@ -98,7 +94,7 @@ public class AiServiceImpl implements AiService {
                     .build();
 
         } catch (Exception e) {
-            log.error("Errore nella chiamata application.properties Gemini per utente {}: {}", username, e.getMessage());
+            log.error("Errore nella chiamata a Groq per utente {}: {}", username, e.getMessage());
             throw new RuntimeException("Assistente temporaneamente non disponibile", e);
         }
     }
@@ -109,23 +105,20 @@ public class AiServiceImpl implements AiService {
 
         var existingCache = cacheRepository.findByUser(user).orElse(null);
 
-        // Cache valida (< 24h) — la ritorna senza richiamare l'LLM (Regola di Business 10)
         if (existingCache != null &&
                 existingCache.getGeneratedAt().isAfter(LocalDateTime.now().minusHours(CACHE_VALID_HOURS))) {
             return toDailyDTO(existingCache);
         }
 
-        // Cache assente o scaduta — rigenera
         String prompt = buildDailyPrompt(user);
 
         List<TmdbSearchResultResponse> suggestions;
         try {
-            String rawResponse = callGemini(prompt);
+            String rawResponse = callGroq(prompt);
             List<String> titles = parseTitlesFromResponse(rawResponse);
             suggestions = resolveTitlesOnTmdb(titles);
         } catch (Exception e) {
             log.error("Errore nella generazione raccomandazione giornaliera per {}: {}", username, e.getMessage());
-            // Se la cache precedente esiste anche se scaduta, meglio quella di niente
             if (existingCache != null) {
                 return toDailyDTO(existingCache);
             }
@@ -170,7 +163,7 @@ public class AiServiceImpl implements AiService {
                 Cosa sta discutendo la community questa settimana:
                 %s
                 Suggerisci 3 titoli che potrebbero piacergli oggi, privilegiando varietà
-                rispetto application.properties quello che ha già visto, ma considerando anche i trend della community.
+                rispetto a quello che ha già visto, ma considerando anche i trend della community.
                 Rispondi SOLO con un array JSON di titoli esistenti, formato:
                 ["Titolo 1", "Titolo 2", "Titolo 3"]
                 Niente testo aggiuntivo, solo l'array JSON.
@@ -221,22 +214,30 @@ public class AiServiceImpl implements AiService {
                 .build();
     }
 
-    private String callGemini(String prompt) throws Exception {
-        String body = mapper.writeValueAsString(
-                java.util.Map.of("contents", List.of(
-                        java.util.Map.of("parts", List.of(java.util.Map.of("text", prompt)))
-                ))
-        );
+    private String callGroq(String prompt) throws Exception {
+        String body = mapper.writeValueAsString(Map.of(
+                "model", GROQ_MODEL,
+                "messages", List.of(
+                        Map.of("role", "user", "content", prompt)
+                )
+        ));
 
         HttpRequest httpRequest = HttpRequest.newBuilder()
-                .uri(URI.create(GEMINI_URL + "?key=" + apiKey))
+                .uri(URI.create(GROQ_URL))
                 .header("Content-Type", "application/json")
+                .header("Authorization", "Bearer " + apiKey)
                 .POST(HttpRequest.BodyPublishers.ofString(body))
                 .build();
 
         HttpResponse<String> response = httpClient.send(httpRequest, HttpResponse.BodyHandlers.ofString());
+
+        if (response.statusCode() != 200) {
+            log.error("Groq ha risposto {} : {}", response.statusCode(), response.body());
+            throw new RuntimeException("Groq API non disponibile (status " + response.statusCode() + ")");
+        }
+
         JsonNode root = mapper.readTree(response.body());
-        return root.path("candidates").get(0).path("content").path("parts").get(0).path("text").asText();
+        return root.path("choices").get(0).path("message").path("content").asText();
     }
 
     private List<String> parseTitlesFromResponse(String rawResponse) {
@@ -286,7 +287,7 @@ public class AiServiceImpl implements AiService {
     private void saveLog(User user, String sessionId, String message, String rawResponse) {
         String messagesJson;
         try {
-            messagesJson = mapper.writeValueAsString(java.util.Map.of(
+            messagesJson = mapper.writeValueAsString(Map.of(
                     "request", message,
                     "response", rawResponse
             ));

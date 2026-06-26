@@ -8,7 +8,6 @@ import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
-import com.project.ciaklog.exception.ForbiddenException;
 
 import java.time.LocalDateTime;
 import java.util.HashMap;
@@ -42,20 +41,16 @@ public class GlobalExceptionHandler {
         return buildResponse(HttpStatus.UNAUTHORIZED, ex.getMessage());
     }
 
-    private ResponseEntity<Map<String, Object>> buildResponse(HttpStatus status, String message) {
-        Map<String, Object> body = new HashMap<>();
-        body.put("timestamp", LocalDateTime.now());
-        body.put("status", status.value());
-        body.put("error", message);
-        return ResponseEntity.status(status).body(body);
-    }
-    @ExceptionHandler(LimitExceededException.class)
-    public ResponseEntity<Map<String, Object>> handleLimitExceeded(LimitExceededException ex) {
-        return buildResponse(HttpStatus.CONFLICT, ex.getMessage());
-    }
+    // 403 — accesso negato (utente autenticato ma non autorizzato)
     @ExceptionHandler(ForbiddenException.class)
     public ResponseEntity<Map<String, Object>> handleForbidden(ForbiddenException ex) {
         return buildResponse(HttpStatus.FORBIDDEN, ex.getMessage());
+    }
+
+    // 409 — limite superato (es. max 3 WATCHING)
+    @ExceptionHandler(LimitExceededException.class)
+    public ResponseEntity<Map<String, Object>> handleLimitExceeded(LimitExceededException ex) {
+        return buildResponse(HttpStatus.CONFLICT, ex.getMessage());
     }
 
     // 400 — validazione Bean Validation (@Valid sui DTO)
@@ -74,18 +69,25 @@ public class GlobalExceptionHandler {
     }
 
     // 400 — parametro/path variable con tipo o valore non valido
-    // (es. @RequestParam WatchStatus status=INVALIDO, @PathVariable ContentType non valido)
     @ExceptionHandler(MethodArgumentTypeMismatchException.class)
     public ResponseEntity<Map<String, Object>> handleTypeMismatch(MethodArgumentTypeMismatchException ex) {
         String message = String.format("Valore non valido per '%s': %s", ex.getName(), ex.getValue());
         return buildResponse(HttpStatus.BAD_REQUEST, message);
     }
 
-    // 500 — tutto il resto
+    // 500 — tutto il resto (deve stare per ultimo)
     @ExceptionHandler(Exception.class)
     public ResponseEntity<Map<String, Object>> handleGeneric(Exception ex) {
         log.error("Errore non gestito: {}", ex.getMessage(), ex);
         return buildResponse(HttpStatus.INTERNAL_SERVER_ERROR,
                 "Si è verificato un errore interno. Riprova più tardi.");
+    }
+
+    private ResponseEntity<Map<String, Object>> buildResponse(HttpStatus status, String message) {
+        Map<String, Object> body = new HashMap<>();
+        body.put("timestamp", LocalDateTime.now());
+        body.put("status", status.value());
+        body.put("error", message);
+        return ResponseEntity.status(status).body(body);
     }
 }
