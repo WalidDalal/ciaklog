@@ -31,17 +31,14 @@ public class ReportServiceImpl implements ReportService {
         Review review = reviewRepository.findById(dto.getReviewId())
                 .orElseThrow(() -> new ResourceNotFoundException("Recensione non trovata"));
 
-        // Non puoi segnalare la tua recensione
         if (review.getUser().getId().equals(reporter.getId())) {
             throw new BusinessRuleException("Non puoi segnalare la tua recensione");
         }
 
-        // Segnalazione duplicata
         if (reportRepository.existsByReporterAndReview(reporter, review)) {
             throw new DuplicateResourceException("Hai già segnalato questa recensione");
         }
 
-        // reasonText obbligatorio se OTHER
         if (dto.getReasonCategory() == ReportReasonCategory.OTHER &&
                 (dto.getReasonText() == null || dto.getReasonText().isBlank())) {
             throw new BusinessRuleException("Il motivo è obbligatorio quando la categoria è OTHER");
@@ -58,9 +55,12 @@ public class ReportServiceImpl implements ReportService {
     }
 
     @Override
-    public List<ReportResponse> getPendingReports() {
-        return reportRepository.findByStatus(ReportStatus.PENDING)
-                .stream().map(this::toDTO).collect(Collectors.toList());
+    public List<ReportResponse> getReports(ReportStatus status) {
+        // Se status è null restituisce tutti, altrimenti filtra
+        List<Report> reports = (status != null)
+                ? reportRepository.findByStatus(status)
+                : reportRepository.findAll();
+        return reports.stream().map(this::toDTO).collect(Collectors.toList());
     }
 
     @Override
@@ -69,7 +69,6 @@ public class ReportServiceImpl implements ReportService {
         Report report = reportRepository.findById(reportId)
                 .orElseThrow(() -> new ResourceNotFoundException("Segnalazione non trovata"));
 
-        // Impedisce doppia risoluzione — violationCount non va incrementato due volte
         if (report.getStatus() != ReportStatus.PENDING) {
             throw new BusinessRuleException("Segnalazione già risolta (stato attuale: " + report.getStatus() + ")");
         }
@@ -83,7 +82,6 @@ public class ReportServiceImpl implements ReportService {
             review.setStatus(ReviewStatus.REMOVED);
             reviewRepository.save(review);
 
-            // Aggiorna violationCount e sospendi se necessario
             User offender = review.getUser();
             offender.setViolationCount(offender.getViolationCount() + 1);
 
