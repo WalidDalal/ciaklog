@@ -9,6 +9,6 @@ import java.util.UUID;
 
 public interface ReportService {
     ReportResponse createReport(String username, ReportRequest dto);
-    List<ReportResponse> getPendingReports();
+    List<ReportResponse> getReports(ReportStatus status);
     ReportResponse resolveReport(UUID reportId, ReportStatus newStatus, String adminUsername);
 }

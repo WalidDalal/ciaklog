@@ -16,19 +16,15 @@ import java.util.UUID;
 @Repository
 public interface WatchEntryRepository extends JpaRepository<WatchEntry, UUID> {
 
-    // Libreria utente paginata, filtrabile per stato
     Page<WatchEntry> findByUser(User user, Pageable pageable);
     Page<WatchEntry> findByUserAndStatus(User user, WatchStatus status, Pageable pageable);
 
-    // Per la regola "max 3 WATCHING per utente" (Regola 1)
     long countByUserAndStatus(User user, WatchStatus status);
 
-    // Per verificare duplicati (UC4/FA1 — 409 se già in libreria)
     boolean existsByUserAndTmdbIdAndContentType(User user, Long tmdbId, ContentType contentType);
 
-    // Per recuperare una entry specifica (es. al cambio stato o eliminazione)
     Optional<WatchEntry> findByUserAndTmdbIdAndContentType(User user, Long tmdbId, ContentType contentType);
 
-    // Per il profilo pubblico — contenuti "Sta guardando" (max 3, solo WATCHING)
+    // Rinominato da findByUserAndStatus per evitare conflitto di firma con quello paginato
     List<WatchEntry> findAllByUserAndStatus(User user, WatchStatus status);
 }

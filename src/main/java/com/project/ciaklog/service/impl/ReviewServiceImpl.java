@@ -1,11 +1,12 @@
 package com.project.ciaklog.service.impl;
 
 import com.project.ciaklog.dto.request.ReviewRequest;
+import com.project.ciaklog.dto.request.ReviewUpdateRequest;
 import com.project.ciaklog.dto.response.ReviewResponse;
 import com.project.ciaklog.entity.*;
 import com.project.ciaklog.exception.DuplicateResourceException;
 import com.project.ciaklog.exception.ResourceNotFoundException;
-import com.project.ciaklog.exception.UnauthorizedException;
+import com.project.ciaklog.exception.ForbiddenException;
 import com.project.ciaklog.repository.ReviewRepository;
 import com.project.ciaklog.repository.UserRepository;
 import com.project.ciaklog.repository.WatchEntryRepository;
@@ -36,7 +37,7 @@ public class ReviewServiceImpl implements ReviewService {
             throw new DuplicateResourceException("Hai già recensito questo contenuto");
         }
 
-        // Aggiorna WatchEntry application.properties WATCHED (se l'entry esiste in libreria)
+        // Aggiorna WatchEntry a WATCHED (se l'entry esiste in libreria)
         watchEntryRepository.findByUserAndTmdbIdAndContentType(user, dto.getTmdbId(), contentType)
                 .ifPresent(entry -> {
                     if (entry.getStatus() != WatchStatus.WATCHED) {
@@ -59,13 +60,13 @@ public class ReviewServiceImpl implements ReviewService {
     }
 
     @Override
-    public ReviewResponse updateReview(String username, UUID reviewId, ReviewRequest dto) {
+    public ReviewResponse updateReview(String username, UUID reviewId, ReviewUpdateRequest dto) {
         User user = getUser(username);
         Review review = reviewRepository.findById(reviewId)
                 .orElseThrow(() -> new ResourceNotFoundException("Recensione non trovata"));
 
         if (!review.getUser().getId().equals(user.getId())) {
-            throw new UnauthorizedException("Non autorizzato application.properties modificare questa recensione");
+            throw new ForbiddenException("Non autorizzato a modificare questa recensione");
         }
 
         review.setRating(dto.getRating());
@@ -81,10 +82,10 @@ public class ReviewServiceImpl implements ReviewService {
                 .orElseThrow(() -> new ResourceNotFoundException("Recensione non trovata"));
 
         if (!review.getUser().getId().equals(user.getId())) {
-            throw new UnauthorizedException("Non autorizzato application.properties eliminare questa recensione");
+            throw new ForbiddenException("Non autorizzato a eliminare questa recensione");
         }
 
-        // Soft delete — coerente con la Regola di Business 2 (Review.status, mai hard delete)
+        // Soft delete — coerente con Regola di Business 2 (mai hard delete)
         review.setStatus(ReviewStatus.REMOVED);
         reviewRepository.save(review);
     }
