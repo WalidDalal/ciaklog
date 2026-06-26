@@ -35,8 +35,9 @@ public class UserServiceImpl implements UserService {
         User user = userRepository.findByUsername(username)
                 .orElseThrow(() -> new ResourceNotFoundException("Utente non trovato"));
 
-        // Top 3 generi — calcolati dai contenuti in libreria per frequenza
-        List<WatchEntry> allEntries = watchEntryRepository.findByUser(user, org.springframework.data.domain.Pageable.unpaged()).getContent();
+        List<WatchEntry> allEntries = watchEntryRepository
+                .findByUser(user, org.springframework.data.domain.Pageable.unpaged())
+                .getContent();
 
         List<String> topGenres = allEntries.stream()
                 .filter(e -> e.getGenres() != null && !e.getGenres().isBlank())
@@ -49,10 +50,7 @@ public class UserServiceImpl implements UserService {
                 .map(Map.Entry::getKey)
                 .collect(Collectors.toList());
 
-        // "Sta guardando" — solo se lastStatusUpdate negli ultimi 30gg.
-        // Filtro applicato qui, lato backend: se sono passati più di 30gg,
-        // watchingTitle/watchingSeason restano null e nessun timestamp è esposto
-        // nella response (Fix DTO #5, opzione A).
+        // Usa findAllByUserAndStatus (firma List<>) per evitare ambiguità con quella paginata
         List<WatchEntry> watching = watchEntryRepository.findAllByUserAndStatus(user, WatchStatus.WATCHING);
         WatchEntry activeWatching = watching.stream()
                 .filter(e -> e.getLastStatusUpdate() != null &&
