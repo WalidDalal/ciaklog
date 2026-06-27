@@ -1,0 +1,511 @@
+import { useEffect, useState, useRef } from 'react'
+import { Link } from 'react-router-dom'
+import Navbar from '../components/Navbar'
+import api from '../services/api'
+import useAuthStore from '../store/authStore'
+
+function StarRating({ rating }) {
+  if (!rating) return null
+  return (
+    <span style={{ color: '#f5c518', fontSize: '13px' }}>
+      {'★'.repeat(Math.round(rating))}{'☆'.repeat(5 - Math.round(rating))}
+      <span style={{ color: '#9ca3af', marginLeft: '6px', fontSize: '12px' }}>{rating?.toFixed(1)}</span>
+    </span>
+  )
+}
+
+const AVATAR_COLORS = ['#e50914', '#3b82f6', '#22c55e', '#f59e0b', '#8b5cf6', '#ec4899']
+
+function UserAvatar({ username, size = 48, index = 0 }) {
+  const color = AVATAR_COLORS[index % AVATAR_COLORS.length]
+  return (
+    <div style={{
+      width: size, height: size, borderRadius: '50%', backgroundColor: color,
+      display: 'flex', alignItems: 'center', justifyContent: 'center',
+      color: 'white', fontWeight: '800', fontSize: size * 0.4, flexShrink: 0,
+    }}>
+      {username?.[0]?.toUpperCase()}
+    </div>
+  )
+}
+
+function RankBadge({ rank }) {
+  const configs = {
+    1: { bg: 'linear-gradient(135deg, #f5c518, #f59e0b)', color: '#000' },
+    2: { bg: 'linear-gradient(135deg, #9ca3af, #6b7280)', color: '#fff' },
+    3: { bg: 'linear-gradient(135deg, #cd7c2c, #a0522d)', color: '#fff' },
+  }
+  const c = configs[rank] || { bg: '#1a1a1a', color: '#9ca3af' }
+  return (
+    <div style={{
+      background: c.bg, color: c.color, width: '28px', height: '28px', borderRadius: '50%',
+      display: 'flex', alignItems: 'center', justifyContent: 'center',
+      fontWeight: '800', fontSize: '12px', flexShrink: 0,
+    }}>
+      {rank}
+    </div>
+  )
+}
+
+function TrendingQuoteCard({ item, reviews }) {
+  const visible = reviews.filter(r => r.text && r.text.trim().length > 20).slice(0, 2)
+  return (
+    <Link to={`/movie/${item.tmdbId}?type=${item.contentType}`}>
+      <div style={{
+        backgroundColor: '#0f0f0f', border: '1px solid #1a1a1a', borderRadius: '14px',
+        overflow: 'hidden', display: 'flex', flexDirection: 'column', height: '100%',
+      }}
+        onMouseEnter={e => e.currentTarget.style.borderColor = '#333'}
+        onMouseLeave={e => e.currentTarget.style.borderColor = '#1a1a1a'}
+      >
+        <div style={{ display: 'flex', gap: '14px', padding: '16px 16px 12px' }}>
+          {item.posterPath
+            ? <img src={`https://image.tmdb.org/t/p/w92${item.posterPath}`} alt={item.title}
+                style={{ width: '52px', height: '78px', objectFit: 'cover', borderRadius: '6px', flexShrink: 0 }} />
+            : <div style={{ width: '52px', height: '78px', backgroundColor: '#222', borderRadius: '6px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '20px', flexShrink: 0 }}>🎬</div>
+          }
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div style={{ color: 'white', fontWeight: '700', fontSize: '15px', marginBottom: '6px', lineHeight: 1.3 }}>{item.title}</div>
+            <StarRating rating={item.ciakLogAverageRating} />
+            <div style={{ color: '#6b7280', fontSize: '12px', marginTop: '6px' }}>
+              💬 {item.weeklyReviewCount} {item.weeklyReviewCount === 1 ? 'recensione' : 'recensioni'} questa settimana
+            </div>
+          </div>
+        </div>
+        <div style={{ padding: '0 16px 16px', display: 'flex', flexDirection: 'column', gap: '10px', flex: 1 }}>
+          {visible.length === 0
+            ? <div style={{ color: '#2a2a2a', fontSize: '13px', fontStyle: 'italic', padding: '8px 0' }}>
+                Ancora nessuna recensione con testo.
+              </div>
+            : visible.map((r, i) => (
+              <div key={r.id} style={{
+                backgroundColor: '#141414', borderRadius: '10px', padding: '12px',
+                borderLeft: `3px solid ${i === 0 ? '#e50914' : '#3b82f6'}`,
+              }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '6px' }}>
+                  <UserAvatar username={r.username} size={22} index={i} />
+                  <span style={{ color: '#9ca3af', fontSize: '12px', fontWeight: '600' }}>{r.username}</span>
+                  <span style={{ color: '#f5c518', fontSize: '11px', marginLeft: 'auto' }}>{'★'.repeat(r.rating)}</span>
+                </div>
+                <p style={{
+                  color: '#d1d5db', fontSize: '13px', lineHeight: 1.5, margin: 0,
+                  display: '-webkit-box', WebkitLineClamp: 3, WebkitBoxOrient: 'vertical', overflow: 'hidden',
+                }}>
+                  "{r.text}"
+                </p>
+              </div>
+            ))
+          }
+        </div>
+      </div>
+    </Link>
+  )
+}
+
+// Carosello con frecce
+function TrendingCarousel({ trending, trendingReviews }) {
+  const [page, setPage] = useState(0)
+  const itemsPerPage = 3
+  const totalPages = Math.ceil(trending.length / itemsPerPage)
+  const visible = trending.slice(page * itemsPerPage, page * itemsPerPage + itemsPerPage)
+
+  if (trending.length === 0) return (
+    <div style={{ color: '#6b7280', textAlign: 'center', padding: '40px' }}>Nessun contenuto trending questa settimana.</div>
+  )
+
+  return (
+    <div>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '16px', marginBottom: '20px' }}>
+        {visible.map(item => (
+          <TrendingQuoteCard
+            key={item.tmdbId}
+            item={item}
+            reviews={trendingReviews[`${item.tmdbId}_${item.contentType}`] || []}
+          />
+        ))}
+      </div>
+      {totalPages > 1 && (
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '16px' }}>
+          <button
+            onClick={() => setPage(p => Math.max(0, p - 1))}
+            disabled={page === 0}
+            style={{
+              width: '40px', height: '40px', borderRadius: '50%',
+              backgroundColor: page === 0 ? '#1a1a1a' : '#222',
+              border: '1px solid #333', color: page === 0 ? '#444' : 'white',
+              fontSize: '18px', cursor: page === 0 ? 'default' : 'pointer',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+            }}
+          >←</button>
+          <div style={{ display: 'flex', gap: '6px' }}>
+            {Array.from({ length: totalPages }).map((_, i) => (
+              <div key={i} onClick={() => setPage(i)} style={{
+                width: i === page ? '20px' : '8px', height: '8px',
+                borderRadius: '4px',
+                backgroundColor: i === page ? '#e50914' : '#333',
+                cursor: 'pointer', transition: 'all 0.2s',
+              }} />
+            ))}
+          </div>
+          <button
+            onClick={() => setPage(p => Math.min(totalPages - 1, p + 1))}
+            disabled={page === totalPages - 1}
+            style={{
+              width: '40px', height: '40px', borderRadius: '50%',
+              backgroundColor: page === totalPages - 1 ? '#1a1a1a' : '#222',
+              border: '1px solid #333', color: page === totalPages - 1 ? '#444' : 'white',
+              fontSize: '18px', cursor: page === totalPages - 1 ? 'default' : 'pointer',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+            }}
+          >→</button>
+        </div>
+      )}
+    </div>
+  )
+}
+
+function HomePage() {
+  const { token, user } = useAuthStore()
+  const logged = !!token
+
+  const [topFilms, setTopFilms] = useState([])
+  const [topSeries, setTopSeries] = useState([])
+  const [topUsers, setTopUsers] = useState([])
+  const [trending, setTrending] = useState([])
+  const [trendingReviews, setTrendingReviews] = useState({})
+  const [watching, setWatching] = useState([])
+  const [toWatch, setToWatch] = useState([])
+
+  useEffect(() => {
+    api.get('/charts/films').then(r => setTopFilms(r.data)).catch(() => {})
+    api.get('/charts/series').then(r => setTopSeries(r.data)).catch(() => {})
+    api.get('/charts/users').then(r => setTopUsers(r.data)).catch(() => {})
+    api.get('/charts/trending').then(r => {
+      // Fix: filtra solo item con almeno 1 recensione reale questa settimana
+      const validTrending = (r.data || []).filter(item => item.weeklyReviewCount > 0)
+      setTrending(validTrending)
+      validTrending.forEach(item => {
+        api.get(`/reviews/media/${item.contentType}/${item.tmdbId}`, { params: { size: 5, sort: 'createdAt,desc' } })
+          .then(res => {
+            const reviews = res.data.content || res.data
+            setTrendingReviews(prev => ({ ...prev, [`${item.tmdbId}_${item.contentType}`]: reviews }))
+          })
+          .catch(() => {})
+      })
+    }).catch(() => {})
+
+    if (token) {
+      api.get('/library', { params: { status: 'WATCHING' } })
+        .then(r => setWatching(r.data.content || r.data))
+        .catch(() => {})
+      api.get('/library', { params: { status: 'TO_WATCH' } })
+        .then(r => setToWatch(r.data.content || r.data))
+        .catch(() => {})
+    }
+  }, [token])
+
+  // Fix podio: myRank corretto (findIndex restituisce -1 se non trovato, +1 lo rende 0)
+  const myRankIndex = topUsers.findIndex(u => u.username === user?.username)
+  const myRank = myRankIndex >= 0 ? myRankIndex + 1 : 0
+
+  // Fix podio: ordine visivo corretto — 2° sinistra, 1° centro, 3° destra
+  const podiumOrder = [1, 0, 2] // indici in topUsers
+  const podiumHeights = { 0: 110, 1: 70, 2: 44 } // altezza colonna per posizione (0=1°, 1=2°, 2=3°)
+  const podiumSizes = { 0: 76, 1: 60, 2: 52 }
+
+  return (
+    <div style={{ backgroundColor: '#0a0a0a', minHeight: '100vh', color: 'white' }}>
+      <Navbar />
+
+      {/* ── HERO ── */}
+      <section style={{ position: 'relative', minHeight: '480px', display: 'flex', alignItems: 'center', overflow: 'hidden' }}>
+        <div style={{
+          position: 'absolute', right: 0, top: 0, bottom: 0, width: '65%',
+          display: 'flex', gap: '6px', opacity: 0.2, overflow: 'hidden',
+          maskImage: 'linear-gradient(to left, rgba(0,0,0,0.9), transparent)',
+          WebkitMaskImage: 'linear-gradient(to left, rgba(0,0,0,0.9), transparent)',
+        }}>
+          {['/8Gxv8gSFCU0XGDykEGv7zR1n2ua.jpg','/qNBAXBIQlnOThrVvA6mA2B5ggV6.jpg','/tmU7GeKVybMWFButWEGl2M4GeiP.jpg','/3bhkrj58Vtu7enYsRolD1fZdja1.jpg','/oYuLEt3zVCKq57qu2F8dT7NIa6f.jpg'].map((p,i) => (
+            <img key={i} src={`https://image.tmdb.org/t/p/w300${p}`} alt="" style={{ height: '100%', width: '140px', objectFit: 'cover', flexShrink: 0 }} />
+          ))}
+        </div>
+        <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(to right, #0a0a0a 55%, transparent)', zIndex: 1 }} />
+
+        <div style={{ position: 'relative', zIndex: 2, padding: '0 64px', maxWidth: '620px' }}>
+          {logged ? (
+            <>
+              <div style={{ fontSize: '13px', color: '#e50914', fontWeight: '700', marginBottom: '12px', letterSpacing: '1px', textTransform: 'uppercase' }}>Bentornato</div>
+              <h1 style={{ fontSize: '52px', fontWeight: '800', lineHeight: 1.05, marginBottom: '16px' }}>
+                Ciao, <span style={{ color: '#e50914' }}>{user?.username}</span> 👋
+              </h1>
+              <p style={{ fontSize: '16px', color: '#9ca3af', marginBottom: '16px', lineHeight: 1.6 }}>
+                {watching.length > 0
+                  ? `Stai guardando ${watching.length} ${watching.length === 1 ? 'contenuto' : 'contenuti'} in questo momento.`
+                  : toWatch.length > 0
+                    ? `Hai ${toWatch.length} ${toWatch.length === 1 ? 'contenuto' : 'contenuti'} da vedere in lista.`
+                    : 'Cosa guardiamo stasera?'}
+              </p>
+              {myRank > 0 && myRank <= 10 && (
+                <div style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', backgroundColor: '#1a0f0f', border: '1px solid #e5091444', borderRadius: '8px', padding: '8px 14px', marginBottom: '24px' }}>
+                  <span>🏆</span>
+                  <span style={{ color: '#f5c518', fontSize: '14px', fontWeight: '600' }}>
+                    Sei #{myRank} nella classifica — continua così!
+                  </span>
+                </div>
+              )}
+              {/* Fix: rimossi bottoni Cerca e Chat AI (già in navbar) */}
+              <Link to="/library">
+                <button style={{ padding: '13px 32px', backgroundColor: '#e50914', border: 'none', borderRadius: '8px', color: 'white', fontSize: '15px', fontWeight: '700' }}>
+                  📚 Vai alla tua libreria
+                </button>
+              </Link>
+            </>
+          ) : (
+            <>
+              <h1 style={{ fontSize: '48px', fontWeight: '800', lineHeight: 1.1, marginBottom: '16px' }}>
+                Il tuo diario<br />cinematografico,<br />
+                <span style={{ color: '#e50914' }}>con un tocco di AI</span>
+              </h1>
+              <p style={{ fontSize: '16px', color: '#9ca3af', marginBottom: '32px', lineHeight: 1.6 }}>
+                Traccia ciò che guardi, scopri cosa pensa la community, ricevi consigli su misura.
+              </p>
+              {/* Fix: rimosso "Esplora senza registrarti" (barra ricerca già visibile) */}
+              <Link to="/register">
+                <button style={{ padding: '14px 40px', backgroundColor: '#e50914', border: 'none', borderRadius: '8px', color: 'white', fontSize: '16px', fontWeight: '700' }}>
+                  Inizia ora — è gratis
+                </button>
+              </Link>
+            </>
+          )}
+        </div>
+      </section>
+
+      {/* ── CONTINUA A GUARDARE + DA VEDERE (loggato) ── */}
+      {logged && (watching.length > 0 || toWatch.length > 0) && (
+        <section style={{ padding: '0 64px 48px' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: watching.length > 0 && toWatch.length > 0 ? '1fr 1fr' : '1fr', gap: '32px' }}>
+
+            {/* Continua a guardare */}
+            {watching.length > 0 && (
+              <div>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '16px' }}>
+                  <h2 style={{ fontSize: '18px', fontWeight: '700' }}>▶️ Continua a guardare</h2>
+                  <Link to="/library?filter=WATCHING" style={{ color: '#e50914', fontSize: '13px', fontWeight: '600' }}>Vedi tutti →</Link>
+                </div>
+                <div style={{ display: 'flex', gap: '12px', overflowX: 'auto', paddingBottom: '4px' }}>
+                  {watching.slice(0, 6).map(item => (
+                    <Link to={`/movie/${item.tmdbId}?type=${item.contentType || item.mediaType}`} key={item.id} style={{ flexShrink: 0 }}>
+                      <div style={{ width: '120px', backgroundColor: '#141414', borderRadius: '8px', overflow: 'hidden', border: '1px solid #222' }}
+                        onMouseEnter={e => e.currentTarget.style.borderColor = '#3b82f6'}
+                        onMouseLeave={e => e.currentTarget.style.borderColor = '#222'}
+                      >
+                        <div style={{ position: 'relative' }}>
+                          {item.posterPath
+                            ? <img src={`https://image.tmdb.org/t/p/w200${item.posterPath}`} alt={item.title} style={{ width: '100%', height: '170px', objectFit: 'cover' }} />
+                            : <div style={{ width: '100%', height: '170px', backgroundColor: '#222', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '32px' }}>🎬</div>
+                          }
+                          <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, padding: '16px 6px 4px', background: 'linear-gradient(transparent, rgba(0,0,0,0.9))' }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '3px' }}>
+                              <div style={{ width: '5px', height: '5px', borderRadius: '50%', backgroundColor: '#3b82f6' }} />
+                              <span style={{ color: '#93c5fd', fontSize: '10px', fontWeight: '600' }}>In visione</span>
+                            </div>
+                          </div>
+                        </div>
+                        <div style={{ padding: '8px' }}>
+                          <div style={{ color: 'white', fontSize: '11px', fontWeight: '600', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{item.title}</div>
+                          {item.currentSeason && <div style={{ color: '#6b7280', fontSize: '10px' }}>S{item.currentSeason}</div>}
+                        </div>
+                      </div>
+                    </Link>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Da vedere */}
+            {toWatch.length > 0 && (
+              <div>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '16px' }}>
+                  <h2 style={{ fontSize: '18px', fontWeight: '700' }}>📌 Da vedere</h2>
+                  <Link to="/library?filter=TO_WATCH" style={{ color: '#e50914', fontSize: '13px', fontWeight: '600' }}>Vedi tutti →</Link>
+                </div>
+                <div style={{ display: 'flex', gap: '12px', overflowX: 'auto', paddingBottom: '4px' }}>
+                  {toWatch.slice(0, 6).map(item => (
+                    <Link to={`/movie/${item.tmdbId}?type=${item.contentType || item.mediaType}`} key={item.id} style={{ flexShrink: 0 }}>
+                      <div style={{ width: '120px', backgroundColor: '#141414', borderRadius: '8px', overflow: 'hidden', border: '1px solid #222' }}
+                        onMouseEnter={e => e.currentTarget.style.borderColor = '#6b7280'}
+                        onMouseLeave={e => e.currentTarget.style.borderColor = '#222'}
+                      >
+                        {item.posterPath
+                          ? <img src={`https://image.tmdb.org/t/p/w200${item.posterPath}`} alt={item.title} style={{ width: '100%', height: '170px', objectFit: 'cover' }} />
+                          : <div style={{ width: '100%', height: '170px', backgroundColor: '#222', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '32px' }}>🎬</div>
+                        }
+                        <div style={{ padding: '8px' }}>
+                          <div style={{ color: 'white', fontSize: '11px', fontWeight: '600', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{item.title}</div>
+                        </div>
+                      </div>
+                    </Link>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        </section>
+      )}
+
+      {/* ── TOP FILM & SERIE ── */}
+      <section style={{ padding: '0 64px 48px' }}>
+        <h2 style={{ fontSize: '22px', fontWeight: '700', marginBottom: '28px' }}>🏆 I più amati dalla community</h2>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '24px' }}>
+          {[{ label: '🎬 Top Film', data: topFilms, type: 'MOVIE' }, { label: '📺 Top Serie TV', data: topSeries, type: 'TV' }].map(({ label, data, type }) => (
+            <div key={type} style={{ backgroundColor: '#0f0f0f', border: '1px solid #1a1a1a', borderRadius: '12px', padding: '20px' }}>
+              <div style={{ color: '#9ca3af', fontSize: '12px', fontWeight: '700', textTransform: 'uppercase', letterSpacing: '1.5px', marginBottom: '16px' }}>{label}</div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                {data.length === 0
+                  ? <div style={{ color: '#333', fontSize: '13px', padding: '12px 0' }}>Nessun dato disponibile.</div>
+                  : data.slice(0, 3).map((item, i) => (
+                    <Link to={`/movie/${item.tmdbId}?type=${type}`} key={item.tmdbId}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '10px', borderRadius: '8px', backgroundColor: '#141414' }}
+                        onMouseEnter={e => e.currentTarget.style.backgroundColor = '#1a1a1a'}
+                        onMouseLeave={e => e.currentTarget.style.backgroundColor = '#141414'}
+                      >
+                        <RankBadge rank={i + 1} />
+                        {item.posterPath && <img src={`https://image.tmdb.org/t/p/w92${item.posterPath}`} alt={item.title} style={{ width: '36px', height: '52px', objectFit: 'cover', borderRadius: '4px', flexShrink: 0 }} />}
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <div style={{ color: 'white', fontWeight: '600', fontSize: '14px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{item.title}</div>
+                          <StarRating rating={item.averageRating} />
+                        </div>
+                      </div>
+                    </Link>
+                  ))
+                }
+              </div>
+            </div>
+          ))}
+        </div>
+      </section>
+
+      {/* ── COSA DICE LA COMMUNITY (TRENDING) ── */}
+      <section style={{ padding: '0 64px 48px' }}>
+        <div style={{ marginBottom: '28px' }}>
+          <h2 style={{ fontSize: '22px', fontWeight: '700', marginBottom: '6px' }}>🔥 Cosa dice la community</h2>
+          <p style={{ color: '#6b7280', fontSize: '14px' }}>I più discussi questa settimana, con le opinioni dei nostri utenti</p>
+        </div>
+        <TrendingCarousel trending={trending} trendingReviews={trendingReviews} />
+      </section>
+
+      {/* ── LEADERBOARD UTENTI ── */}
+      <section style={{ padding: '0 64px 64px' }}>
+        <h2 style={{ fontSize: '22px', fontWeight: '700', marginBottom: '28px' }}>👥 Critici più attivi</h2>
+
+        {/* Fix podio: 2° a sinistra (livello medio), 1° al centro (più alto), 3° a destra (più basso) */}
+        {topUsers.length >= 3 && (
+          <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'center', gap: '8px', marginBottom: '24px' }}>
+            {podiumOrder.map(idx => {
+              const u = topUsers[idx]
+              const rank = idx + 1
+              const height = podiumHeights[idx]
+              const avatarSize = podiumSizes[idx]
+              const isMe = logged && user?.username === u.username
+
+              return (
+                <Link to={`/profile/${u.username}`} key={u.username}>
+                  <div style={{ textAlign: 'center', width: idx === 0 ? '160px' : '130px' }}>
+                    {/* Corona solo per il 1° */}
+                    {idx === 0
+                      ? <div style={{ fontSize: '28px', marginBottom: '6px' }}>👑</div>
+                      : <div style={{ height: '34px', marginBottom: '6px' }} />
+                    }
+
+                    {/* Avatar + badge rank */}
+                    <div style={{ position: 'relative', display: 'inline-block', marginBottom: '8px' }}>
+                      <UserAvatar username={u.username} size={avatarSize} index={idx} />
+                      {rank !== 1 && (
+                        <div style={{
+                          position: 'absolute', bottom: -4, right: -4,
+                          background: rank === 2 ? 'linear-gradient(135deg,#9ca3af,#6b7280)' : 'linear-gradient(135deg,#cd7c2c,#a0522d)',
+                          width: '20px', height: '20px', borderRadius: '50%',
+                          display: 'flex', alignItems: 'center', justifyContent: 'center',
+                          fontSize: '10px', fontWeight: '800', color: 'white', border: '2px solid #0a0a0a',
+                        }}>{rank}</div>
+                      )}
+                    </div>
+
+                    <div style={{ color: 'white', fontWeight: idx === 0 ? '800' : '700', fontSize: idx === 0 ? '15px' : '13px', marginBottom: '2px' }}>
+                      {u.username}
+                      {/* Fix: stellina + testo chiaro se è l'utente loggato */}
+                      {isMe && <span style={{ marginLeft: '4px', fontSize: '14px' }}>⭐</span>}
+                    </div>
+                    {isMe && (
+                      <div style={{ color: '#f5c518', fontSize: '10px', marginBottom: '2px', fontWeight: '600' }}>Tu sei qui!</div>
+                    )}
+                    {/* Fix: mostra "punti" invece del numero di recensioni */}
+                    <div style={{ color: '#9ca3af', fontSize: '11px', marginBottom: '10px' }}>
+                      🏅 {u.score ?? u.reviewCount} punti
+                    </div>
+
+                    {/* Colonna podio — Fix: altezze corrette */}
+                    <div style={{
+                      height: height,
+                      background: idx === 0 ? 'linear-gradient(to bottom, #e5091422, #1a1a1a)' : '#1a1a1a',
+                      border: idx === 0 ? '1px solid #e5091433' : '1px solid #2a2a2a',
+                      borderBottom: 'none', borderRadius: '6px 6px 0 0',
+                    }} />
+                  </div>
+                </Link>
+              )
+            })}
+          </div>
+        )}
+
+        {/* Lista dal 4° in poi */}
+        {topUsers.length > 3 && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+            {topUsers.slice(3).map((u, i) => {
+              const isMe = logged && user?.username === u.username
+              return (
+                <Link to={`/profile/${u.username}`} key={u.username}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '16px', padding: '12px 16px', backgroundColor: isMe ? '#1a0f0f' : '#0f0f0f', border: `1px solid ${isMe ? '#e5091466' : '#1a1a1a'}`, borderRadius: '10px' }}>
+                    <span style={{ color: '#6b7280', fontSize: '14px', fontWeight: '700', minWidth: '28px' }}>#{i + 4}</span>
+                    <UserAvatar username={u.username} size={34} index={i + 3} />
+                    <span style={{ color: 'white', fontWeight: '600', flex: 1 }}>{u.username}</span>
+                    {isMe && <span style={{ color: '#f5c518', fontSize: '12px', fontWeight: '600' }}>Tu ⭐</span>}
+                    <span style={{ color: '#9ca3af', fontSize: '13px' }}>🏅 {u.score ?? u.reviewCount} punti</span>
+                  </div>
+                </Link>
+              )
+            })}
+          </div>
+        )}
+
+        {topUsers.length === 0 && (
+          <div style={{ color: '#333', textAlign: 'center', padding: '40px' }}>Nessun utente in classifica ancora.</div>
+        )}
+      </section>
+
+      {/* ── CTA GUEST ── */}
+      {!logged && (
+        <section style={{ margin: '0 64px 64px', padding: '48px', background: 'linear-gradient(135deg, #1a0a0a, #0f0f1a)', borderRadius: '16px', border: '1px solid #2a1a1a', textAlign: 'center' }}>
+          <div style={{ fontSize: '40px', marginBottom: '16px' }}>🎬</div>
+          <h2 style={{ fontSize: '28px', fontWeight: '800', marginBottom: '12px' }}>Unisciti alla community</h2>
+          <p style={{ color: '#9ca3af', fontSize: '16px', marginBottom: '28px' }}>Traccia i tuoi film, scrivi recensioni, chiedi consigli alla tua AI personale.</p>
+          <div style={{ display: 'flex', gap: '16px', justifyContent: 'center' }}>
+            <Link to="/register"><button style={{ padding: '14px 40px', backgroundColor: '#e50914', border: 'none', borderRadius: '8px', color: 'white', fontSize: '16px', fontWeight: '700' }}>Registrati gratis</button></Link>
+            <Link to="/login"><button style={{ padding: '14px 32px', backgroundColor: 'transparent', border: '1px solid #444', borderRadius: '8px', color: 'white', fontSize: '16px' }}>Ho già un account</button></Link>
+          </div>
+        </section>
+      )}
+
+      {/* ── FOOTER ── */}
+      <footer style={{ borderTop: '1px solid #1a1a1a', padding: '28px 64px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        <div>
+          <div style={{ fontSize: '20px', fontWeight: '700', marginBottom: '4px' }}>Ciak<span style={{ color: '#e50914' }}>Log</span></div>
+          <div style={{ color: '#6b7280', fontSize: '13px' }}>Traccia • Recensisci • Scopri</div>
+        </div>
+        <div style={{ color: '#6b7280', fontSize: '13px' }}>© 2026 CiakLog</div>
+      </footer>
+    </div>
+  )
+}
+
+export default HomePage
