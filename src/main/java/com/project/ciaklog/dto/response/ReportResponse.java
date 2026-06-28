@@ -1,4 +1,3 @@
-// ReportResponseDTO.java
 package com.project.ciaklog.dto.response;
 
 import com.project.ciaklog.entity.ReportReasonCategory;
@@ -15,8 +14,16 @@ public class ReportResponse {
     private UUID id;
     private UUID reviewId;
     private String reporterUsername;
+
+    // Dati recensione segnalata — per mostrarli nella dashboard admin
+    private String reviewAuthorUsername;
+    private String reviewText;
+    private Integer reviewRating;
+
     private ReportReasonCategory reasonCategory;
     private String reasonText;
     private ReportStatus status;
     private LocalDateTime createdAt;
+    private LocalDateTime resolvedAt;
+    private String resolvedByUsername;
 }

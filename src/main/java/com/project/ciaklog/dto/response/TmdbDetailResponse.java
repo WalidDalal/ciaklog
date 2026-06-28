@@ -16,8 +16,15 @@ public class TmdbDetailResponse {
     private Integer releaseYear;
     private String overview;
     private List<String> genres;
-    private List<String> cast; // top 5 attori
+    private List<CastMember> cast; // top 5 attori con foto
     private Double tmdbRating;
     private Double ciakLogAverageRating;
     private Integer ciakLogVoteCount;
+
+    @Getter
+    @Builder
+    public static class CastMember {
+        private String name;
+        private String photoPath; // profile_path da TMDB, può essere null
+    }
 }
