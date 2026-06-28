@@ -4,5 +4,5 @@ public enum ReportStatus {
     PENDING,
     APPROVED,
     REJECTED,
-    PAUSED
+
 }

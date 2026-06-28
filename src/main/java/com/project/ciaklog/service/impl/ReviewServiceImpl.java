@@ -7,6 +7,7 @@ import com.project.ciaklog.entity.*;
 import com.project.ciaklog.exception.DuplicateResourceException;
 import com.project.ciaklog.exception.ResourceNotFoundException;
 import com.project.ciaklog.exception.ForbiddenException;
+import com.project.ciaklog.exception.BusinessRuleException;
 import com.project.ciaklog.repository.ReviewRepository;
 import com.project.ciaklog.repository.UserRepository;
 import com.project.ciaklog.repository.WatchEntryRepository;
@@ -15,38 +16,43 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
-import java.time.LocalDate;
-import java.time.LocalDateTime;
 import java.util.UUID;
 
 @Service
 @RequiredArgsConstructor
 public class ReviewServiceImpl implements ReviewService {
 
+    private static final int POINTS_CREATE_REVIEW = 10;
+
     private final ReviewRepository reviewRepository;
     private final UserRepository userRepository;
     private final WatchEntryRepository watchEntryRepository;
 
     @Override
+    @Transactional
     public ReviewResponse createReview(String username, ReviewRequest dto) {
         User user = getUser(username);
+
+        if (user.getRole() == Role.ADMIN) {
+            throw new ForbiddenException("Gli amministratori non possono pubblicare recensioni");
+        }
+
         ContentType contentType = dto.getContentType();
 
         if (reviewRepository.existsByUserAndTmdbIdAndContentType(user, dto.getTmdbId(), contentType)) {
             throw new DuplicateResourceException("Hai già recensito questo contenuto");
         }
 
-        // Aggiorna WatchEntry a WATCHED (se l'entry esiste in libreria)
-        watchEntryRepository.findByUserAndTmdbIdAndContentType(user, dto.getTmdbId(), contentType)
-                .ifPresent(entry -> {
-                    if (entry.getStatus() != WatchStatus.WATCHED) {
-                        entry.setWatchedDate(LocalDate.now());
-                    }
-                    entry.setStatus(WatchStatus.WATCHED);
-                    entry.setLastStatusUpdate(LocalDateTime.now());
-                    watchEntryRepository.save(entry);
-                });
+        boolean isWatched = watchEntryRepository
+                .findByUserAndTmdbIdAndContentType(user, dto.getTmdbId(), contentType)
+                .map(e -> e.getStatus() == WatchStatus.WATCHED)
+                .orElse(false);
+
+        if (!isWatched) {
+            throw new BusinessRuleException("Puoi recensire solo contenuti che hai contrassegnato come 'Visto'");
+        }
 
         Review review = Review.builder()
                 .user(user)
@@ -56,10 +62,17 @@ public class ReviewServiceImpl implements ReviewService {
                 .text(dto.getText())
                 .build();
 
-        return toDTO(reviewRepository.save(review));
+        reviewRepository.save(review);
+
+        // +10 punti — fonte di verità unica: user.score persistito
+        user.setScore(user.getScore() + POINTS_CREATE_REVIEW);
+        userRepository.save(user);
+
+        return toDTO(review);
     }
 
     @Override
+    @Transactional
     public ReviewResponse updateReview(String username, UUID reviewId, ReviewUpdateRequest dto) {
         User user = getUser(username);
         Review review = reviewRepository.findById(reviewId)
@@ -76,6 +89,7 @@ public class ReviewServiceImpl implements ReviewService {
     }
 
     @Override
+    @Transactional
     public void deleteReview(String username, UUID reviewId) {
         User user = getUser(username);
         Review review = reviewRepository.findById(reviewId)
@@ -85,14 +99,18 @@ public class ReviewServiceImpl implements ReviewService {
             throw new ForbiddenException("Non autorizzato a eliminare questa recensione");
         }
 
-        // Soft delete — coerente con Regola di Business 2 (mai hard delete)
         review.setStatus(ReviewStatus.REMOVED);
         reviewRepository.save(review);
+
+        // -10 punti: la cancellazione volontaria revoca il bonus della pubblicazione
+        user.setScore(Math.max(0, user.getScore() - POINTS_CREATE_REVIEW));
+        userRepository.save(user);
     }
 
     @Override
     public Page<ReviewResponse> getReviewsForMedia(Long tmdbId, ContentType contentType, Pageable pageable) {
-        return reviewRepository.findByTmdbIdAndContentTypeAndStatus(tmdbId, contentType, ReviewStatus.VISIBLE, pageable)
+        return reviewRepository
+                .findByTmdbIdAndContentTypeAndStatus(tmdbId, contentType, ReviewStatus.VISIBLE, pageable)
                 .map(this::toDTO);
     }
 

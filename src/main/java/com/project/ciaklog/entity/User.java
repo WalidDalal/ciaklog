@@ -15,6 +15,7 @@ import java.util.UUID;
 @Entity
 @Table(name = "users")
 public class User {
+
     @Id
     @GeneratedValue(strategy = GenerationType.UUID)
     private UUID id;
@@ -43,6 +44,19 @@ public class User {
     @Column(nullable = false)
     @Builder.Default
     private int violationCount = 0;
+
+    /**
+     * Punteggio classifica — aggiornato in modo persistito ad ogni evento:
+     * +10 pubblica recensione
+     * +5  segnalazione inviata approvata
+     * -15 tua recensione rimossa da segnalazione
+     * -20 sospensione temporanea
+     *  0  azzerato in caso di sospensione permanente
+     * L'admin non accumula punti (Role.ADMIN).
+     */
+    @Column(nullable = false)
+    @Builder.Default
+    private int score = 0;
 
     @CreationTimestamp
     @Column(nullable = false, updatable = false)

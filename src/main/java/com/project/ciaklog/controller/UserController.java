@@ -1,6 +1,7 @@
 package com.project.ciaklog.controller;
 
 import com.project.ciaklog.dto.request.UpdateCredentialsRequest;
+import com.project.ciaklog.dto.response.AuthResponse;
 import com.project.ciaklog.dto.response.UserProfileResponse;
 import com.project.ciaklog.service.UserService;
 import jakarta.validation.Valid;
@@ -24,11 +25,20 @@ public class UserController {
     }
 
     // Protetto — modifica credenziali dell'utente autenticato
+    // Se è cambiato l'username restituisce 200 + nuovo token; altrimenti 204
     @PutMapping("/me")
-    public ResponseEntity<Void> updateCredentials(
+    public ResponseEntity<AuthResponse> updateCredentials(
             @AuthenticationPrincipal UserDetails userDetails,
             @Valid @RequestBody UpdateCredentialsRequest dto) {
-        userService.updateCredentials(userDetails.getUsername(), dto);
+
+        AuthResponse response = userService.updateCredentials(userDetails.getUsername(), dto);
+
+        if (response != null) {
+            // Username cambiato: il client deve aggiornare il token
+            return ResponseEntity.ok(response);
+        }
+
+        // Solo password cambiata: nessun nuovo token necessario
         return ResponseEntity.noContent().build();
     }
 }
