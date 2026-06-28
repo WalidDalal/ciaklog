@@ -12,7 +12,11 @@ import com.project.ciaklog.repository.UserRepository;
 import com.project.ciaklog.service.ReportService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
+import java.time.LocalDateTime;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import java.util.List;
 import java.util.UUID;
 import java.util.stream.Collectors;
@@ -26,6 +30,7 @@ public class ReportServiceImpl implements ReportService {
     private final UserRepository userRepository;
 
     @Override
+    @Transactional
     public ReportResponse createReport(String username, ReportRequest dto) {
         User reporter = getUser(username);
         Review review = reviewRepository.findById(dto.getReviewId())
@@ -55,15 +60,15 @@ public class ReportServiceImpl implements ReportService {
     }
 
     @Override
-    public List<ReportResponse> getReports(ReportStatus status) {
-        // Se status è null restituisce tutti, altrimenti filtra
-        List<Report> reports = (status != null)
-                ? reportRepository.findByStatus(status)
-                : reportRepository.findAll();
-        return reports.stream().map(this::toDTO).collect(Collectors.toList());
+    public Page<ReportResponse> getReports(ReportStatus status, Pageable pageable) {
+        Page<Report> reports = (status != null)
+                ? reportRepository.findByStatus(status, pageable)
+                : reportRepository.findAll(pageable);
+        return reports.map(this::toDTO);
     }
 
     @Override
+    @Transactional
     public ReportResponse resolveReport(UUID reportId, ReportStatus newStatus, String adminUsername) {
         User admin = getUser(adminUsername);
         Report report = reportRepository.findById(reportId)
@@ -75,26 +80,32 @@ public class ReportServiceImpl implements ReportService {
 
         report.setStatus(newStatus);
         report.setResolvedBy(admin);
+        report.setResolvedAt(LocalDateTime.now());
 
         Review review = report.getReview();
 
         if (newStatus == ReportStatus.APPROVED) {
-            review.setStatus(ReviewStatus.REMOVED);
-            reviewRepository.save(review);
+            // Guard: se la review è già REMOVED (rimossa da una segnalazione precedente),
+            // non penalizzare di nuovo l'autore — aggiorna solo lo stato del report
+            if (review.getStatus() != ReviewStatus.REMOVED) {
+                review.setStatus(ReviewStatus.REMOVED);
+                reviewRepository.save(review);
 
-            User offender = review.getUser();
-            offender.setViolationCount(offender.getViolationCount() + 1);
+                User offender = review.getUser();
+                offender.setViolationCount(offender.getViolationCount() + 1);
+                // Scala score per la rimozione — sottrae i punti della pubblicazione + penale
+                offender.setScore(Math.max(0, offender.getScore() - 15));
 
-            if (offender.getViolationCount() >= 3) {
-                offender.setStatus(UserStatus.PERMANENTLY_SUSPENDED);
-            } else if (offender.getViolationCount() == 2) {
-                offender.setStatus(UserStatus.SUSPENDED);
+                if (offender.getViolationCount() >= 3) {
+                    offender.setStatus(UserStatus.PERMANENTLY_SUSPENDED);
+                    offender.setScore(0);
+                } else if (offender.getViolationCount() == 2) {
+                    offender.setStatus(UserStatus.SUSPENDED);
+                    offender.setScore(Math.max(0, offender.getScore() - 20));
+                }
+
+                userRepository.save(offender);
             }
-            userRepository.save(offender);
-
-        } else if (newStatus == ReportStatus.PAUSED) {
-            review.setStatus(ReviewStatus.HIDDEN);
-            reviewRepository.save(review);
 
         } else if (newStatus == ReportStatus.REJECTED) {
             review.setStatus(ReviewStatus.VISIBLE);
@@ -112,14 +123,20 @@ public class ReportServiceImpl implements ReportService {
     }
 
     private ReportResponse toDTO(Report r) {
+        Review review = r.getReview();
         return ReportResponse.builder()
                 .id(r.getId())
-                .reviewId(r.getReview().getId())
+                .reviewId(review.getId())
                 .reporterUsername(r.getReporter().getUsername())
+                .reviewAuthorUsername(review.getUser().getUsername())
+                .reviewText(review.getText())
+                .reviewRating(review.getRating())
                 .reasonCategory(r.getReasonCategory())
                 .reasonText(r.getReasonText())
                 .status(r.getStatus())
                 .createdAt(r.getCreatedAt())
+                .resolvedAt(r.getResolvedAt())
+                .resolvedByUsername(r.getResolvedBy() != null ? r.getResolvedBy().getUsername() : null)
                 .build();
     }
 }

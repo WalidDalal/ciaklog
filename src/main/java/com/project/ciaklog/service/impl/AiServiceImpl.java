@@ -19,12 +19,14 @@ import com.project.ciaklog.service.TmdbService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
 
 import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
+import java.time.Duration;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
@@ -41,6 +43,7 @@ public class AiServiceImpl implements AiService {
 
     private static final int MAX_HISTORY_MESSAGES = 10;
     private static final int CACHE_VALID_HOURS = 24;
+    private static final int LIBRARY_PROFILE_LIMIT = 15;
 
     @Value("${groq.api.key}")
     private String apiKey;
@@ -52,7 +55,11 @@ public class AiServiceImpl implements AiService {
     private final TmdbService tmdbService;
     private final ChartService chartService;
 
-    private final HttpClient httpClient = HttpClient.newHttpClient();
+    // Timeout: 5s di connessione, 30s per la risposta completa di Groq
+    private final HttpClient httpClient = HttpClient.newBuilder()
+            .connectTimeout(Duration.ofSeconds(5))
+            .build();
+
     private final ObjectMapper mapper = new ObjectMapper();
 
     @Override
@@ -64,28 +71,68 @@ public class AiServiceImpl implements AiService {
         String libraryProfile = buildLibraryProfile(user);
         String historyText = buildHistoryText(request);
 
-        String prompt = """
-                Sei l'assistente AI di CiakLog, un'app di tracking film/serie TV.
-                Profilo cinematografico dell'utente:
-                %s
-                Storico della conversazione:
-                %s
-                Richiesta attuale: %s
-                Rispondi SOLO con un array JSON di titoli esistenti (max 5), formato:
-                ["Titolo 1", "Titolo 2", ...]
-                Niente testo aggiuntivo, solo l'array JSON.
-                """.formatted(libraryProfile, historyText, request.getMessage());
+        boolean isFirstMessage = request.getSessionHistory() == null || request.getSessionHistory().isEmpty();
+
+        String prompt;
+        if (isFirstMessage) {
+            // Primo messaggio: risposta naturale + suggerimenti
+            prompt = """
+                    Sei l'assistente AI di CiakLog, un'app di tracking film/serie TV.
+                    Profilo cinematografico dell'utente:
+                    %s
+                    Messaggio dell'utente: %s
+                    Rispondi in modo naturale e amichevole in italiano (1-2 frasi), poi suggerisci titoli pertinenti.
+                    Formato risposta — SOLO questo JSON, niente altro:
+                    { "reply": "testo naturale qui", "titles": ["Titolo 1", "Titolo 2", "Titolo 3"] }
+                    """.formatted(libraryProfile, request.getMessage());
+        } else {
+            // Messaggi successivi: comportamento normale
+            prompt = """
+                    Sei l'assistente AI di CiakLog, un'app di tracking film/serie TV.
+                    Profilo cinematografico dell'utente:
+                    %s
+                    Storico della conversazione:
+                    %s
+                    Richiesta attuale: %s
+                    Rispondi SOLO con un array JSON di titoli esistenti (max 5), formato:
+                    ["Titolo 1", "Titolo 2", ...]
+                    Niente testo aggiuntivo, solo l'array JSON.
+                    """.formatted(libraryProfile, historyText, request.getMessage());
+        }
 
         try {
             String rawResponse = callGroq(prompt);
-            List<String> titles = parseTitlesFromResponse(rawResponse);
+
+            String reply;
+            List<String> titles;
+
+            if (isFirstMessage) {
+                // Parsing formato { "reply": "...", "titles": [...] }
+                try {
+                    String cleaned = rawResponse.replaceAll("```json|```", "").trim();
+                    JsonNode root = mapper.readTree(cleaned);
+                    reply = root.path("reply").asText("Ciao! Ecco alcuni suggerimenti per te:");
+                    titles = new ArrayList<>();
+                    for (JsonNode n : root.path("titles")) {
+                        titles.add(n.asText());
+                    }
+                } catch (Exception e) {
+                    // Fallback: tratta come array di titoli
+                    reply = "Ecco alcuni titoli che potrebbero piacerti:";
+                    titles = parseTitlesFromResponse(rawResponse);
+                }
+            } else {
+                reply = "Ecco alcuni titoli che potrebbero piacerti:";
+                titles = parseTitlesFromResponse(rawResponse);
+            }
+
             List<TmdbSearchResultResponse> suggestions = resolveTitlesOnTmdb(titles);
 
-            saveLog(user, sessionId, request.getMessage(), rawResponse);
+            if (suggestions.isEmpty()) {
+                reply = "Non ho trovato suggerimenti validi, prova a riformulare la richiesta.";
+            }
 
-            String reply = suggestions.isEmpty()
-                    ? "Non ho trovato suggerimenti validi, prova a riformulare la richiesta."
-                    : "Ecco alcuni titoli che potrebbero piacerti:";
+            saveLog(user, sessionId, request.getMessage(), rawResponse);
 
             return AiChatResponse.builder()
                     .reply(reply)
@@ -224,6 +271,7 @@ public class AiServiceImpl implements AiService {
 
         HttpRequest httpRequest = HttpRequest.newBuilder()
                 .uri(URI.create(GROQ_URL))
+                .timeout(Duration.ofSeconds(30)) // timeout per risposta completa
                 .header("Content-Type", "application/json")
                 .header("Authorization", "Bearer " + apiKey)
                 .POST(HttpRequest.BodyPublishers.ofString(body))
@@ -254,8 +302,9 @@ public class AiServiceImpl implements AiService {
     }
 
     private String buildLibraryProfile(User user) {
+        // PageRequest.of(0, 15) invece di Pageable.unpaged() — evita di caricare tutta la libreria in memoria
         List<WatchEntry> entries = watchEntryRepository
-                .findByUser(user, org.springframework.data.domain.Pageable.unpaged())
+                .findByUser(user, PageRequest.of(0, LIBRARY_PROFILE_LIMIT))
                 .getContent();
 
         if (entries.isEmpty()) {
@@ -263,7 +312,7 @@ public class AiServiceImpl implements AiService {
         }
 
         StringBuilder sb = new StringBuilder();
-        entries.stream().limit(15).forEach(e ->
+        entries.forEach(e ->
                 sb.append("- ").append(e.getTitle())
                         .append(" (").append(e.getStatus()).append(")\n"));
         return sb.toString();

@@ -11,6 +11,7 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -24,16 +25,39 @@ public interface ReviewRepository extends JpaRepository<Review, UUID> {
     // Tutte le recensioni di un utente — paginata (profilo pubblico)
     Page<Review> findByUser(User user, Pageable pageable);
 
-    // Per la classifica utenti (score = numero recensioni)
-    long countByUser(User user);
-
     // Per verificare duplicati (UC6/FA2 — 409 se già recensito)
     boolean existsByUserAndTmdbIdAndContentType(User user, Long tmdbId, ContentType contentType);
 
     // Per recuperare la recensione esistente (modifica, UC7)
     Optional<Review> findByUserAndTmdbIdAndContentType(User user, Long tmdbId, ContentType contentType);
 
-    // Per la weighted average (classifiche) — query custom
+    // Per la weighted average in getTrending() — carica le review di un singolo tmdbId
     @Query("SELECT r FROM Review r WHERE r.tmdbId = :tmdbId AND r.contentType = :contentType AND r.status = 'VISIBLE'")
     List<Review> findVisibleByTmdbIdAndContentType(@Param("tmdbId") Long tmdbId, @Param("contentType") ContentType contentType);
+
+    // Classifica film/serie: dati aggregati in una sola query, evita findAll()
+    // Restituisce: [tmdbId (Long), contentType (String), count (Long), avgRating (Double), maxCreatedAt (LocalDateTime)]
+    @Query("""
+            SELECT r.tmdbId, r.contentType, COUNT(r), AVG(r.rating), MAX(r.createdAt)
+            FROM Review r
+            WHERE r.status = com.project.ciaklog.entity.ReviewStatus.VISIBLE
+              AND r.contentType = :contentType
+            GROUP BY r.tmdbId, r.contentType
+            HAVING COUNT(r) >= :minVotes
+            """)
+    List<Object[]> findAggregatedByContentType(
+            @Param("contentType") ContentType contentType,
+            @Param("minVotes") long minVotes);
+
+    // Trending: recensioni recenti aggregate — evita findAll() + N query annidate
+    // Restituisce: [tmdbId (Long), contentType (String), weeklyCount (Long)]
+    @Query("""
+            SELECT r.tmdbId, r.contentType, COUNT(r)
+            FROM Review r
+            WHERE r.status = com.project.ciaklog.entity.ReviewStatus.VISIBLE
+              AND r.createdAt >= :since
+            GROUP BY r.tmdbId, r.contentType
+            ORDER BY COUNT(r) DESC
+            """)
+    List<Object[]> findTrendingGrouped(@Param("since") LocalDateTime since);
 }

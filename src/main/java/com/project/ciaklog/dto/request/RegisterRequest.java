@@ -3,6 +3,7 @@ package com.project.ciaklog.dto.request;
 
 import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Size;
 import lombok.Getter;
 import lombok.Setter;
@@ -20,6 +21,9 @@ public class RegisterRequest {
     private String email;
 
     @NotBlank(message = "Password obbligatoria")
-    @Size(min = 8, message = "Password minimo 8 caratteri")
+    @Pattern(
+            regexp = "^(?=.*[a-z])(?=.*[A-Z])(?=.*\\d).{8,}$",
+            message = "La password deve contenere almeno 8 caratteri, una maiuscola, una minuscola e un numero"
+    )
     private String password;
 }
