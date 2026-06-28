@@ -1,4 +1,5 @@
 import { BrowserRouter, Routes, Route } from 'react-router-dom'
+import ProtectedRoute from './components/ProtectedRoute'
 import HomePage from './pages/HomePage'
 import LoginPage from './pages/LoginPage'
 import RegisterPage from './pages/RegisterPage'
@@ -9,7 +10,8 @@ import ProfilePage from './pages/ProfilePage'
 import ChatAiPage from './pages/ChatAiPage'
 import AdminPage from './pages/AdminPage'
 import SettingsPage from './pages/SettingsPage'
-import { ChatAiFloatingButton } from './components/Navbar'
+import { ChatFloating } from './components/ChatWidget'
+import ToastContainer from './components/ToastContainer'
 
 function App() {
   return (
@@ -18,16 +20,21 @@ function App() {
         <Route path="/" element={<HomePage />} />
         <Route path="/login" element={<LoginPage />} />
         <Route path="/register" element={<RegisterPage />} />
-        <Route path="/library" element={<LibraryPage />} />
         <Route path="/search" element={<SearchPage />} />
         <Route path="/movie/:id" element={<MovieDetailPage />} />
         <Route path="/profile/:username" element={<ProfilePage />} />
-        <Route path="/chat" element={<ChatAiPage />} />
-        <Route path="/admin" element={<AdminPage />} />
-        <Route path="/settings" element={<SettingsPage />} />
+
+        {/* Rotte protette — richiedono login */}
+        <Route path="/library" element={<ProtectedRoute><LibraryPage /></ProtectedRoute>} />
+        <Route path="/chat" element={<ProtectedRoute><ChatAiPage /></ProtectedRoute>} />
+        <Route path="/settings" element={<ProtectedRoute><SettingsPage /></ProtectedRoute>} />
+
+        {/* Rotte admin */}
+        <Route path="/admin" element={<ProtectedRoute adminOnly><AdminPage /></ProtectedRoute>} />
       </Routes>
-      {/* Floating button AI — visibile in tutte le pagine tranne /chat */}
-      <ChatAiFloatingButton />
+      {/* Chat AI floating — visibile in tutte le pagine */}
+      <ChatFloating />
+      <ToastContainer />
     </BrowserRouter>
   )
 }

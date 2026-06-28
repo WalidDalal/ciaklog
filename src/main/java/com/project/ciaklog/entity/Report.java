@@ -39,6 +39,10 @@ public class Report {
     @Column(name = "created_at", nullable = false, updatable = false)
     private LocalDateTime createdAt;
 
+    // Fix: campo mancante — necessario per registrare quando la segnalazione è stata risolta
+    @Column(name = "resolved_at")
+    private LocalDateTime resolvedAt;
+
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "reporter_id", nullable = false)
     private User reporter;
@@ -47,13 +51,6 @@ public class Report {
     @JoinColumn(name = "review_id", nullable = false)
     private Review review;
 
-    /**
-     * Admin che ha gestito la segnalazione. Contratto: resta {@code null} finché
-     * {@link #status} è {@link ReportStatus#PENDING}; viene valorizzato dal
-     * ReportService nel momento in cui un Admin risolve la segnalazione
-     * (APPROVED, REJECTED o PAUSED). Non validato application.properties livello di entity/DB:
-     * la coerenza va garantita nel Service.
-     */
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "resolved_by_id")
     private User resolvedBy;

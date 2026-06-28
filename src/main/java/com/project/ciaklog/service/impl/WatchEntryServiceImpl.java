@@ -1,18 +1,22 @@
 package com.project.ciaklog.service.impl;
 
 import com.project.ciaklog.dto.request.WatchEntryRequest;
+import com.project.ciaklog.dto.response.TmdbDetailResponse;
 import com.project.ciaklog.dto.response.WatchEntryResponse;
+import com.project.ciaklog.entity.Role;
 import com.project.ciaklog.entity.User;
 import com.project.ciaklog.entity.WatchEntry;
 import com.project.ciaklog.entity.WatchStatus;
 import com.project.ciaklog.exception.*;
 import com.project.ciaklog.repository.UserRepository;
 import com.project.ciaklog.repository.WatchEntryRepository;
+import com.project.ciaklog.service.TmdbService;
 import com.project.ciaklog.service.WatchEntryService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
@@ -26,10 +30,16 @@ public class WatchEntryServiceImpl implements WatchEntryService {
 
     private final WatchEntryRepository watchEntryRepository;
     private final UserRepository userRepository;
+    private final TmdbService tmdbService;
 
     @Override
+    @Transactional
     public WatchEntryResponse addToLibrary(String username, WatchEntryRequest dto) {
         User user = getUser(username);
+
+        if (user.getRole() == Role.ADMIN) {
+            throw new ForbiddenException("Gli amministratori non possono aggiungere contenuti alla libreria");
+        }
 
         if (watchEntryRepository.existsByUserAndTmdbIdAndContentType(user, dto.getTmdbId(), dto.getContentType())) {
             throw new DuplicateResourceException("Contenuto già presente in libreria");
@@ -39,14 +49,17 @@ public class WatchEntryServiceImpl implements WatchEntryService {
             validateWatchingLimit(user);
         }
 
+        // Dati recuperati server-side da TMDB — il client invia solo tmdbId + contentType
+        TmdbDetailResponse detail = tmdbService.getDetail(dto.getTmdbId(), dto.getContentType());
+
         WatchEntry entry = WatchEntry.builder()
                 .user(user)
                 .tmdbId(dto.getTmdbId())
                 .contentType(dto.getContentType())
-                .title(dto.getTitle())
-                .posterPath(dto.getPosterPath())
-                .releaseYear(dto.getReleaseYear())
-                .genres(dto.getGenres())
+                .title(detail.getTitle())
+                .posterPath(detail.getPosterPath())
+                .releaseYear(detail.getReleaseYear())
+                .genres(detail.getGenres() != null ? String.join(",", detail.getGenres()) : null)
                 .status(dto.getStatus())
                 .currentSeason(dto.getCurrentSeason())
                 .watchedDate(dto.getStatus() == WatchStatus.WATCHED ? LocalDate.now() : null)
@@ -57,20 +70,25 @@ public class WatchEntryServiceImpl implements WatchEntryService {
     }
 
     @Override
+    @Transactional
     public WatchEntryResponse updateStatus(String username, UUID entryId, WatchStatus newStatus) {
         User user = getUser(username);
+
+        if (user.getRole() == Role.ADMIN) {
+            throw new ForbiddenException("Gli amministratori non possono modificare la libreria");
+        }
+
         WatchEntry entry = watchEntryRepository.findById(entryId)
                 .orElseThrow(() -> new ResourceNotFoundException("Contenuto non trovato in libreria"));
 
         if (!entry.getUser().getId().equals(user.getId())) {
-            throw new ForbiddenException("Non autorizzato");        }
+            throw new ForbiddenException("Non autorizzato");
+        }
 
         if (newStatus == WatchStatus.WATCHING && entry.getStatus() != WatchStatus.WATCHING) {
             validateWatchingLimit(user);
         }
 
-        // Imposta watchedDate solo nel momento in cui si transita VERSO WATCHED
-        // (non se era già WATCHED, per non sovrascrivere la data originale)
         if (newStatus == WatchStatus.WATCHED && entry.getStatus() != WatchStatus.WATCHED) {
             entry.setWatchedDate(LocalDate.now());
         }
@@ -82,13 +100,15 @@ public class WatchEntryServiceImpl implements WatchEntryService {
     }
 
     @Override
+    @Transactional
     public void removeFromLibrary(String username, UUID entryId) {
         User user = getUser(username);
         WatchEntry entry = watchEntryRepository.findById(entryId)
                 .orElseThrow(() -> new ResourceNotFoundException("Contenuto non trovato in libreria"));
 
         if (!entry.getUser().getId().equals(user.getId())) {
-            throw new ForbiddenException("Non autorizzato");        }
+            throw new ForbiddenException("Non autorizzato");
+        }
 
         watchEntryRepository.delete(entry);
     }

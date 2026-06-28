@@ -17,6 +17,7 @@ import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.stream.StreamSupport;
@@ -32,7 +33,12 @@ public class TmdbServiceImpl implements TmdbService {
     private String apiKey;
 
     private final ReviewRepository reviewRepository;
-    private final HttpClient httpClient = HttpClient.newHttpClient();
+
+    // Timeout condiviso — 5s connessione, 10s risposta (TMDB è veloce)
+    private final HttpClient httpClient = HttpClient.newBuilder()
+            .connectTimeout(Duration.ofSeconds(5))
+            .build();
+
     private final ObjectMapper mapper = new ObjectMapper();
 
     @Override
@@ -42,10 +48,17 @@ public class TmdbServiceImpl implements TmdbService {
                     : "tv".equals(type) ? "/search/tv"
                       : "/search/multi";
 
-            String url = BASE_URL + endpoint + "?api_key=" + apiKey
-                    + "&query=" + java.net.URLEncoder.encode(query, "UTF-8");
+            // Bearer header (metodo moderno) — ?api_key= è deprecato da TMDB
+            String url = BASE_URL + endpoint + "?query=" + java.net.URLEncoder.encode(query, "UTF-8");
 
-            HttpRequest request = HttpRequest.newBuilder().uri(URI.create(url)).GET().build();
+            HttpRequest request = HttpRequest.newBuilder()
+                    .uri(URI.create(url))
+                    .timeout(Duration.ofSeconds(10))
+                    .header("Authorization", "Bearer " + apiKey)
+                    .header("Accept", "application/json")
+                    .GET()
+                    .build();
+
             HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
 
             if (response.statusCode() != 200) {
@@ -71,6 +84,7 @@ public class TmdbServiceImpl implements TmdbService {
                         .build());
             }
             return out;
+
         } catch (RuntimeException e) {
             throw e;
         } catch (Exception e) {
@@ -83,14 +97,18 @@ public class TmdbServiceImpl implements TmdbService {
     public TmdbDetailResponse getDetail(Long tmdbId, ContentType contentType) {
         try {
             String endpoint = contentType == ContentType.TV ? "/tv/" : "/movie/";
-            String url = BASE_URL + endpoint + tmdbId + "?api_key=" + apiKey + "&append_to_response=credits";
+            String url = BASE_URL + endpoint + tmdbId + "?append_to_response=credits";
 
-            HttpRequest request = HttpRequest.newBuilder().uri(URI.create(url)).GET().build();
+            HttpRequest request = HttpRequest.newBuilder()
+                    .uri(URI.create(url))
+                    .timeout(Duration.ofSeconds(10))
+                    .header("Authorization", "Bearer " + apiKey)
+                    .header("Accept", "application/json")
+                    .GET()
+                    .build();
+
             HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
 
-            // TMDB risponde 404 con un body JSON di errore (status_code/status_message)
-            // quando l'id non esiste — senza questo controllo, il parsing sotto
-            // produrrebbe silenziosamente un DTO "vuoto" con status 200.
             if (response.statusCode() == 404) {
                 throw new ResourceNotFoundException(
                         "Contenuto TMDB non trovato: " + contentType + "/" + tmdbId);
@@ -105,13 +123,17 @@ public class TmdbServiceImpl implements TmdbService {
             List<String> genres = new ArrayList<>();
             root.path("genres").forEach(g -> genres.add(g.get("name").asText()));
 
-            List<String> cast = StreamSupport.stream(root.path("credits").path("cast").spliterator(), false)
+            List<TmdbDetailResponse.CastMember> cast = StreamSupport
+                    .stream(root.path("credits").path("cast").spliterator(), false)
                     .limit(5)
-                    .map(c -> c.get("name").asText())
+                    .map(c -> TmdbDetailResponse.CastMember.builder()
+                            .name(c.get("name").asText())
+                            .photoPath(c.path("profile_path").asText(null))
+                            .build())
                     .toList();
 
             double ciakLogAvg = computeCiakLogAverage(tmdbId, contentType);
-            int ciakLogVotes = (int) reviewRepository
+            int ciakLogVotes = reviewRepository
                     .findVisibleByTmdbIdAndContentType(tmdbId, contentType)
                     .size();
 
@@ -128,6 +150,7 @@ public class TmdbServiceImpl implements TmdbService {
                     .ciakLogAverageRating(ciakLogAvg)
                     .ciakLogVoteCount(ciakLogVotes)
                     .build();
+
         } catch (RuntimeException e) {
             throw e;
         } catch (Exception e) {
