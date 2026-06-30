@@ -1,10 +1,14 @@
 package com.project.ciaklog.controller;
 
+import com.project.ciaklog.dto.request.SuspendRequest;
+import com.project.ciaklog.dto.response.AdminUserDetailResponse;
 import com.project.ciaklog.dto.response.AdminUserResponse;
 import com.project.ciaklog.service.AdminService;
+import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
-import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Sort;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
@@ -22,15 +26,26 @@ public class AdminController {
     private final AdminService adminService;
 
     @GetMapping("/users")
-    public ResponseEntity<Page<AdminUserResponse>> listUsers(Pageable pageable) {
+    public ResponseEntity<Page<AdminUserResponse>> listUsers(
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "10") int size,
+            @RequestParam(required = false) String search) {
+        PageRequest pageable = PageRequest.of(page, size, Sort.by("username").ascending());
         return ResponseEntity.ok(adminService.listUsers(pageable));
+    }
+
+    // Dettaglio utente per il drawer laterale — caricato on-demand
+    @GetMapping("/users/{id}")
+    public ResponseEntity<AdminUserDetailResponse> getUserDetail(@PathVariable UUID id) {
+        return ResponseEntity.ok(adminService.getUserDetail(id));
     }
 
     @PutMapping("/users/{id}/suspend")
     public ResponseEntity<Void> suspendUser(
             @AuthenticationPrincipal UserDetails userDetails,
-            @PathVariable UUID id) {
-        adminService.suspendUser(id, userDetails.getUsername());
+            @PathVariable UUID id,
+            @Valid @RequestBody SuspendRequest dto) {
+        adminService.suspendUser(id, userDetails.getUsername(), dto.getReason());
         return ResponseEntity.noContent().build();
     }
 

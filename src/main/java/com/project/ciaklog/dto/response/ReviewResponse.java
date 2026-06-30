@@ -1,4 +1,3 @@
-// ReviewResponseDTO.java
 package com.project.ciaklog.dto.response;
 
 import com.project.ciaklog.entity.ContentType;
@@ -21,4 +20,9 @@ public class ReviewResponse {
     private ReviewStatus status;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
+
+    // Arricchiti dalla WatchEntry dell'utente — usati nel profilo per mostrare titolo e poster
+    // invece di "#tmdbId". Possono essere null se l'utente ha rimosso il contenuto dalla libreria.
+    private String title;
+    private String posterPath;
 }

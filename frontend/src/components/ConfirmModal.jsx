@@ -3,7 +3,7 @@ function ConfirmModal({ message, onConfirm, onCancel, confirmLabel = 'Conferma',
     <>
       <div
         onClick={onCancel}
-        style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(0,0,0,0.7)', zIndex: 500 }}
+        style={{ position: 'fixed', inset: 0, backgroundColor: 'var(--bg-modal)', zIndex: 500 }}
       />
       <div style={{
         position: 'fixed', top: '50%', left: '50%',

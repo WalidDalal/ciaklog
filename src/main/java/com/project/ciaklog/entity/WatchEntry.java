@@ -16,7 +16,11 @@ import java.util.UUID;
 @Entity
 @Table(
         name = "watch_entries",
-        uniqueConstraints = @UniqueConstraint(columnNames = {"user_id", "tmdb_id", "content_type"})
+        uniqueConstraints = @UniqueConstraint(columnNames = {"user_id", "tmdb_id", "content_type"}),
+        indexes = {
+            @Index(name = "idx_watch_entry_user_status", columnList = "user_id, status"),
+            @Index(name = "idx_watch_entry_user_last_update", columnList = "user_id, lastStatusUpdate")
+        }
 )
 public class WatchEntry {
     @Id

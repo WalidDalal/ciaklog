@@ -10,6 +10,9 @@ import com.project.ciaklog.dto.response.TrendingItemResponse;
 import com.project.ciaklog.entity.*;
 import com.project.ciaklog.exception.ResourceNotFoundException;
 import com.project.ciaklog.repository.AiRecommendationLogRepository;
+import com.project.ciaklog.repository.ReportRepository;
+import com.project.ciaklog.entity.ReportStatus;
+import com.project.ciaklog.entity.UserStatus;
 import com.project.ciaklog.repository.DailyRecommendationCacheRepository;
 import com.project.ciaklog.repository.UserRepository;
 import com.project.ciaklog.repository.WatchEntryRepository;
@@ -52,6 +55,7 @@ public class AiServiceImpl implements AiService {
     private final WatchEntryRepository watchEntryRepository;
     private final AiRecommendationLogRepository logRepository;
     private final DailyRecommendationCacheRepository cacheRepository;
+    private final ReportRepository reportRepository;
     private final TmdbService tmdbService;
     private final ChartService chartService;
 
@@ -112,10 +116,9 @@ public class AiServiceImpl implements AiService {
                     String cleaned = rawResponse.replaceAll("```json|```", "").trim();
                     JsonNode root = mapper.readTree(cleaned);
                     reply = root.path("reply").asText("Ciao! Ecco alcuni suggerimenti per te:");
-                    titles = new ArrayList<>();
-                    for (JsonNode n : root.path("titles")) {
-                        titles.add(n.asText());
-                    }
+                    final java.util.List<String> titlesList = new java.util.ArrayList<>();
+                    root.path("titles").forEach(n -> titlesList.add(n.asText()));
+                    titles = titlesList;
                 } catch (Exception e) {
                     // Fallback: tratta come array di titoli
                     reply = "Ecco alcuni titoli che potrebbero piacerti:";
@@ -144,6 +147,117 @@ public class AiServiceImpl implements AiService {
             log.error("Errore nella chiamata a Groq per utente {}: {}", username, e.getMessage());
             throw new RuntimeException("Assistente temporaneamente non disponibile", e);
         }
+    }
+
+    @Override
+    public AiChatResponse chatAdmin(String username, AiChatRequest request) {
+        // Verifica che sia un admin
+        User admin = getUser(username);
+        String sessionId = request.getSessionId() != null ? request.getSessionId() : java.util.UUID.randomUUID().toString();
+
+        // Costruisce il contesto gestionale dal DB
+        String adminContext = buildAdminContext();
+        String historyText = buildHistoryText(request);
+
+        String prompt = """
+                Sei l'assistente gestionale di CiakLog, una piattaforma di tracking film e serie TV.
+                Stai parlando con un amministratore della piattaforma.
+                
+                Dati attuali della piattaforma:
+                %s
+                
+                Storico conversazione:
+                %s
+                
+                Domanda dell'amministratore: %s
+                
+                ISTRUZIONI:
+                - Rispondi SOLO a domande gestionali sulla piattaforma (utenti, segnalazioni, violazioni, statistiche)
+                - Usa i dati forniti sopra per rispondere in modo preciso
+                - Se la domanda non riguarda la gestione della piattaforma, rispondi esattamente:
+                  "Non posso aiutarti con questo. Sono l'assistente gestionale di CiakLog e rispondo solo a domande sulla gestione della piattaforma."
+                - Rispondi in italiano, in modo conciso e diretto
+                - NON restituire JSON, solo testo naturale
+                """.formatted(adminContext, historyText, request.getMessage());
+
+        try {
+            String rawResponse = callGroq(prompt);
+            saveLog(admin, sessionId, request.getMessage(), rawResponse);
+
+            return AiChatResponse.builder()
+                    .reply(rawResponse.trim())
+                    .suggestions(java.util.List.of()) // nessun suggerimento film per l'admin
+                    .sessionId(sessionId)
+                    .build();
+
+        } catch (Exception e) {
+            log.error("Errore nella chat admin per {}: {}", username, e.getMessage());
+            throw new RuntimeException("Assistente temporaneamente non disponibile", e);
+        }
+    }
+
+    /**
+     * Costruisce il contesto gestionale leggendo i dati dal DB.
+     * Groq risponde solo ai dati qui presenti — non ha accesso diretto al DB.
+     */
+    private String buildAdminContext() {
+        StringBuilder sb = new StringBuilder();
+
+        // Segnalazioni
+        long pending = reportRepository.findByStatus(ReportStatus.PENDING, org.springframework.data.domain.PageRequest.of(0, 1)).getTotalElements();
+        long approved = reportRepository.findByStatus(ReportStatus.APPROVED, org.springframework.data.domain.PageRequest.of(0, 1)).getTotalElements();
+        long rejected = reportRepository.findByStatus(ReportStatus.REJECTED, org.springframework.data.domain.PageRequest.of(0, 1)).getTotalElements();
+
+        sb.append("=== SEGNALAZIONI ===\n");
+        sb.append("- In attesa (PENDING): ").append(pending).append("\n");
+        sb.append("- Approvate (recensione rimossa): ").append(approved).append("\n");
+        sb.append("- Rifiutate: ").append(rejected).append("\n\n");
+
+        // Ultime 5 segnalazioni pendenti con dettaglio
+        var pendingReports = reportRepository.findByStatus(ReportStatus.PENDING,
+                org.springframework.data.domain.PageRequest.of(0, 5,
+                        org.springframework.data.domain.Sort.by("createdAt").descending()));
+
+        if (pendingReports.hasContent()) {
+            sb.append("Ultime segnalazioni in attesa:\n");
+            pendingReports.forEach(r -> sb.append("  - ")
+                    .append(r.getReporter().getUsername())
+                    .append(" ha segnalato la recensione di ")
+                    .append(r.getReview().getUser().getUsername())
+                    .append(" (categoria: ").append(r.getReasonCategory()).append(")")
+                    .append("\n"));
+            sb.append("\n");
+        }
+
+        // Utenti
+        long totalUsers = userRepository.count() - 1; // escludi admin
+        long suspended = userRepository.findAll().stream()
+                .filter(u -> u.getStatus() == UserStatus.SUSPENDED).count();
+        long permSuspended = userRepository.findAll().stream()
+                .filter(u -> u.getStatus() == UserStatus.PERMANENTLY_SUSPENDED).count();
+
+        sb.append("=== UTENTI ===\n");
+        sb.append("- Utenti totali: ").append(totalUsers).append("\n");
+        sb.append("- Sospesi temporaneamente: ").append(suspended).append("\n");
+        sb.append("- Sospesi permanentemente: ").append(permSuspended).append("\n\n");
+
+        // Utenti con violazioni
+        var usersWithViolations = userRepository.findAll().stream()
+                .filter(u -> u.getViolationCount() > 0 && u.getRole() == com.project.ciaklog.entity.Role.USER)
+                .sorted((a, b) -> Integer.compare(b.getViolationCount(), a.getViolationCount()))
+                .limit(5)
+                .toList();
+
+        if (!usersWithViolations.isEmpty()) {
+            sb.append("Utenti con violazioni (top 5):\n");
+            usersWithViolations.forEach(u -> sb.append("  - ")
+                    .append(u.getUsername())
+                    .append(": ").append(u.getViolationCount()).append(" violazioni")
+                    .append(", stato: ").append(u.getStatus())
+                    .append("\n"));
+        }
+
+        return sb.toString();
     }
 
     @Override
@@ -261,6 +375,9 @@ public class AiServiceImpl implements AiService {
                 .build();
     }
 
+    private static final int MAX_RETRIES = 2;
+    private static final long RETRY_BACKOFF_MS = 1500L;
+
     private String callGroq(String prompt) throws Exception {
         String body = mapper.writeValueAsString(Map.of(
                 "model", GROQ_MODEL,
@@ -271,21 +388,44 @@ public class AiServiceImpl implements AiService {
 
         HttpRequest httpRequest = HttpRequest.newBuilder()
                 .uri(URI.create(GROQ_URL))
-                .timeout(Duration.ofSeconds(30)) // timeout per risposta completa
+                .timeout(Duration.ofSeconds(30))
                 .header("Content-Type", "application/json")
                 .header("Authorization", "Bearer " + apiKey)
                 .POST(HttpRequest.BodyPublishers.ofString(body))
                 .build();
 
-        HttpResponse<String> response = httpClient.send(httpRequest, HttpResponse.BodyHandlers.ofString());
+        Exception lastException = null;
+        for (int attempt = 0; attempt <= MAX_RETRIES; attempt++) {
+            try {
+                HttpResponse<String> response = httpClient.send(httpRequest, HttpResponse.BodyHandlers.ofString());
 
-        if (response.statusCode() != 200) {
-            log.error("Groq ha risposto {} : {}", response.statusCode(), response.body());
-            throw new RuntimeException("Groq API non disponibile (status " + response.statusCode() + ")");
+                if (response.statusCode() == 200) {
+                    JsonNode root = mapper.readTree(response.body());
+                    return root.path("choices").get(0).path("message").path("content").asText();
+                }
+
+                // 429 o 5xx — errori transitori, vale la pena riprovare
+                boolean isTransient = response.statusCode() == 429
+                        || response.statusCode() >= 500;
+
+                log.warn("Groq risposto {} al tentativo {}/{}", response.statusCode(), attempt + 1, MAX_RETRIES + 1);
+
+                if (!isTransient || attempt == MAX_RETRIES) {
+                    throw new RuntimeException("Groq API non disponibile (status " + response.statusCode() + ")");
+                }
+
+            } catch (java.io.IOException | InterruptedException e) {
+                // Errore di rete — retriable
+                log.warn("Errore di rete Groq al tentativo {}/{}: {}", attempt + 1, MAX_RETRIES + 1, e.getMessage());
+                lastException = e;
+                if (attempt == MAX_RETRIES) throw new RuntimeException("Assistente temporaneamente non disponibile", e);
+            }
+
+            // Backoff esponenziale: 1.5s, 3s
+            Thread.sleep(RETRY_BACKOFF_MS * (long) Math.pow(2, attempt));
         }
 
-        JsonNode root = mapper.readTree(response.body());
-        return root.path("choices").get(0).path("message").path("content").asText();
+        throw new RuntimeException("Assistente temporaneamente non disponibile", lastException);
     }
 
     private List<String> parseTitlesFromResponse(String rawResponse) {
