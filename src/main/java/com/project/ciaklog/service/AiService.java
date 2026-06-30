@@ -6,5 +6,6 @@ import com.project.ciaklog.dto.response.DailyRecommendationResponse;
 
 public interface AiService {
     AiChatResponse chat(String username, AiChatRequest dto);
+    AiChatResponse chatAdmin(String username, AiChatRequest dto);
     DailyRecommendationResponse getDaily(String username);
 }

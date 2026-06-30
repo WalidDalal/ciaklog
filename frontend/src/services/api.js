@@ -1,22 +1,49 @@
 import axios from 'axios'
+import { jwtDecode } from 'jwt-decode'
 
 const api = axios.create({
   baseURL: import.meta.env.VITE_API_URL || 'http://localhost:8080/api',
 })
 
+function isTokenExpired(token) {
+  try {
+    return jwtDecode(token).exp < Date.now() / 1000
+  } catch {
+    return true
+  }
+}
+
 api.interceptors.request.use((config) => {
   const token = localStorage.getItem('token')
-  if (token) config.headers.Authorization = `Bearer ${token}`
+  if (!token) return config
+
+  if (isTokenExpired(token) && !config.url.includes('/auth/')) {
+    // Token scaduto — pulizia e redirect con messaggio
+    localStorage.removeItem('token')
+    // Importazione dinamica per evitare circular dependency con authStore
+    import('../store/toastStore').then(({ default: useToastStore }) => {
+      useToastStore.getState().show('Sessione scaduta, effettua di nuovo il login', 'info')
+    })
+    // Piccolo delay per far apparire il toast prima del redirect
+    setTimeout(() => { window.location.href = '/login' }, 800)
+    return Promise.reject(new axios.Cancel('Token scaduto'))
+  }
+
+  config.headers.Authorization = `Bearer ${token}`
   return config
 })
 
 api.interceptors.response.use(
   res => res,
   err => {
-    // Non fare redirect se siamo già sulle rotte di autenticazione
+    if (axios.isCancel(err)) return Promise.reject(err)
+    // 401 dal backend (token manomesso o invalidato server-side)
     if (err.response?.status === 401 && !err.config.url.includes('/auth/')) {
       localStorage.removeItem('token')
-      window.location.href = '/login'
+      import('../store/toastStore').then(({ default: useToastStore }) => {
+        useToastStore.getState().show('Sessione scaduta, effettua di nuovo il login', 'info')
+      })
+      setTimeout(() => { window.location.href = '/login' }, 800)
     }
     return Promise.reject(err)
   }

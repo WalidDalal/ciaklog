@@ -238,20 +238,10 @@ function LibraryPage() {
                       <div style={{ width: '100%', height: '240px', backgroundColor: 'var(--border)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '40px' }}>🎬</div>
                     )}
 
-                    {/* Badge status sovrapposto */}
-                    <div style={{
-                      position: 'absolute', top: '8px', left: '8px',
-                      display: 'flex', alignItems: 'center', gap: '4px',
-                      backgroundColor: 'rgba(0,0,0,0.75)', borderRadius: '10px', padding: '3px 8px',
-                    }}>
-                      <div style={{ width: '6px', height: '6px', borderRadius: '50%', backgroundColor: STATUS_COLORS[entry.status] }} />
-                      <span style={{ color: 'var(--text)', fontSize: '10px', fontWeight: '600' }}>{STATUS_LABELS[entry.status]}</span>
-                    </div>
-
                     {entry.currentSeason && (
                       <div style={{
                         position: 'absolute', top: '8px', right: '8px',
-                        backgroundColor: 'rgba(0,0,0,0.75)', borderRadius: '8px', padding: '3px 8px',
+                        backgroundColor: 'var(--bg-overlay)', borderRadius: '8px', padding: '3px 8px',
                       }}>
                         <span style={{ color: 'var(--text-muted)', fontSize: '10px' }}>S{entry.currentSeason}</span>
                       </div>
