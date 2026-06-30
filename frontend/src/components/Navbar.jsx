@@ -112,7 +112,7 @@ function Navbar() {
               {/* Admin — visibile direttamente in navbar, non nel dropdown */}
               {user?.role === 'ADMIN' && (
                 <Link to="/admin">
-                  <button style={{ padding: '8px 14px', backgroundColor: '#1a0a0a', border: '1px solid #e5091466', borderRadius: '6px', color: 'var(--accent)', fontSize: '14px', fontWeight: '600', cursor: 'pointer', whiteSpace: 'nowrap' }}>
+                  <button style={{ padding: '8px 14px', backgroundColor: 'var(--accent-subtle)', border: '1px solid #e5091466', borderRadius: '6px', color: 'var(--accent)', fontSize: '14px', fontWeight: '600', cursor: 'pointer', whiteSpace: 'nowrap' }}>
                     🛡️ Admin
                   </button>
                 </Link>
@@ -138,7 +138,7 @@ function Navbar() {
                     position: 'absolute', right: 0, top: '44px',
                     backgroundColor: 'var(--bg-card)', border: '1px solid #333',
                     borderRadius: '10px', minWidth: '180px', overflow: 'hidden',
-                    boxShadow: '0 8px 32px rgba(0,0,0,0.5)',
+                    boxShadow: 'var(--shadow-lg)',
                     zIndex: 200,
                   }}>
                     <Link to={`/profile/${user?.username}`} onClick={() => setShowDropdown(false)}>

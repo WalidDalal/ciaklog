@@ -7,6 +7,7 @@ import com.project.ciaklog.service.AiService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.web.bind.annotation.*;
@@ -18,16 +19,27 @@ public class AiController {
 
     private final AiService aiService;
 
-    // Chat libera in linguaggio naturale
+    // Chat film/serie — solo utenti normali
     @PostMapping("/chat")
+    @PreAuthorize("hasRole('USER')")
     public ResponseEntity<AiChatResponse> chat(
             @AuthenticationPrincipal UserDetails userDetails,
             @Valid @RequestBody AiChatRequest dto) {
         return ResponseEntity.ok(aiService.chat(userDetails.getUsername(), dto));
     }
 
-    // Raccomandazione giornaliera — cachata 24h
+    // Chat gestionale — solo admin
+    @PostMapping("/chat/admin")
+    @PreAuthorize("hasRole('ADMIN')")
+    public ResponseEntity<AiChatResponse> chatAdmin(
+            @AuthenticationPrincipal UserDetails userDetails,
+            @Valid @RequestBody AiChatRequest dto) {
+        return ResponseEntity.ok(aiService.chatAdmin(userDetails.getUsername(), dto));
+    }
+
+    // Raccomandazione giornaliera — solo utenti normali
     @GetMapping("/daily")
+    @PreAuthorize("hasRole('USER')")
     public ResponseEntity<DailyRecommendationResponse> getDaily(
             @AuthenticationPrincipal UserDetails userDetails) {
         return ResponseEntity.ok(aiService.getDaily(userDetails.getUsername()));

@@ -4,6 +4,7 @@ import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
+import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 import org.springframework.web.filter.OncePerRequestFilter;
 
@@ -66,6 +67,19 @@ public class AiRateLimitFilter extends OncePerRequestFilter {
 
         timestamps.addLast(now);
         filterChain.doFilter(request, response);
+    }
+
+    /**
+     * Eviction schedulata ogni 30 minuti — rimuove entry con deque vuota
+     * per evitare che la mappa cresca indefinitamente su server long-running.
+     */
+    @Scheduled(fixedRate = 30 * 60 * 1000L)
+    public void evictEmptyEntries() {
+        long windowStart = Instant.now().toEpochMilli() - WINDOW_MS;
+        requestLog.forEach((username, timestamps) -> {
+            timestamps.removeIf(t -> t < windowStart);
+            if (timestamps.isEmpty()) requestLog.remove(username);
+        });
     }
 
     private String extractUsername(HttpServletRequest request) {

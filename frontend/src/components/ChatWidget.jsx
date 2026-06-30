@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
+import { Link, useNavigate, useLocation } from 'react-router-dom'
 import api from '../services/api'
 import useAuthStore from '../store/authStore'
 import useChatStore from '../store/chatStore'
@@ -13,8 +13,9 @@ const SUGGESTIONS = [
 
 // Componente puro della chat — usato sia nella floating che nella pagina intera
 export function ChatCore({ compact = false, initialPrompt = null }) {
-  const { token } = useAuthStore()
+  const { token, user } = useAuthStore()
   const { messages, sessionId, addMessage, setSessionId, clear } = useChatStore()
+  const isAdmin = user?.role === 'ADMIN'
   const [input, setInput] = useState(initialPrompt || '')
   const [loading, setLoading] = useState(false)
   const bottomRef = useRef(null)
@@ -46,7 +47,7 @@ export function ChatCore({ compact = false, initialPrompt = null }) {
       const res = await api.post('/ai/chat', {
         message: text.trim(),
         sessionId,
-        sessionHistory: messages,
+        sessionHistory: messages.slice(-10),
       })
       setSessionId(res.data.sessionId)
       addMessage({
@@ -124,7 +125,7 @@ export function ChatCore({ compact = false, initialPrompt = null }) {
                 {msg.content}
               </div>
 
-              {msg.suggestions?.length > 0 && (
+              {msg.suggestions?.length > 0 && !isAdmin && (
                 <div style={{ display: 'flex', gap: '8px', marginTop: '10px', flexWrap: 'wrap' }}>
                   {msg.suggestions.map((s, j) => (
                     <Link to={`/movie/${s.tmdbId}?type=${s.contentType || s.mediaType}`} key={j}
@@ -206,12 +207,14 @@ export function ChatCore({ compact = false, initialPrompt = null }) {
 
 // Finestra floating — rimpiazza ChatAiFloatingButton in Navbar
 export function ChatFloating() {
-  const { token } = useAuthStore()
+  const { token, user } = useAuthStore()
   const { isOpen, toggle, close, messages } = useChatStore()
   const navigate = useNavigate()
+  const location = useLocation()
 
-  // Non mostrare se non loggato
+  // Non mostrare se non loggato o se siamo già sulla pagina chat (evita doppia apertura)
   if (!token) return null
+  if (location.pathname === '/chat') return null
 
   const unread = 0 // placeholder per future notifiche
 
@@ -228,7 +231,7 @@ export function ChatFloating() {
           border: 'none', cursor: 'pointer',
           display: 'flex', alignItems: 'center', justifyContent: 'center',
           fontSize: isOpen ? '20px' : '24px',
-          boxShadow: isOpen ? '0 4px 16px rgba(0,0,0,0.4)' : '0 4px 20px rgba(229,9,20,0.4)',
+          boxShadow: isOpen ? 'var(--shadow)' : '0 4px 20px rgba(229,9,20,0.4)',
           transition: 'all 0.2s',
         }}
         onMouseEnter={e => { e.currentTarget.style.transform = 'scale(1.1)' }}
@@ -245,7 +248,7 @@ export function ChatFloating() {
           backgroundColor: 'var(--bg-card)', border: '1px solid #2a2a2a',
           borderRadius: '16px', zIndex: 599,
           display: 'flex', flexDirection: 'column',
-          boxShadow: '0 8px 40px rgba(0,0,0,0.6)',
+          boxShadow: 'var(--shadow-lg)',
           animation: 'chatSlideUp 0.2s ease',
           overflow: 'hidden',
         }}>

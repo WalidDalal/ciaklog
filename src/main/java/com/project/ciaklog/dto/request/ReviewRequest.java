@@ -20,7 +20,8 @@ public class ReviewRequest {
     @Max(value = 5, message = "Il voto massimo è 5")
     private Integer rating;
 
-    @NotBlank(message = "Testo recensione obbligatorio")
+    // Testo opzionale nel DTO — la validazione "obbligatorio se WATCHED"
+    // è delegata a ReviewServiceImpl dove si conosce lo stato della WatchEntry
     @Size(max = 1000, message = "Testo massimo 1000 caratteri")
     private String text;
 }

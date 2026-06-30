@@ -1,10 +1,13 @@
-import { useSearchParams, Navigate } from 'react-router-dom'
+import { useSearchParams, Navigate, useNavigate } from 'react-router-dom'
 import Navbar from '../components/Navbar'
 import { ChatCore } from '../components/ChatWidget'
+import useChatStore from '../store/chatStore'
 import useAuthStore from '../store/authStore'
 
 function ChatAiPage() {
   const { token } = useAuthStore()
+  const { open } = useChatStore()
+  const navigate = useNavigate()
   const [searchParams] = useSearchParams()
   const initialPrompt = searchParams.get('prompt') || null
 
@@ -16,7 +19,18 @@ function ChatAiPage() {
 
       <div style={{ textAlign: 'center', padding: '40px 24px 16px' }}>
         <div style={{ fontSize: '48px', marginBottom: '12px' }}>🤖</div>
-        <h1 style={{ fontSize: '32px', fontWeight: '800', color: 'var(--text)', marginBottom: '8px' }}>Chat AI</h1>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '12px', marginBottom: '8px' }}>
+          <h1 style={{ fontSize: '32px', fontWeight: '800', color: 'var(--text)' }}>Chat AI</h1>
+          <button
+            onClick={() => { open(); navigate(-1) }}
+            title="Rimpicciolisci"
+            style={{
+              backgroundColor: 'transparent', border: '1px solid var(--border)',
+              borderRadius: '8px', padding: '6px 12px',
+              color: 'var(--text-dark)', fontSize: '13px', cursor: 'pointer',
+            }}
+          >⤡ Rimpicciolisci</button>
+        </div>
         <p style={{ color: 'var(--text-muted)', fontSize: '15px' }}>
           Conosce la tua libreria e i tuoi gusti — chiedi un consiglio
         </p>

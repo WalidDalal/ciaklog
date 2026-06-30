@@ -18,12 +18,12 @@ public interface ReportRepository extends JpaRepository<Report, UUID> {
     // Dashboard Admin — lista segnalazioni per stato, paginata
     Page<Report> findByStatus(ReportStatus status, Pageable pageable);
 
-    // Dashboard Admin — tutte le segnalazioni, paginata
-    Page<Report> findAll(Pageable pageable);
-
-    // Per verificare segnalazione duplicata (UC10/FA2 — 409)
+    // Per verificare segnalazione duplicata
     boolean existsByReporterAndReview(User reporter, Review review);
 
-    // Per trovare tutte le segnalazioni su una review (utile per debug/storico)
+    // Per trovare tutte le segnalazioni su una review
     List<Report> findByReview(Review review);
+
+    // Fix N+1: carica tutti i report per una lista di review in una sola query
+    List<Report> findAllByReviewIn(List<Review> reviews);
 }
