@@ -93,15 +93,18 @@ public class ReportServiceImpl implements ReportService {
 
                 User offender = review.getUser();
                 offender.setViolationCount(offender.getViolationCount() + 1);
-                // Scala score per la rimozione — sottrae i punti della pubblicazione + penale
-                offender.setScore(Math.max(0, offender.getScore() - 15));
 
                 if (offender.getViolationCount() >= 3) {
+                    // Terza violazione: sospensione permanente, score azzerato
                     offender.setStatus(UserStatus.PERMANENTLY_SUSPENDED);
                     offender.setScore(0);
                 } else if (offender.getViolationCount() == 2) {
+                    // Seconda violazione: sospensione temporanea, penale -20
                     offender.setStatus(UserStatus.SUSPENDED);
                     offender.setScore(Math.max(0, offender.getScore() - 20));
+                } else {
+                    // Prima violazione: solo penale -15
+                    offender.setScore(Math.max(0, offender.getScore() - 15));
                 }
 
                 userRepository.save(offender);

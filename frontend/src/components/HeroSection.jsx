@@ -30,11 +30,14 @@ function HeroSection() {
         width: '60%',
         display: 'flex',
         gap: '8px',
-        opacity: 0.3,
-        maskImage: 'linear-gradient(to left, rgba(0,0,0,0.8), transparent)',
-        WebkitMaskImage: 'linear-gradient(to left, rgba(0,0,0,0.8), transparent)',
         overflow: 'hidden',
       }}>
+        {/* Overlay che sfuma i poster verso il bg — funziona sia in dark che light */}
+        <div style={{
+          position: 'absolute', inset: 0, zIndex: 1,
+          background: 'linear-gradient(to right, var(--bg) 0%, transparent 40%)',
+          pointerEvents: 'none',
+        }} />
         {posters.map((path, i) => (
           <img
             key={i}
@@ -49,7 +52,7 @@ function HeroSection() {
       <div style={{
         position: 'absolute',
         inset: 0,
-        background: 'linear-gradient(to right, #0a0a0a 50%, transparent)',
+        background: 'var(--gradient-hero)',
         zIndex: 1,
       }} />
 

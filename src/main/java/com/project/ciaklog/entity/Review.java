@@ -18,6 +18,10 @@ import java.util.UUID;
         name = "reviews",
         uniqueConstraints = {
                 @UniqueConstraint(columnNames = {"user_id", "tmdb_id", "content_type"})
+        },
+        indexes = {
+            @Index(name = "idx_review_tmdb_type_status", columnList = "tmdb_id, content_type, status"),
+            @Index(name = "idx_review_user_status", columnList = "user_id, status")
         }
 )
 public class Review {

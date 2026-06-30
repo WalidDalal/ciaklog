@@ -1,22 +1,30 @@
 spring.application.name=ciaklog
 
+# Database
 spring.datasource.url=jdbc:mysql://localhost:3306/ciaklog_db
 spring.datasource.username=root
 spring.datasource.password=MYSQL_PASSWORD
 
+# JPA — usare "validate" in produzione, "update" in sviluppo
 spring.jpa.hibernate.ddl-auto=update
-spring.jpa.show-sql=true
+spring.jpa.show-sql=false
+spring.jpa.open-in-view=false
 
+# Paginazione
+spring.data.web.pageable.default-page-size=10
+spring.data.web.pageable.max-page-size=50
+
+# JWT — scadenza: 28800000 = 8h, 86400000 = 24h, 604800000 = 7gg
 jwt.secret=JWT_SECRET_MIN_32_CHARS
-jwt.expiration=86400000
+jwt.expiration=28800000
 
+# TMDB
 tmdb.api.key=TMDB_API_KEY
 tmdb.api.base-url=https://api.themoviedb.org/3
 tmdb.api.image-base-url=https://image.tmdb.org/t/p/w500
 
-ai.api.key=GEMINI_API_KEY
-ai.api.url=https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent
-ai.api.model=gemini-2.0-flash
+# AI — Groq (LLaMA 3.3 70B)
+groq.api.key=GROQ_API_KEY
 
-spring.data.web.pageable.default-page-size=10
-spring.data.web.pageable.max-page-size=50
+# CORS
+cors.allowed-origins=http://localhost:5173

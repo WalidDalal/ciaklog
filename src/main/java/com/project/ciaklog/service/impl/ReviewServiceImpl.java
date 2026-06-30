@@ -54,6 +54,11 @@ public class ReviewServiceImpl implements ReviewService {
             throw new BusinessRuleException("Puoi recensire solo contenuti che hai contrassegnato come 'Visto'");
         }
 
+        // Testo obbligatorio solo per le recensioni di contenuti visti
+        if (dto.getText() == null || dto.getText().isBlank()) {
+            throw new BusinessRuleException("Il testo della recensione è obbligatorio per i contenuti visti");
+        }
+
         Review review = Review.builder()
                 .user(user)
                 .tmdbId(dto.getTmdbId())
@@ -64,11 +69,10 @@ public class ReviewServiceImpl implements ReviewService {
 
         reviewRepository.save(review);
 
-        // +10 punti — fonte di verità unica: user.score persistito
         user.setScore(user.getScore() + POINTS_CREATE_REVIEW);
         userRepository.save(user);
 
-        return toDTO(review);
+        return toDTO(review, user);
     }
 
     @Override
@@ -85,7 +89,7 @@ public class ReviewServiceImpl implements ReviewService {
         review.setRating(dto.getRating());
         review.setText(dto.getText());
 
-        return toDTO(reviewRepository.save(review));
+        return toDTO(reviewRepository.save(review), user);
     }
 
     @Override
@@ -102,7 +106,6 @@ public class ReviewServiceImpl implements ReviewService {
         review.setStatus(ReviewStatus.REMOVED);
         reviewRepository.save(review);
 
-        // -10 punti: la cancellazione volontaria revoca il bonus della pubblicazione
         user.setScore(Math.max(0, user.getScore() - POINTS_CREATE_REVIEW));
         userRepository.save(user);
     }
@@ -111,13 +114,19 @@ public class ReviewServiceImpl implements ReviewService {
     public Page<ReviewResponse> getReviewsForMedia(Long tmdbId, ContentType contentType, Pageable pageable) {
         return reviewRepository
                 .findByTmdbIdAndContentTypeAndStatus(tmdbId, contentType, ReviewStatus.VISIBLE, pageable)
-                .map(this::toDTO);
+                .map(r -> toDTO(r, r.getUser()));
     }
 
     @Override
     public Page<ReviewResponse> getUserReviews(String username, Pageable pageable) {
         User user = getUser(username);
-        return reviewRepository.findByUser(user, pageable).map(this::toDTO);
+        // Caricare tutte le WatchEntry in una sola query per evitare N+1
+        java.util.Map<String, WatchEntry> entryMap = new java.util.HashMap<>();
+        watchEntryRepository.findAllByUser(user).forEach(e ->
+            entryMap.put(e.getTmdbId() + "_" + e.getContentType(), e)
+        );
+        return reviewRepository.findByUser(user, pageable)
+                .map(r -> toDTOWithMap(r, entryMap));
     }
 
     // ── helpers ──
@@ -127,7 +136,8 @@ public class ReviewServiceImpl implements ReviewService {
                 .orElseThrow(() -> new ResourceNotFoundException("Utente non trovato"));
     }
 
-    private ReviewResponse toDTO(Review r) {
+    private ReviewResponse toDTOWithMap(Review r, java.util.Map<String, WatchEntry> entryMap) {
+        WatchEntry entry = entryMap.get(r.getTmdbId() + "_" + r.getContentType());
         return ReviewResponse.builder()
                 .id(r.getId())
                 .username(r.getUser().getUsername())
@@ -138,6 +148,35 @@ public class ReviewServiceImpl implements ReviewService {
                 .status(r.getStatus())
                 .createdAt(r.getCreatedAt())
                 .updatedAt(r.getUpdatedAt())
+                .title(entry != null ? entry.getTitle() : null)
+                .posterPath(entry != null ? entry.getPosterPath() : null)
+                .build();
+    }
+
+    private ReviewResponse toDTO(Review r, User user) {
+        // Cerca title e posterPath nella WatchEntry dell'utente per questo contenuto
+        String title = null;
+        String posterPath = null;
+        var entry = watchEntryRepository
+                .findByUserAndTmdbIdAndContentType(user, r.getTmdbId(), r.getContentType())
+                .orElse(null);
+        if (entry != null) {
+            title = entry.getTitle();
+            posterPath = entry.getPosterPath();
+        }
+
+        return ReviewResponse.builder()
+                .id(r.getId())
+                .username(r.getUser().getUsername())
+                .tmdbId(r.getTmdbId())
+                .contentType(r.getContentType())
+                .rating(r.getRating())
+                .text(r.getText())
+                .status(r.getStatus())
+                .createdAt(r.getCreatedAt())
+                .updatedAt(r.getUpdatedAt())
+                .title(title)
+                .posterPath(posterPath)
                 .build();
     }
 }

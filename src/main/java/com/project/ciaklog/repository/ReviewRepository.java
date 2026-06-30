@@ -19,24 +19,36 @@ import java.util.UUID;
 @Repository
 public interface ReviewRepository extends JpaRepository<Review, UUID> {
 
-    // Recensioni pubbliche (VISIBLE) per un film/serie — paginata (UC3, pagina dettaglio)
-    Page<Review> findByTmdbIdAndContentTypeAndStatus(Long tmdbId, ContentType contentType, ReviewStatus status, Pageable pageable);
+    // JOIN FETCH user — evita LazyInitializationException in toDTO()
+    @Query("""
+            SELECT r FROM Review r
+            JOIN FETCH r.user
+            WHERE r.tmdbId = :tmdbId AND r.contentType = :contentType AND r.status = :status
+            """)
+    Page<Review> findByTmdbIdAndContentTypeAndStatus(
+            @Param("tmdbId") Long tmdbId,
+            @Param("contentType") ContentType contentType,
+            @Param("status") ReviewStatus status,
+            Pageable pageable);
 
-    // Tutte le recensioni di un utente — paginata (profilo pubblico)
-    Page<Review> findByUser(User user, Pageable pageable);
+    // JOIN FETCH user — evita LazyInitializationException in toDTO()
+    @Query("""
+            SELECT r FROM Review r
+            JOIN FETCH r.user
+            WHERE r.user = :user
+            """)
+    Page<Review> findByUser(@Param("user") User user, Pageable pageable);
 
-    // Per verificare duplicati (UC6/FA2 — 409 se già recensito)
+    // Tutte le review di un utente senza filtro status — usata dall'admin
+    List<Review> findAllByUser(User user);
+
     boolean existsByUserAndTmdbIdAndContentType(User user, Long tmdbId, ContentType contentType);
 
-    // Per recuperare la recensione esistente (modifica, UC7)
     Optional<Review> findByUserAndTmdbIdAndContentType(User user, Long tmdbId, ContentType contentType);
 
-    // Per la weighted average in getTrending() — carica le review di un singolo tmdbId
     @Query("SELECT r FROM Review r WHERE r.tmdbId = :tmdbId AND r.contentType = :contentType AND r.status = 'VISIBLE'")
     List<Review> findVisibleByTmdbIdAndContentType(@Param("tmdbId") Long tmdbId, @Param("contentType") ContentType contentType);
 
-    // Classifica film/serie: dati aggregati in una sola query, evita findAll()
-    // Restituisce: [tmdbId (Long), contentType (String), count (Long), avgRating (Double), maxCreatedAt (LocalDateTime)]
     @Query("""
             SELECT r.tmdbId, r.contentType, COUNT(r), AVG(r.rating), MAX(r.createdAt)
             FROM Review r
@@ -49,8 +61,6 @@ public interface ReviewRepository extends JpaRepository<Review, UUID> {
             @Param("contentType") ContentType contentType,
             @Param("minVotes") long minVotes);
 
-    // Trending: recensioni recenti aggregate — evita findAll() + N query annidate
-    // Restituisce: [tmdbId (Long), contentType (String), weeklyCount (Long)]
     @Query("""
             SELECT r.tmdbId, r.contentType, COUNT(r)
             FROM Review r

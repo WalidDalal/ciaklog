@@ -27,4 +27,7 @@ public interface WatchEntryRepository extends JpaRepository<WatchEntry, UUID> {
 
     // Rinominato da findByUserAndStatus per evitare conflitto di firma con quello paginato
     List<WatchEntry> findAllByUserAndStatus(User user, WatchStatus status);
+
+    // Tutte le entry di un utente — usato per evitare N+1 in getUserReviews
+    List<WatchEntry> findAllByUser(User user);
 }
