@@ -39,9 +39,7 @@ public class UserServiceImpl implements UserService {
         User user = userRepository.findByUsername(username)
                 .orElseThrow(() -> new ResourceNotFoundException("Utente non trovato"));
 
-        List<WatchEntry> allEntries = watchEntryRepository
-                .findByUser(user, org.springframework.data.domain.Pageable.unpaged())
-                .getContent();
+        List<WatchEntry> allEntries = watchEntryRepository.findAllByUser(user);
 
         List<String> topGenres = allEntries.stream()
                 .filter(e -> e.getGenres() != null && !e.getGenres().isBlank())
@@ -55,25 +53,28 @@ public class UserServiceImpl implements UserService {
                 .collect(Collectors.toList());
 
         List<WatchEntry> watching = watchEntryRepository.findAllByUserAndStatus(user, WatchStatus.WATCHING);
-        WatchEntry activeWatching = watching.stream()
+        List<UserProfileResponse.WatchingItem> watchingItems = watching.stream()
                 .filter(e -> e.getLastStatusUpdate() != null &&
                         e.getLastStatusUpdate().isAfter(LocalDateTime.now().minusDays(30)))
-                .findFirst()
-                .orElse(null);
+                .limit(5)
+                .map(e -> UserProfileResponse.WatchingItem.builder()
+                        .title(e.getTitle())
+                        .season(e.getCurrentSeason())
+                        .build())
+                .collect(Collectors.toList());
 
         return UserProfileResponse.builder()
                 .username(user.getUsername())
                 .bio(user.getBio())
                 .topGenres(topGenres.isEmpty() ? Collections.emptyList() : topGenres)
-                .watchingTitle(activeWatching != null ? activeWatching.getTitle() : null)
-                .watchingSeason(activeWatching != null ? activeWatching.getCurrentSeason() : null)
+                .watching(watchingItems)
                 .build();
     }
 
     @Override
     @Transactional
     public AuthResponse updateCredentials(String username, UpdateCredentialsRequest dto) {
-        if (dto.getUsername() == null && dto.getNewPassword() == null) {
+        if (dto.getUsername() == null && dto.getNewPassword() == null && dto.getBio() == null) {
             throw new BusinessRuleException("Almeno un campo da aggiornare è obbligatorio");
         }
 
@@ -82,12 +83,17 @@ public class UserServiceImpl implements UserService {
 
         boolean usernameChanged = false;
 
-        if (dto.getUsername() != null && !dto.getUsername().isBlank()) {
+        if (dto.getUsername() != null && !dto.getUsername().isBlank()
+                && !dto.getUsername().equals(user.getUsername())) {
             if (userRepository.existsByUsername(dto.getUsername())) {
                 throw new DuplicateResourceException("Username non disponibile");
             }
             user.setUsername(dto.getUsername());
             usernameChanged = true;
+        }
+
+        if (dto.getBio() != null) {
+            user.setBio(dto.getBio().isBlank() ? null : dto.getBio().trim());
         }
 
         if (dto.getNewPassword() != null && !dto.getNewPassword().isBlank()) {
@@ -113,5 +119,19 @@ public class UserServiceImpl implements UserService {
 
         // Solo password cambiata: il token esistente rimane valido
         return null;
+    }
+
+    @Override
+    @Transactional
+    public void deleteAccount(String username) {
+        User user = userRepository.findByUsername(username)
+                .orElseThrow(() -> new ResourceNotFoundException("Utente non trovato"));
+        // Soft delete: anonimizza i dati invece di eliminare fisicamente
+        // per mantenere integrità referenziale con recensioni e segnalazioni
+        user.setUsername("deleted_" + user.getId().toString().substring(0, 8));
+        user.setEmail("deleted_" + user.getId() + "@deleted.com");
+        user.setPasswordHash("[DELETED]");
+        user.setBio(null);
+        userRepository.save(user);
     }
 }

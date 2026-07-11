@@ -102,12 +102,14 @@ function Navbar() {
 
           {logged ? (
             <>
-              {/* Libreria */}
-              <Link to="/library">
-                <button style={{ padding: '8px 14px', backgroundColor: 'var(--bg-hover)', border: '1px solid #333', borderRadius: '6px', color: 'var(--text)', fontSize: '14px', cursor: 'pointer', whiteSpace: 'nowrap' }}>
-                  📚 Libreria
-                </button>
-              </Link>
+              {/* Libreria — nascosta per admin */}
+              {user?.role !== 'ADMIN' && (
+                <Link to="/library">
+                  <button style={{ padding: '8px 14px', backgroundColor: 'var(--bg-hover)', border: '1px solid #333', borderRadius: '6px', color: 'var(--text)', fontSize: '14px', cursor: 'pointer', whiteSpace: 'nowrap' }}>
+                    📚 Libreria
+                  </button>
+                </Link>
+              )}
 
               {/* Admin — visibile direttamente in navbar, non nel dropdown */}
               {user?.role === 'ADMIN' && (

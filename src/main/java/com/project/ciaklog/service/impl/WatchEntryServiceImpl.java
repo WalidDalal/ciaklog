@@ -71,7 +71,7 @@ public class WatchEntryServiceImpl implements WatchEntryService {
 
     @Override
     @Transactional
-    public WatchEntryResponse updateStatus(String username, UUID entryId, WatchStatus newStatus) {
+    public WatchEntryResponse updateStatus(String username, UUID entryId, WatchStatus newStatus, Integer currentSeason) {
         User user = getUser(username);
 
         if (user.getRole() == Role.ADMIN) {
@@ -93,7 +93,31 @@ public class WatchEntryServiceImpl implements WatchEntryService {
             entry.setWatchedDate(LocalDate.now());
         }
 
+        // Fix: prima non era possibile aggiornare la stagione corrente di un
+        // titolo già "In Visione" — bisognava rimuoverlo e riaggiungerlo da capo.
+        if (currentSeason != null) {
+            entry.setCurrentSeason(currentSeason);
+        }
+
         entry.setStatus(newStatus);
+        entry.setLastStatusUpdate(LocalDateTime.now());
+
+        return toDTO(watchEntryRepository.save(entry));
+    }
+
+    @Override
+    @Transactional
+    public WatchEntryResponse updateSeason(String username, UUID entryId, Integer currentSeason) {
+        User user = getUser(username);
+
+        WatchEntry entry = watchEntryRepository.findById(entryId)
+                .orElseThrow(() -> new ResourceNotFoundException("Contenuto non trovato in libreria"));
+
+        if (!entry.getUser().getId().equals(user.getId())) {
+            throw new ForbiddenException("Non autorizzato");
+        }
+
+        entry.setCurrentSeason(currentSeason);
         entry.setLastStatusUpdate(LocalDateTime.now());
 
         return toDTO(watchEntryRepository.save(entry));

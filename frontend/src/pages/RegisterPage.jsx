@@ -21,6 +21,8 @@ function RegisterPage() {
   const [confirm, setConfirm] = useState('')
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
+  const [showPassword, setShowPassword] = useState(false)
+  const [showConfirm, setShowConfirm] = useState(false)
   const navigate = useNavigate()
   const { register } = useAuthStore()
 
@@ -105,30 +107,42 @@ function RegisterPage() {
 
             <div style={{ marginBottom: '16px' }}>
               <label style={{ display: 'block', color: 'var(--text-muted)', fontSize: '13px', marginBottom: '6px' }}>Password</label>
-              <input
-                type="password"
-                placeholder="Min. 8 caratteri"
-                value={password}
-                onChange={e => setPassword(e.target.value)}
-                required
-                style={{ width: '100%', padding: '12px 16px', backgroundColor: 'var(--bg-hover)', border: '1px solid #333', borderRadius: '8px', color: 'var(--text)', fontSize: '15px', boxSizing: 'border-box' }}
-              />
+              <div style={{ position: 'relative' }}>
+                <input
+                  type={showPassword ? 'text' : 'password'}
+                  placeholder="Min. 8 caratteri"
+                  value={password}
+                  onChange={e => setPassword(e.target.value)}
+                  required
+                  style={{ width: '100%', padding: '12px 40px 12px 16px', backgroundColor: 'var(--bg-hover)', border: '1px solid #333', borderRadius: '8px', color: 'var(--text)', fontSize: '15px', boxSizing: 'border-box' }}
+                />
+                <button type="button" onClick={() => setShowPassword(v => !v)}
+                  style={{ position: 'absolute', right: '12px', top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', cursor: 'pointer', fontSize: '16px', color: 'var(--text-dark)', padding: 0 }}>
+                  {showPassword ? '🙈' : '👁️'}
+                </button>
+              </div>
             </div>
 
             <div style={{ marginBottom: '24px' }}>
               <label style={{ display: 'block', color: 'var(--text-muted)', fontSize: '13px', marginBottom: '6px' }}>Conferma password</label>
-              <input
-                type="password"
-                placeholder="Ripeti la password"
-                value={confirm}
-                onChange={e => setConfirm(e.target.value)}
-                required
-                style={{
-                  width: '100%', padding: '12px 16px', backgroundColor: 'var(--bg-hover)',
-                  border: `1px solid ${confirm && confirm !== password ? 'var(--accent)' : 'var(--border-soft)'}`,
-                  borderRadius: '8px', color: 'var(--text)', fontSize: '15px', boxSizing: 'border-box'
-                }}
-              />
+              <div style={{ position: 'relative' }}>
+                <input
+                  type={showConfirm ? 'text' : 'password'}
+                  placeholder="Ripeti la password"
+                  value={confirm}
+                  onChange={e => setConfirm(e.target.value)}
+                  required
+                  style={{
+                    width: '100%', padding: '12px 40px 12px 16px', backgroundColor: 'var(--bg-hover)',
+                    border: `1px solid ${confirm && confirm !== password ? 'var(--accent)' : 'var(--border-soft)'}`,
+                    borderRadius: '8px', color: 'var(--text)', fontSize: '15px', boxSizing: 'border-box'
+                  }}
+                />
+                <button type="button" onClick={() => setShowConfirm(v => !v)}
+                  style={{ position: 'absolute', right: '12px', top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', cursor: 'pointer', fontSize: '16px', color: 'var(--text-dark)', padding: 0 }}>
+                  {showConfirm ? '🙈' : '👁️'}
+                </button>
+              </div>
               {confirm && confirm !== password && (
                 <p style={{ color: 'var(--accent)', fontSize: '12px', marginTop: '4px' }}>Le password non coincidono</p>
               )}

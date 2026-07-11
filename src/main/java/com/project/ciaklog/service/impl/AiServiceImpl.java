@@ -86,6 +86,14 @@ public class AiServiceImpl implements AiService {
                     %s
                     Messaggio dell'utente: %s
                     Rispondi in modo naturale e amichevole in italiano (1-2 frasi), poi suggerisci titoli pertinenti.
+
+                    IMPORTANTE — resta sempre nei binari di CiakLog:
+                    Rispondi SOLO a richieste su film, serie TV, consigli di visione o l'uso della piattaforma.
+                    Se il messaggio dell'utente non riguarda questi argomenti (es. domande generiche,
+                    richieste su altri argomenti non cinematografici, richieste di scrivere codice, ecc.),
+                    NON inventare titoli a caso: nel campo "reply" spiega gentilmente che puoi aiutare solo
+                    con film, serie TV e consigli di visione, e lascia "titles" vuoto ([]).
+
                     Formato risposta — SOLO questo JSON, niente altro:
                     { "reply": "testo naturale qui", "titles": ["Titolo 1", "Titolo 2", "Titolo 3"] }
                     """.formatted(libraryProfile, request.getMessage());
@@ -98,6 +106,11 @@ public class AiServiceImpl implements AiService {
                     Storico della conversazione:
                     %s
                     Richiesta attuale: %s
+
+                    IMPORTANTE — resta sempre nei binari di CiakLog: rispondi SOLO a richieste su film,
+                    serie TV o consigli di visione. Se la richiesta attuale non riguarda questi argomenti,
+                    rispondi con un array vuoto: []
+
                     Rispondi SOLO con un array JSON di titoli esistenti (max 5), formato:
                     ["Titolo 1", "Titolo 2", ...]
                     Niente testo aggiuntivo, solo l'array JSON.

@@ -24,6 +24,9 @@ public interface ReportRepository extends JpaRepository<Report, UUID> {
     // Per trovare tutte le segnalazioni su una review
     List<Report> findByReview(Review review);
 
+    // Conta il numero totale di segnalazioni ricevute da una review (per l'auto-hide)
+    long countByReview(Review review);
+
     // Fix N+1: carica tutti i report per una lista di review in una sola query
     List<Report> findAllByReviewIn(List<Review> reviews);
 }

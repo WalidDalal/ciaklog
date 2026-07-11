@@ -44,14 +44,25 @@ public class ChartServiceImpl implements ChartService {
     @Override
     @Cacheable("topUsers")
     public List<ChartUserResponse> getTopUsers() {
-        return userRepository.findTop5ByRoleNotOrderByScoreDesc(Role.ADMIN)
-                .stream()
-                .map(u -> ChartUserResponse.builder()
-                        .username(u.getUsername())
-                        .score(u.getScore())
-                        .reviewCount(null)
-                        .build())
-                .collect(Collectors.toList());
+        List<com.project.ciaklog.entity.User> users =
+                userRepository.findTop5ByRoleNotOrderByScoreDesc(Role.ADMIN);
+
+        List<ChartUserResponse> result = new java.util.ArrayList<>();
+        int rank = 1;
+        for (int i = 0; i < users.size(); i++) {
+            // Stessa posizione se stesso score del precedente
+            if (i > 0 && users.get(i).getScore() != users.get(i - 1).getScore()) {
+                rank = i + 1;
+            }
+            com.project.ciaklog.entity.User u = users.get(i);
+            result.add(ChartUserResponse.builder()
+                    .username(u.getUsername())
+                    .score(u.getScore())
+                    .reviewCount(null)
+                    .rank(rank)
+                    .build());
+        }
+        return result;
     }
 
     @Override
