@@ -60,11 +60,10 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.GET, "/api/charts/**").permitAll()
                         .requestMatchers(HttpMethod.GET, "/api/users/{username}").permitAll()
                         .requestMatchers(HttpMethod.GET, "/api/reviews/media/**").permitAll()
+                        .requestMatchers(HttpMethod.GET, "/api/reviews/*/comments").permitAll()
                         .requestMatchers("/api/admin/**").hasRole("ADMIN")
                         .requestMatchers(HttpMethod.GET, "/api/reports").hasRole("ADMIN")
                         .requestMatchers(HttpMethod.PUT, "/api/reports/**").hasRole("ADMIN")
-                        // Swagger UI / OpenAPI — accesso libero solo alla documentazione, non agli endpoint reali
-                        .requestMatchers("/swagger-ui/**", "/swagger-ui.html", "/v3/api-docs/**").permitAll()
                         .anyRequest().authenticated()
                 )
                 .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class)
