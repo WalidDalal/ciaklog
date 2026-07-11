@@ -41,4 +41,12 @@ public class UserController {
         // Solo password cambiata: nessun nuovo token necessario
         return ResponseEntity.noContent().build();
     }
+
+    // Eliminazione account — anonimizza i dati dell'utente
+    @DeleteMapping("/me")
+    public ResponseEntity<Void> deleteAccount(
+            @AuthenticationPrincipal UserDetails userDetails) {
+        userService.deleteAccount(userDetails.getUsername());
+        return ResponseEntity.noContent().build();
+    }
 }

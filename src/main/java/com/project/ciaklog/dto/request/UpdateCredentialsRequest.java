@@ -9,13 +9,12 @@ import lombok.Setter;
 public class UpdateCredentialsRequest {
 
     @Size(min = 3, max = 30, message = "Username tra 3 e 30 caratteri")
-    private String username; // nullable — se null non si aggiorna
+    private String username; // null = non modificare
 
-    @Size(min = 8, message = "Password minimo 8 caratteri")
-    private String newPassword; // nullable — se null non si aggiorna
+    @Size(max = 200, message = "Bio massimo 200 caratteri")
+    private String bio; // null = non modificare, "" = azzera
 
-    private String currentPassword; // obbligatorio se newPassword non è null — validato nel Service
+    private String currentPassword;
 
-    // Validazione "almeno un campo da aggiornare" fatta nel Service:
-    // if (username == null && newPassword == null) throw new IllegalArgumentException(...)
+    private String newPassword;
 }

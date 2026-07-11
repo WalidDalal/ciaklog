@@ -21,6 +21,7 @@ function LoginPage() {
   const [password, setPassword] = useState('')
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
+  const [showPassword, setShowPassword] = useState(false)
   const navigate = useNavigate()
   const location = useLocation()
   const from = location.state?.from || '/'
@@ -82,14 +83,20 @@ function LoginPage() {
 
             <div style={{ marginBottom: '24px' }}>
               <label style={{ display: 'block', color: 'var(--text-muted)', fontSize: '13px', marginBottom: '6px' }}>Password</label>
-              <input
-                type="password"
-                placeholder="••••••••••"
-                value={password}
-                onChange={e => setPassword(e.target.value)}
-                required
-                style={{ width: '100%', padding: '12px 16px', backgroundColor: 'var(--bg-hover)', border: '1px solid #333', borderRadius: '8px', color: 'var(--text)', fontSize: '15px', boxSizing: 'border-box' }}
-              />
+              <div style={{ position: 'relative' }}>
+                <input
+                  type={showPassword ? 'text' : 'password'}
+                  placeholder="••••••••••"
+                  value={password}
+                  onChange={e => setPassword(e.target.value)}
+                  required
+                  style={{ width: '100%', padding: '12px 40px 12px 16px', backgroundColor: 'var(--bg-hover)', border: '1px solid #333', borderRadius: '8px', color: 'var(--text)', fontSize: '15px', boxSizing: 'border-box' }}
+                />
+                <button type="button" onClick={() => setShowPassword(v => !v)}
+                  style={{ position: 'absolute', right: '12px', top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', cursor: 'pointer', fontSize: '16px', color: 'var(--text-dark)', padding: 0 }}>
+                  {showPassword ? '🙈' : '👁️'}
+                </button>
+              </div>
             </div>
 
             <button

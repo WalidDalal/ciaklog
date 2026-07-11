@@ -12,4 +12,5 @@ public class TmdbSearchResultResponse {
     private ContentType contentType;
     private String posterPath;
     private Integer releaseYear;
+    private Double tmdbRating;
 }

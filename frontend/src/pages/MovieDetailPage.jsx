@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { useParams, useSearchParams, useNavigate, Link } from 'react-router-dom'
 import Navbar from '../components/Navbar'
 import StaticRating from '../components/StaticRating'
+import ConfirmModal from '../components/ConfirmModal'
 import api from '../services/api'
 import useAuthStore from '../store/authStore'
 import useToastStore from '../store/toastStore'
@@ -198,6 +199,27 @@ function MovieDetailPage() {
     finally { setReviewLoading(false) }
   }
 
+  // Fix: l'endpoint DELETE /api/reviews/{id} esisteva già ma nessun bottone
+  // lo richiamava nel frontend
+  const [deletingReview, setDeletingReview] = useState(false)
+  const [confirmDeleteReview, setConfirmDeleteReview] = useState(false)
+  const handleDeleteReview = async () => {
+    if (!myReview) return
+    setConfirmDeleteReview(false)
+    setDeletingReview(true)
+    try {
+      await api.delete(`/reviews/${myReview.id}`)
+      setReviews(prev => prev.filter(r => r.id !== myReview.id))
+      setMyReview(null)
+      setRating(0); setText(''); setEditMode(false)
+      setReviewSuccess('Recensione eliminata.')
+    } catch (err) {
+      setReviewError(err.response?.data?.error || 'Errore durante l\'eliminazione')
+    } finally {
+      setDeletingReview(false)
+    }
+  }
+
   if (loading) return (<div style={{ backgroundColor: 'var(--bg)', minHeight: '100vh' }}><Navbar /><div style={{ textAlign: 'center', color: 'var(--text-muted)', marginTop: '100px' }}>Caricamento...</div></div>)
   if (!detail) return (<div style={{ backgroundColor: 'var(--bg)', minHeight: '100vh' }}><Navbar /><div style={{ textAlign: 'center', color: 'var(--text-muted)', marginTop: '100px' }}>Contenuto non trovato</div></div>)
 
@@ -217,6 +239,15 @@ function MovieDetailPage() {
           reviewId={reportingReviewId}
           onClose={() => setReportingReviewId(null)}
           onSuccess={() => { setReportedIds(prev => new Set([...prev, reportingReviewId])); setReportingReviewId(null) }}
+        />
+      )}
+
+      {confirmDeleteReview && (
+        <ConfirmModal
+          message="Eliminare la tua recensione? L'azione non è reversibile."
+          confirmLabel="Elimina"
+          onConfirm={handleDeleteReview}
+          onCancel={() => setConfirmDeleteReview(false)}
         />
       )}
 
@@ -324,7 +355,12 @@ function MovieDetailPage() {
               <>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
                   <h2 style={{ color: 'var(--text)', fontSize: '18px', fontWeight: '700' }}>✏️ La tua recensione</h2>
-                  <button onClick={() => setEditMode(true)} style={{ padding: '6px 16px', backgroundColor: 'transparent', border: '1px solid #333', borderRadius: '6px', color: 'var(--text-muted)', fontSize: '13px', cursor: 'pointer' }}>Modifica</button>
+                  <div style={{ display: 'flex', gap: '8px' }}>
+                    <button onClick={() => setEditMode(true)} style={{ padding: '6px 16px', backgroundColor: 'transparent', border: '1px solid #333', borderRadius: '6px', color: 'var(--text-muted)', fontSize: '13px', cursor: 'pointer' }}>Modifica</button>
+                    <button onClick={() => setConfirmDeleteReview(true)} disabled={deletingReview} style={{ padding: '6px 16px', backgroundColor: 'transparent', border: '1px solid #4a2222', borderRadius: '6px', color: '#ff6b6b', fontSize: '13px', cursor: 'pointer' }}>
+                      {deletingReview ? 'Eliminazione...' : 'Elimina'}
+                    </button>
+                  </div>
                 </div>
                 <div style={{ marginBottom: '10px' }}><StaticRating rating={myReview.rating} /></div>
                 {myReview.text && <p style={{ color: '#d1d5db', fontSize: '14px', lineHeight: 1.6 }}>{myReview.text}</p>}
