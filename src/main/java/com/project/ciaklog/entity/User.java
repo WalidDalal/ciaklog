@@ -48,7 +48,6 @@ public class User {
     /**
      * Punteggio classifica — aggiornato in modo persistito ad ogni evento:
      * +10 pubblica recensione
-     * +5  segnalazione inviata approvata
      * -15 tua recensione rimossa da segnalazione
      * -20 sospensione temporanea
      *  0  azzerato in caso di sospensione permanente

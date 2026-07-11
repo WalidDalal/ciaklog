@@ -44,7 +44,11 @@ export function ChatCore({ compact = false, initialPrompt = null }) {
     setLoading(true)
 
     try {
-      const res = await api.post('/ai/chat', {
+      // Fix: gli admin devono usare l'endpoint gestionale /ai/chat/admin —
+      // prima veniva sempre chiamato /ai/chat, protetto con hasRole('USER'),
+      // che un admin non possiede: la richiesta falliva sempre.
+      const endpoint = isAdmin ? '/ai/chat/admin' : '/ai/chat'
+      const res = await api.post(endpoint, {
         message: text.trim(),
         sessionId,
         sessionHistory: messages.slice(-10),
@@ -215,8 +219,6 @@ export function ChatFloating() {
   // Non mostrare se non loggato o se siamo già sulla pagina chat (evita doppia apertura)
   if (!token) return null
   if (location.pathname === '/chat') return null
-
-  const unread = 0 // placeholder per future notifiche
 
   return (
     <>

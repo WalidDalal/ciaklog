@@ -1,4 +1,3 @@
-// LoginRequestDTO.java
 package com.project.ciaklog.dto.request;
 
 import jakarta.validation.constraints.Email;

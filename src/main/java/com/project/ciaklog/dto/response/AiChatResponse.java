@@ -1,4 +1,3 @@
-// AiChatResponseDTO.java
 package com.project.ciaklog.dto.response;
 
 import lombok.Builder;

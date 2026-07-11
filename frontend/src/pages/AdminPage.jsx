@@ -1,5 +1,5 @@
-import { useEffect, useState, useCallback } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
+import { useEffect, useState, useCallback, useMemo } from 'react'
+import { Link } from 'react-router-dom'
 import Navbar from '../components/Navbar'
 import api from '../services/api'
 import useAuthStore from '../store/authStore'
@@ -149,7 +149,6 @@ function UserDrawer({ user: u, onClose, onSuspend, onReinstate, loading = false 
 function AdminPage() {
   const { user, token } = useAuthStore()
   const toast = useToastStore()
-  const navigate = useNavigate()
   const [tab, setTab] = useState('users')
 
   const [stats, setStats] = useState(null)
@@ -240,9 +239,24 @@ function AdminPage() {
     catch (err) { toast.show(err.response?.data?.error || 'Errore') }
   }
 
-  const handleReport = async (reportId, action) => {
-    try { await api.put(`/reports/${reportId}`, { action }); loadReports(); loadStats() }
-    catch (err) { toast.show(err.response?.data?.error || 'Errore') }
+  // Fix: raggruppa le segnalazioni per recensione, invece di mostrarle come
+  // righe separate — così l'admin vede "Recensione X — N segnalazioni"
+  const reportGroups = useMemo(() => {
+    const map = new Map()
+    reports.forEach(r => {
+      if (!map.has(r.reviewId)) map.set(r.reviewId, [])
+      map.get(r.reviewId).push(r)
+    })
+    return Array.from(map.values())
+  }, [reports])
+
+  // Approva/rifiuta in blocco tutte le segnalazioni pendenti di una recensione
+  const handleReportGroup = async (group, action) => {
+    const pendingIds = group.filter(r => r.status === 'PENDING').map(r => r.id)
+    try {
+      await Promise.all(pendingIds.map(id => api.put(`/reports/${id}`, { action })))
+      loadReports(); loadStats()
+    } catch (err) { toast.show(err.response?.data?.error || 'Errore') }
   }
 
   return (
@@ -422,83 +436,91 @@ function AdminPage() {
 
                 {reportsLoading ? (
                     <div style={{ textAlign: 'center', color: 'var(--text-muted)' }}>Caricamento...</div>
-                ) : reports.length === 0 ? (
+                ) : reportGroups.length === 0 ? (
                     <div style={{ textAlign: 'center', color: 'var(--text-dark)', marginTop: '60px', fontSize: '16px' }}>
                       {reportFilter === 'PENDING' ? '✅ Nessuna segnalazione in attesa' : 'Nessuna segnalazione'}
                     </div>
                 ) : (
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-                      {reports.map(r => {
-                        const expanded = expandedReport === r.id
+                      {reportGroups.map(group => {
+                        const first = group[0]
+                        const groupKey = first.reviewId
+                        const expanded = expandedReport === groupKey
+                        const pendingCount = group.filter(r => r.status === 'PENDING').length
                         return (
-                            <div key={r.id} style={{ backgroundColor: 'var(--bg-nav)', border: '1px solid #1a1a1a', borderRadius: '12px', overflow: 'hidden' }}>
+                            <div key={groupKey} style={{ backgroundColor: 'var(--bg-nav)', border: '1px solid #1a1a1a', borderRadius: '12px', overflow: 'hidden' }}>
 
                               <div style={{ padding: '16px 20px', display: 'flex', alignItems: 'center', gap: '12px', cursor: 'pointer' }}
-                                   onClick={() => setExpandedReport(expanded ? null : r.id)}
+                                   onClick={() => setExpandedReport(expanded ? null : groupKey)}
                               >
                         <span style={{ padding: '3px 10px', borderRadius: '4px', fontSize: '12px', fontWeight: '600', backgroundColor: '#2d1a1a', color: 'var(--accent)', border: '1px solid #e5091444', flexShrink: 0 }}>
-                          {r.reasonCategory}
+                          {group.length} {group.length === 1 ? 'segnalazione' : 'segnalazioni'}
                         </span>
                                 <span style={{ color: 'var(--text)', fontSize: '14px', flex: 1 }}>
-                          <strong>{r.reporterUsername}</strong> ha segnalato la recensione di <strong>{r.reviewAuthorUsername || '—'}</strong>
+                          Recensione di <strong>{first.reviewAuthorUsername || '—'}</strong>
+                          {group.length > 1 && (
+                              <span style={{ color: 'var(--text-dark)' }}> — segnalata da {group.map(r => r.reporterUsername).join(', ')}</span>
+                          )}
                         </span>
-                                <span style={{ color: 'var(--text-dark)', fontSize: '12px', flexShrink: 0 }}>{new Date(r.createdAt).toLocaleDateString('it-IT')}</span>
+                                <span style={{ color: 'var(--text-dark)', fontSize: '12px', flexShrink: 0 }}>{new Date(first.createdAt).toLocaleDateString('it-IT')}</span>
                                 <span style={{ color: 'var(--text-dark)', fontSize: '14px', flexShrink: 0 }}>{expanded ? '▲' : '▼'}</span>
                               </div>
 
                               {expanded && (
                                   <div style={{ padding: '0 20px 20px', borderTop: '1px solid #1a1a1a' }}>
 
-                                    {(r.reviewText || r.review?.text) && (
+                                    {(first.reviewText) && (
                                         <div style={{ backgroundColor: 'var(--bg-card)', borderLeft: '3px solid #e50914', borderRadius: '0 8px 8px 0', padding: '14px 16px', margin: '16px 0' }}>
                                           <div style={{ color: 'var(--text-dark)', fontSize: '11px', fontWeight: '600', textTransform: 'uppercase', letterSpacing: '1px', marginBottom: '6px' }}>
                                             Recensione segnalata
                                           </div>
                                           <p style={{ color: '#d1d5db', fontSize: '14px', lineHeight: 1.6, margin: 0, fontStyle: 'italic' }}>
-                                            "{r.reviewText || r.review?.text}"
+                                            "{first.reviewText}"
                                           </p>
-                                          {(r.reviewRating || r.review?.rating) && (
+                                          {first.reviewRating && (
                                               <div style={{ marginTop: '8px', color: 'var(--gold)', fontSize: '13px' }}>
-                                                {'★'.repeat(r.reviewRating || r.review?.rating)}
+                                                {'★'.repeat(first.reviewRating)}
                                               </div>
                                           )}
                                         </div>
                                     )}
 
-                                    {r.reasonText && (
-                                        <div style={{ color: 'var(--text-muted)', fontSize: '13px', marginBottom: '16px' }}>
-                                          <span style={{ color: 'var(--text-dark)' }}>Motivo dichiarato:</span> {r.reasonText}
-                                        </div>
-                                    )}
+                                    {/* Elenco delle singole segnalazioni ricevute su questa recensione */}
+                                    <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', marginBottom: '16px' }}>
+                                      {group.map(r => (
+                                          <div key={r.id} style={{ backgroundColor: 'var(--bg-hover)', borderRadius: '8px', padding: '10px 14px' }}>
+                                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: r.reasonText ? '4px' : 0 }}>
+                                              <span style={{ color: 'var(--text)', fontSize: '13px', fontWeight: '600' }}>{r.reporterUsername}</span>
+                                              <span style={{ padding: '1px 8px', borderRadius: '4px', fontSize: '11px', fontWeight: '600', backgroundColor: '#2d1a1a', color: 'var(--accent)', border: '1px solid #e5091444' }}>
+                                                {r.reasonCategory}
+                                              </span>
+                                              <span style={{ color: 'var(--text-dark)', fontSize: '11px', marginLeft: 'auto' }}>{new Date(r.createdAt).toLocaleDateString('it-IT')}</span>
+                                              {r.status !== 'PENDING' && (
+                                                  <span style={{ color: 'var(--text-dark)', fontSize: '11px' }}>
+                                                    {r.status === 'APPROVED' ? '✅' : '❌'} {r.resolvedByUsername ? `da ${r.resolvedByUsername}` : ''}
+                                                  </span>
+                                              )}
+                                            </div>
+                                            {r.reasonText && (
+                                                <div style={{ color: 'var(--text-muted)', fontSize: '12px' }}>{r.reasonText}</div>
+                                            )}
+                                          </div>
+                                      ))}
+                                    </div>
 
-                                    {/* Link al contenuto con navigazione back */}
-                                    {r.tmdbId && (
-                                        <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '16px' }}>
-                                          <Link to={`/movie/${r.tmdbId}?type=${r.contentType || 'MOVIE'}`}
-                                                style={{ color: '#3b82f6', fontSize: '13px' }}>
-                                            → Vai alla pagina del contenuto
-                                          </Link>
-                                          <button onClick={() => navigate(-1)}
-                                                  style={{ backgroundColor: 'transparent', border: '1px solid #333', borderRadius: '6px', color: 'var(--text-dark)', fontSize: '12px', padding: '3px 10px', cursor: 'pointer' }}>
-                                            ← Torna indietro
-                                          </button>
-                                        </div>
-                                    )}
-
-                                    {r.status === 'PENDING' && (
+                                    {pendingCount > 0 && (
                                         <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
-                                          <button onClick={() => handleReport(r.id, 'APPROVED')} style={{ padding: '9px 20px', backgroundColor: 'var(--accent)', border: 'none', borderRadius: '6px', color: 'var(--text)', fontSize: '13px', fontWeight: '600', cursor: 'pointer' }}>
-                                            ✅ Approva — rimuovi recensione
+                                          <button onClick={() => handleReportGroup(group, 'APPROVED')} style={{ padding: '9px 20px', backgroundColor: 'var(--accent)', border: 'none', borderRadius: '6px', color: 'var(--text)', fontSize: '13px', fontWeight: '600', cursor: 'pointer' }}>
+                                            ✅ Approva {pendingCount > 1 ? `tutte (${pendingCount})` : ''} — rimuovi recensione
                                           </button>
-                                          <button onClick={() => handleReport(r.id, 'REJECTED')} style={{ padding: '9px 20px', backgroundColor: 'transparent', border: '1px solid #333', borderRadius: '6px', color: 'var(--text-muted)', fontSize: '13px', cursor: 'pointer' }}>
-                                            ❌ Rifiuta segnalazione
+                                          <button onClick={() => handleReportGroup(group, 'REJECTED')} style={{ padding: '9px 20px', backgroundColor: 'transparent', border: '1px solid #333', borderRadius: '6px', color: 'var(--text-muted)', fontSize: '13px', cursor: 'pointer' }}>
+                                            ❌ Rifiuta {pendingCount > 1 ? `tutte (${pendingCount})` : ''}
                                           </button>
                                         </div>
                                     )}
-                                    {r.status !== 'PENDING' && (
+                                    {pendingCount === 0 && (
                                         <div style={{ color: 'var(--text-dark)', fontSize: '13px' }}>
-                                          Gestita il {r.resolvedAt ? new Date(r.resolvedAt).toLocaleDateString('it-IT') : '—'}
-                                          {r.resolvedByUsername && ` da ${r.resolvedByUsername}`}
+                                          Tutte le segnalazioni di questa recensione sono state gestite.
                                         </div>
                                     )}
                                   </div>

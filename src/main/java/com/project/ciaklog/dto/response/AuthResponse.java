@@ -1,4 +1,3 @@
-// AuthResponseDTO.java
 package com.project.ciaklog.dto.response;
 
 import com.project.ciaklog.entity.Role;
