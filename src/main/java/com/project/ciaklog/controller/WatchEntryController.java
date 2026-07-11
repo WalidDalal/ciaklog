@@ -45,8 +45,20 @@ public class WatchEntryController {
     public ResponseEntity<WatchEntryResponse> updateStatus(
             @AuthenticationPrincipal UserDetails userDetails,
             @PathVariable UUID id,
-            @RequestParam WatchStatus status) {
-        return ResponseEntity.ok(watchEntryService.updateStatus(userDetails.getUsername(), id, status));
+            @RequestParam WatchStatus status,
+            @RequestParam(required = false) Integer currentSeason) {
+        return ResponseEntity.ok(watchEntryService.updateStatus(userDetails.getUsername(), id, status, currentSeason));
+    }
+
+    // Fix: prima non c'era modo di aggiornare solo la stagione corrente di un
+    // titolo già "In Visione" senza rimuoverlo e riaggiungerlo da capo.
+    // PATCH /api/library/{id}/season?currentSeason=3
+    @PatchMapping("/{id}/season")
+    public ResponseEntity<WatchEntryResponse> updateSeason(
+            @AuthenticationPrincipal UserDetails userDetails,
+            @PathVariable UUID id,
+            @RequestParam Integer currentSeason) {
+        return ResponseEntity.ok(watchEntryService.updateSeason(userDetails.getUsername(), id, currentSeason));
     }
 
     @DeleteMapping("/{id}")

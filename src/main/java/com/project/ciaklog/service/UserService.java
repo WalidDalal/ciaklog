@@ -10,4 +10,6 @@ public interface UserService {
     // Restituisce un nuovo AuthResponse (con token aggiornato) solo se è cambiato l'username,
     // null se è cambiata solo la password (il token rimane valido)
     AuthResponse updateCredentials(String username, UpdateCredentialsRequest dto);
+
+    void deleteAccount(String username);
 }

@@ -81,6 +81,7 @@ public class TmdbServiceImpl implements TmdbService {
                         .contentType("tv".equals(mediaType) ? ContentType.TV : ContentType.MOVIE)
                         .posterPath(r.path("poster_path").asText(null))
                         .releaseYear(extractYear(r, mediaType))
+                        .tmdbRating(r.path("vote_average").isMissingNode() ? null : r.path("vote_average").asDouble())
                         .build());
             }
             return out;

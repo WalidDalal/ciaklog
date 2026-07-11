@@ -10,7 +10,8 @@ import java.util.UUID;
 
 public interface WatchEntryService {
     WatchEntryResponse addToLibrary(String username, WatchEntryRequest dto);
-    WatchEntryResponse updateStatus(String username, UUID entryId, WatchStatus newStatus);
+    WatchEntryResponse updateStatus(String username, UUID entryId, WatchStatus newStatus, Integer currentSeason);
+    WatchEntryResponse updateSeason(String username, UUID entryId, Integer currentSeason);
     void removeFromLibrary(String username, UUID entryId);
     Page<WatchEntryResponse> getUserLibrary(String username, WatchStatus status, Pageable pageable);
 }
