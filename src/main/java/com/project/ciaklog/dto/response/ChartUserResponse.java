@@ -8,9 +8,11 @@ import lombok.Getter;
 public class ChartUserResponse {
     private String username;
 
-    // Punteggio classifica: score = count(review) + bonus * count(review con text non vuoto)
-    // — vedi Regola di Business 5. Calcolato nel ChartService.
+    // Punteggio persistito su User.score — aggiornato ad ogni azione rilevante (recensione, violazione, sospensione)
     private Integer score;
 
     private Integer reviewCount;
+
+    // Posizione in classifica — utenti con lo stesso score hanno lo stesso rank (1°, 2°, 2°, 4°)
+    private Integer rank;
 }

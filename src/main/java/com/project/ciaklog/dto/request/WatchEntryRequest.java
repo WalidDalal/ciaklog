@@ -1,4 +1,3 @@
-// WatchEntryRequestDTO.java
 package com.project.ciaklog.dto.request;
 
 import com.project.ciaklog.entity.ContentType;

@@ -56,10 +56,25 @@ public class ReportServiceImpl implements ReportService {
                 .reasonText(dto.getReasonText())
                 .build();
 
-        return toDTO(reportRepository.save(report));
+        Report saved = reportRepository.save(report);
+
+        // Auto-hide: 1a segnalazione -> resta VISIBLE (solo in dashboard admin).
+        // 2a segnalazione (da utente diverso, già garantito dal check anti-duplicato sopra)
+        // sulla stessa recensione -> passa a HIDDEN, sparisce da film/serie ma resta
+        // visibile in dashboard admin per la revisione finale.
+        if (review.getStatus() == ReviewStatus.VISIBLE) {
+            long totalReports = reportRepository.countByReview(review);
+            if (totalReports >= 2) {
+                review.setStatus(ReviewStatus.HIDDEN);
+                reviewRepository.save(review);
+            }
+        }
+
+        return toDTO(saved);
     }
 
     @Override
+    @Transactional(readOnly = true)
     public Page<ReportResponse> getReports(ReportStatus status, Pageable pageable) {
         Page<Report> reports = (status != null)
                 ? reportRepository.findByStatus(status, pageable)
@@ -111,8 +126,16 @@ public class ReportServiceImpl implements ReportService {
             }
 
         } else if (newStatus == ReportStatus.REJECTED) {
-            review.setStatus(ReviewStatus.VISIBLE);
-            reviewRepository.save(review);
+            // Fix: se la review era stata auto-nascosta (HIDDEN) per via di più
+            // segnalazioni, rifiutarne UNA sola non deve rimetterla visibile se
+            // esistono ancora altre segnalazioni PENDING sulla stessa recensione.
+            boolean hasOtherPending = reportRepository.findByReview(review).stream()
+                    .anyMatch(r -> r.getStatus() == ReportStatus.PENDING);
+
+            if (review.getStatus() != ReviewStatus.REMOVED && !hasOtherPending) {
+                review.setStatus(ReviewStatus.VISIBLE);
+                reviewRepository.save(review);
+            }
         }
 
         return toDTO(reportRepository.save(report));

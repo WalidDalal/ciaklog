@@ -20,6 +20,9 @@ public interface UserRepository extends JpaRepository<User, UUID> {
 
     boolean existsByUsername(String username);
 
-    // Top 5 utenti per score — esclude gli admin, evita findAll() + N query
+    // Verifica username duplicato escludendo l'utente corrente — usato in updateCredentials
+    boolean existsByUsernameAndIdNot(String username, UUID id);
+
+    // Top 5 utenti per score — esclude gli admin
     List<User> findTop5ByRoleNotOrderByScoreDesc(Role role);
 }

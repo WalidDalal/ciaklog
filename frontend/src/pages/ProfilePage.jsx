@@ -108,10 +108,12 @@ function ProfilePage() {
       <div style={{ backgroundColor: 'var(--bg)', height: '100vh', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
         <Navbar />
 
-        <div style={{ flex: 1, overflowY: 'auto', maxWidth: '900px', width: '100%', margin: '0 auto', padding: '48px 24px', boxSizing: 'border-box' }}>
+        {/* Fix: la parte superiore (avatar, bio, stats) resta fissa; solo la lista
+            sotto (in visione + recensioni) scrolla */}
+        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', maxWidth: '900px', width: '100%', margin: '0 auto', padding: '0 24px', boxSizing: 'border-box', overflow: 'hidden' }}>
 
-          {/* ── Header profilo ── */}
-          <div style={{ display: 'flex', alignItems: 'flex-start', gap: '28px', marginBottom: '48px' }}>
+          {/* ── Header profilo (fisso) ── */}
+          <div style={{ display: 'flex', alignItems: 'flex-start', gap: '28px', paddingTop: '48px', paddingBottom: '32px', flexShrink: 0 }}>
             {/* Avatar */}
             <div style={{
               width: '88px', height: '88px', borderRadius: '50%', flexShrink: 0,
@@ -230,6 +232,9 @@ function ProfilePage() {
               )}
             </div>
           </div>
+
+          {/* ── Area scrollabile: in visione + recensioni ── */}
+          <div style={{ flex: 1, overflowY: 'auto', paddingBottom: '48px' }}>
 
           {/* ── In visione ── */}
           {watching.length > 0 && (
@@ -361,6 +366,7 @@ function ProfilePage() {
                   {loadingMore ? 'Caricamento...' : 'Carica altre recensioni'}
                 </button>
             )}
+          </div>
           </div>
         </div>
       </div>
