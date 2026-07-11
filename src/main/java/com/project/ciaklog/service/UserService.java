@@ -11,5 +11,5 @@ public interface UserService {
     // null se è cambiata solo la password (il token rimane valido)
     AuthResponse updateCredentials(String username, UpdateCredentialsRequest dto);
 
-    void deleteAccount(String username);
+    void deleteAccount(String username, String password);
 }

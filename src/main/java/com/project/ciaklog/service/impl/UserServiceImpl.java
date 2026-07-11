@@ -123,9 +123,16 @@ public class UserServiceImpl implements UserService {
 
     @Override
     @Transactional
-    public void deleteAccount(String username) {
+    public void deleteAccount(String username, String password) {
         User user = userRepository.findByUsername(username)
                 .orElseThrow(() -> new ResourceNotFoundException("Utente non trovato"));
+
+        // Fix: richiedere la password come secondo fattore prima di
+        // un'azione irreversibile, non solo la conferma via modal
+        if (!passwordEncoder.matches(password, user.getPasswordHash())) {
+            throw new BusinessRuleException("Password non corretta");
+        }
+
         // Soft delete: anonimizza i dati invece di eliminare fisicamente
         // per mantenere integrità referenziale con recensioni e segnalazioni
         user.setUsername("deleted_" + user.getId().toString().substring(0, 8));

@@ -1,5 +1,6 @@
 package com.project.ciaklog.controller;
 
+import com.project.ciaklog.dto.request.DeleteAccountRequest;
 import com.project.ciaklog.dto.request.UpdateCredentialsRequest;
 import com.project.ciaklog.dto.response.AuthResponse;
 import com.project.ciaklog.dto.response.UserProfileResponse;
@@ -43,10 +44,12 @@ public class UserController {
     }
 
     // Eliminazione account — anonimizza i dati dell'utente
+    // Fix: richiede la password come conferma finale, non solo il modal
     @DeleteMapping("/me")
     public ResponseEntity<Void> deleteAccount(
-            @AuthenticationPrincipal UserDetails userDetails) {
-        userService.deleteAccount(userDetails.getUsername());
+            @AuthenticationPrincipal UserDetails userDetails,
+            @Valid @RequestBody DeleteAccountRequest dto) {
+        userService.deleteAccount(userDetails.getUsername(), dto.getPassword());
         return ResponseEntity.noContent().build();
     }
 }
