@@ -3,8 +3,10 @@ package com.project.ciaklog.service.impl;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.project.ciaklog.dto.request.AiChatRequest;
+import com.project.ciaklog.dto.request.StructureReviewRequest;
 import com.project.ciaklog.dto.response.AiChatResponse;
 import com.project.ciaklog.dto.response.DailyRecommendationResponse;
+import com.project.ciaklog.dto.response.StructureReviewResponse;
 import com.project.ciaklog.dto.response.TmdbSearchResultResponse;
 import com.project.ciaklog.dto.response.TrendingItemResponse;
 import com.project.ciaklog.entity.*;
@@ -319,6 +321,48 @@ public class AiServiceImpl implements AiService {
                 .suggestions(suggestions)
                 .generatedAt(cache.getGeneratedAt())
                 .build();
+    }
+
+    // Fix (AI più centrale): "recensione a botta calda" — non salva nulla,
+    // restituisce solo il testo strutturato che l'utente rivede prima di pubblicare
+    @Override
+    public StructureReviewResponse structureReview(String username, StructureReviewRequest request) {
+        User user = getUser(username); // verifica che l'utente esista, coerenza con gli altri metodi
+
+        String movieContext = (request.getMovieTitle() != null && !request.getMovieTitle().isBlank())
+                ? "Il film/serie di cui sta scrivendo è: " + request.getMovieTitle()
+                : "Non è specificato il titolo del film/serie.";
+
+        String prompt = """
+                Sei l'assistente di scrittura di CiakLog, un'app di tracking film/serie TV.
+                Un utente ha appena visto un film/serie e ha buttato giù alcuni appunti sparsi
+                su cosa ne pensa. Il tuo compito è trasformarli in una recensione breve e ben
+                scritta in italiano (massimo 4-5 frasi), mantenendo FEDELMENTE il suo tono,
+                le sue opinioni e i suoi giudizi.
+
+                REGOLE FONDAMENTALI:
+                - NON inventare opinioni, dettagli della trama o giudizi che l'utente non ha espresso
+                - NON ammorbidire né esagerare il suo giudizio (se è severo, resta severo; se entusiasta, resta entusiasta)
+                - Riordina e ripulisci la forma, non il contenuto
+                - Se gli appunti sono troppo confusi o vuoti di contenuto per essere strutturati,
+                  restituisci il testo originale così com'è, senza inventare nulla
+
+                %s
+
+                Appunti dell'utente:
+                %s
+
+                Rispondi SOLO con il testo della recensione, niente virgolette, niente titoli, niente altro testo.
+                """.formatted(movieContext, request.getRawNotes());
+
+        try {
+            String rawResponse = callGroq(prompt);
+            String cleaned = rawResponse.trim().replaceAll("^\"|\"$", "");
+            return StructureReviewResponse.builder().text(cleaned).build();
+        } catch (Exception e) {
+            log.error("Errore nella strutturazione recensione per {}: {}", username, e.getMessage());
+            throw new RuntimeException("Assistente temporaneamente non disponibile", e);
+        }
     }
 
     // ── helpers ──

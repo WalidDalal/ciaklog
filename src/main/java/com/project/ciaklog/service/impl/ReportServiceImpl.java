@@ -7,6 +7,7 @@ import com.project.ciaklog.exception.BusinessRuleException;
 import com.project.ciaklog.exception.DuplicateResourceException;
 import com.project.ciaklog.exception.ResourceNotFoundException;
 import com.project.ciaklog.repository.ReportRepository;
+import com.project.ciaklog.repository.ReviewCommentRepository;
 import com.project.ciaklog.repository.ReviewRepository;
 import com.project.ciaklog.repository.UserRepository;
 import com.project.ciaklog.service.ReportService;
@@ -19,7 +20,6 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import java.util.List;
 import java.util.UUID;
-import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
@@ -27,26 +27,42 @@ public class ReportServiceImpl implements ReportService {
 
     private final ReportRepository reportRepository;
     private final ReviewRepository reviewRepository;
+    private final ReviewCommentRepository reviewCommentRepository;
     private final UserRepository userRepository;
 
     @Override
     @Transactional
     public ReportResponse createReport(String username, ReportRequest dto) {
         User reporter = getUser(username);
+
+        // Fix (moderazione risposte): esattamente uno tra reviewId e reviewCommentId
+        boolean hasReview = dto.getReviewId() != null;
+        boolean hasComment = dto.getReviewCommentId() != null;
+        if (hasReview == hasComment) {
+            throw new BusinessRuleException("Specifica esattamente un bersaglio: reviewId oppure reviewCommentId");
+        }
+
+        if (dto.getReasonCategory() == ReportReasonCategory.OTHER &&
+                (dto.getReasonText() == null || dto.getReasonText().isBlank())) {
+            throw new BusinessRuleException("Il motivo è obbligatorio quando la categoria è OTHER");
+        }
+
+        Report saved = hasReview
+                ? createReviewReport(reporter, dto)
+                : createCommentReport(reporter, dto);
+
+        return toDTO(saved);
+    }
+
+    private Report createReviewReport(User reporter, ReportRequest dto) {
         Review review = reviewRepository.findById(dto.getReviewId())
                 .orElseThrow(() -> new ResourceNotFoundException("Recensione non trovata"));
 
         if (review.getUser().getId().equals(reporter.getId())) {
             throw new BusinessRuleException("Non puoi segnalare la tua recensione");
         }
-
         if (reportRepository.existsByReporterAndReview(reporter, review)) {
             throw new DuplicateResourceException("Hai già segnalato questa recensione");
-        }
-
-        if (dto.getReasonCategory() == ReportReasonCategory.OTHER &&
-                (dto.getReasonText() == null || dto.getReasonText().isBlank())) {
-            throw new BusinessRuleException("Il motivo è obbligatorio quando la categoria è OTHER");
         }
 
         Report report = Report.builder()
@@ -55,22 +71,48 @@ public class ReportServiceImpl implements ReportService {
                 .reasonCategory(dto.getReasonCategory())
                 .reasonText(dto.getReasonText())
                 .build();
-
         Report saved = reportRepository.save(report);
 
-        // Auto-hide: 1a segnalazione -> resta VISIBLE (solo in dashboard admin).
-        // 2a segnalazione (da utente diverso, già garantito dal check anti-duplicato sopra)
-        // sulla stessa recensione -> passa a HIDDEN, sparisce da film/serie ma resta
-        // visibile in dashboard admin per la revisione finale.
         if (review.getStatus() == ReviewStatus.VISIBLE) {
             long totalReports = reportRepository.countByReview(review);
             if (totalReports >= 2) {
                 review.setStatus(ReviewStatus.HIDDEN);
                 reviewRepository.save(review);
+                cascadeHideComments(review, ReviewStatus.HIDDEN);
             }
         }
 
-        return toDTO(saved);
+        return saved;
+    }
+
+    private Report createCommentReport(User reporter, ReportRequest dto) {
+        ReviewComment comment = reviewCommentRepository.findById(dto.getReviewCommentId())
+                .orElseThrow(() -> new ResourceNotFoundException("Risposta non trovata"));
+
+        if (comment.getAuthor().getId().equals(reporter.getId())) {
+            throw new BusinessRuleException("Non puoi segnalare la tua risposta");
+        }
+        if (reportRepository.existsByReporterAndReviewComment(reporter, comment)) {
+            throw new DuplicateResourceException("Hai già segnalato questa risposta");
+        }
+
+        Report report = Report.builder()
+                .reporter(reporter)
+                .reviewComment(comment)
+                .reasonCategory(dto.getReasonCategory())
+                .reasonText(dto.getReasonText())
+                .build();
+        Report saved = reportRepository.save(report);
+
+        if (comment.getStatus() == ReviewStatus.VISIBLE) {
+            long totalReports = reportRepository.countByReviewComment(comment);
+            if (totalReports >= 2) {
+                comment.setStatus(ReviewStatus.HIDDEN);
+                reviewCommentRepository.save(comment);
+            }
+        }
+
+        return saved;
     }
 
     @Override
@@ -97,38 +139,27 @@ public class ReportServiceImpl implements ReportService {
         report.setResolvedBy(admin);
         report.setResolvedAt(LocalDateTime.now());
 
+        if (report.getReview() != null) {
+            resolveReviewTarget(report, newStatus);
+        } else {
+            resolveCommentTarget(report, newStatus);
+        }
+
+        return toDTO(reportRepository.save(report));
+    }
+
+    private void resolveReviewTarget(Report report, ReportStatus newStatus) {
         Review review = report.getReview();
 
         if (newStatus == ReportStatus.APPROVED) {
-            // Guard: se la review è già REMOVED (rimossa da una segnalazione precedente),
-            // non penalizzare di nuovo l'autore — aggiorna solo lo stato del report
             if (review.getStatus() != ReviewStatus.REMOVED) {
                 review.setStatus(ReviewStatus.REMOVED);
                 reviewRepository.save(review);
-
-                User offender = review.getUser();
-                offender.setViolationCount(offender.getViolationCount() + 1);
-
-                if (offender.getViolationCount() >= 3) {
-                    // Terza violazione: sospensione permanente, score azzerato
-                    offender.setStatus(UserStatus.PERMANENTLY_SUSPENDED);
-                    offender.setScore(0);
-                } else if (offender.getViolationCount() == 2) {
-                    // Seconda violazione: sospensione temporanea, penale -20
-                    offender.setStatus(UserStatus.SUSPENDED);
-                    offender.setScore(Math.max(0, offender.getScore() - 20));
-                } else {
-                    // Prima violazione: solo penale -15
-                    offender.setScore(Math.max(0, offender.getScore() - 15));
-                }
-
-                userRepository.save(offender);
+                cascadeHideComments(review, ReviewStatus.REMOVED);
+                penalizeOffender(review.getUser());
             }
 
         } else if (newStatus == ReportStatus.REJECTED) {
-            // Fix: se la review era stata auto-nascosta (HIDDEN) per via di più
-            // segnalazioni, rifiutarne UNA sola non deve rimetterla visibile se
-            // esistono ancora altre segnalazioni PENDING sulla stessa recensione.
             boolean hasOtherPending = reportRepository.findByReview(review).stream()
                     .anyMatch(r -> r.getStatus() == ReportStatus.PENDING);
 
@@ -137,11 +168,50 @@ public class ReportServiceImpl implements ReportService {
                 reviewRepository.save(review);
             }
         }
-
-        return toDTO(reportRepository.save(report));
     }
 
-    // ── helpers ──
+    private void resolveCommentTarget(Report report, ReportStatus newStatus) {
+        ReviewComment comment = report.getReviewComment();
+
+        if (newStatus == ReportStatus.APPROVED) {
+            if (comment.getStatus() != ReviewStatus.REMOVED) {
+                comment.setStatus(ReviewStatus.REMOVED);
+                reviewCommentRepository.save(comment);
+                penalizeOffender(comment.getAuthor());
+            }
+
+        } else if (newStatus == ReportStatus.REJECTED) {
+            boolean hasOtherPending = reportRepository.findByReviewComment(comment).stream()
+                    .anyMatch(r -> r.getStatus() == ReportStatus.PENDING);
+
+            if (comment.getStatus() != ReviewStatus.REMOVED && !hasOtherPending) {
+                comment.setStatus(ReviewStatus.VISIBLE);
+                reviewCommentRepository.save(comment);
+            }
+        }
+    }
+
+    private void cascadeHideComments(Review review, ReviewStatus newStatus) {
+        List<ReviewComment> comments = reviewCommentRepository.findAllByReviewAndStatus(review, ReviewStatus.VISIBLE);
+        comments.forEach(c -> c.setStatus(newStatus));
+        reviewCommentRepository.saveAll(comments);
+    }
+
+    private void penalizeOffender(User offender) {
+        offender.setViolationCount(offender.getViolationCount() + 1);
+
+        if (offender.getViolationCount() >= 3) {
+            offender.setStatus(UserStatus.PERMANENTLY_SUSPENDED);
+            offender.setScore(0);
+        } else if (offender.getViolationCount() == 2) {
+            offender.setStatus(UserStatus.SUSPENDED);
+            offender.setScore(Math.max(0, offender.getScore() - 20));
+        } else {
+            offender.setScore(Math.max(0, offender.getScore() - 15));
+        }
+
+        userRepository.save(offender);
+    }
 
     private User getUser(String username) {
         return userRepository.findByUsername(username)
@@ -149,20 +219,32 @@ public class ReportServiceImpl implements ReportService {
     }
 
     private ReportResponse toDTO(Report r) {
-        Review review = r.getReview();
-        return ReportResponse.builder()
+        ReportResponse.ReportResponseBuilder builder = ReportResponse.builder()
                 .id(r.getId())
-                .reviewId(review.getId())
                 .reporterUsername(r.getReporter().getUsername())
-                .reviewAuthorUsername(review.getUser().getUsername())
-                .reviewText(review.getText())
-                .reviewRating(review.getRating())
                 .reasonCategory(r.getReasonCategory())
                 .reasonText(r.getReasonText())
                 .status(r.getStatus())
                 .createdAt(r.getCreatedAt())
                 .resolvedAt(r.getResolvedAt())
-                .resolvedByUsername(r.getResolvedBy() != null ? r.getResolvedBy().getUsername() : null)
-                .build();
+                .resolvedByUsername(r.getResolvedBy() != null ? r.getResolvedBy().getUsername() : null);
+
+        if (r.getReview() != null) {
+            Review review = r.getReview();
+            builder.targetType(ReportTargetType.REVIEW)
+                    .reviewId(review.getId())
+                    .reviewAuthorUsername(review.getUser().getUsername())
+                    .reviewText(review.getText())
+                    .reviewRating(review.getRating());
+        } else {
+            ReviewComment comment = r.getReviewComment();
+            builder.targetType(ReportTargetType.COMMENT)
+                    .reviewCommentId(comment.getId())
+                    .parentReviewId(comment.getReview().getId())
+                    .commentAuthorUsername(comment.getAuthor().getUsername())
+                    .commentText(comment.getText());
+        }
+
+        return builder.build();
     }
 }

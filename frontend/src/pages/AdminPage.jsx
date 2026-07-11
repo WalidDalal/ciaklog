@@ -239,13 +239,16 @@ function AdminPage() {
     catch (err) { toast.show(err.response?.data?.error || 'Errore') }
   }
 
-  // Fix: raggruppa le segnalazioni per recensione, invece di mostrarle come
-  // righe separate — così l'admin vede "Recensione X — N segnalazioni"
+  // Fix: raggruppa le segnalazioni per bersaglio (recensione O risposta), invece
+  // di mostrarle come righe separate — così l'admin vede "X — N segnalazioni".
+  // Nota: la vera distinzione visiva recensioni/risposte nella dashboard è un
+  // pezzo a parte — questa è solo la patch minima per non rompersi con i due target.
   const reportGroups = useMemo(() => {
     const map = new Map()
     reports.forEach(r => {
-      if (!map.has(r.reviewId)) map.set(r.reviewId, [])
-      map.get(r.reviewId).push(r)
+      const key = r.targetType === 'COMMENT' ? `comment_${r.reviewCommentId}` : `review_${r.reviewId}`
+      if (!map.has(key)) map.set(key, [])
+      map.get(key).push(r)
     })
     return Array.from(map.values())
   }, [reports])
@@ -444,7 +447,10 @@ function AdminPage() {
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
                       {reportGroups.map(group => {
                         const first = group[0]
-                        const groupKey = first.reviewId
+                        const isComment = first.targetType === 'COMMENT'
+                        const groupKey = isComment ? `comment_${first.reviewCommentId}` : `review_${first.reviewId}`
+                        const authorUsername = isComment ? first.commentAuthorUsername : first.reviewAuthorUsername
+                        const contentText = isComment ? first.commentText : first.reviewText
                         const expanded = expandedReport === groupKey
                         const pendingCount = group.filter(r => r.status === 'PENDING').length
                         return (
@@ -453,11 +459,15 @@ function AdminPage() {
                               <div style={{ padding: '16px 20px', display: 'flex', alignItems: 'center', gap: '12px', cursor: 'pointer' }}
                                    onClick={() => setExpandedReport(expanded ? null : groupKey)}
                               >
+                        {/* Fix: distingue recensione/risposta — la vera dashboard dedicata è un pezzo a parte */}
+                        <span style={{ padding: '3px 8px', borderRadius: '4px', fontSize: '11px', fontWeight: '600', backgroundColor: isComment ? '#1a2d2d' : '#2d1a2d', color: isComment ? '#4dd0c8' : '#c084fc', flexShrink: 0 }}>
+                          {isComment ? '💬 Risposta' : '📝 Recensione'}
+                        </span>
                         <span style={{ padding: '3px 10px', borderRadius: '4px', fontSize: '12px', fontWeight: '600', backgroundColor: '#2d1a1a', color: 'var(--accent)', border: '1px solid #e5091444', flexShrink: 0 }}>
                           {group.length} {group.length === 1 ? 'segnalazione' : 'segnalazioni'}
                         </span>
                                 <span style={{ color: 'var(--text)', fontSize: '14px', flex: 1 }}>
-                          Recensione di <strong>{first.reviewAuthorUsername || '—'}</strong>
+                          {isComment ? 'Risposta' : 'Recensione'} di <strong>{authorUsername || '—'}</strong>
                           {group.length > 1 && (
                               <span style={{ color: 'var(--text-dark)' }}> — segnalata da {group.map(r => r.reporterUsername).join(', ')}</span>
                           )}
@@ -469,15 +479,15 @@ function AdminPage() {
                               {expanded && (
                                   <div style={{ padding: '0 20px 20px', borderTop: '1px solid #1a1a1a' }}>
 
-                                    {(first.reviewText) && (
+                                    {contentText && (
                                         <div style={{ backgroundColor: 'var(--bg-card)', borderLeft: '3px solid #e50914', borderRadius: '0 8px 8px 0', padding: '14px 16px', margin: '16px 0' }}>
                                           <div style={{ color: 'var(--text-dark)', fontSize: '11px', fontWeight: '600', textTransform: 'uppercase', letterSpacing: '1px', marginBottom: '6px' }}>
-                                            Recensione segnalata
+                                            {isComment ? 'Risposta segnalata' : 'Recensione segnalata'}
                                           </div>
                                           <p style={{ color: '#d1d5db', fontSize: '14px', lineHeight: 1.6, margin: 0, fontStyle: 'italic' }}>
-                                            "{first.reviewText}"
+                                            "{contentText}"
                                           </p>
-                                          {first.reviewRating && (
+                                          {!isComment && first.reviewRating && (
                                               <div style={{ marginTop: '8px', color: 'var(--gold)', fontSize: '13px' }}>
                                                 {'★'.repeat(first.reviewRating)}
                                               </div>
@@ -485,7 +495,7 @@ function AdminPage() {
                                         </div>
                                     )}
 
-                                    {/* Elenco delle singole segnalazioni ricevute su questa recensione */}
+                                    {/* Elenco delle singole segnalazioni ricevute su questo bersaglio */}
                                     <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', marginBottom: '16px' }}>
                                       {group.map(r => (
                                           <div key={r.id} style={{ backgroundColor: 'var(--bg-hover)', borderRadius: '8px', padding: '10px 14px' }}>

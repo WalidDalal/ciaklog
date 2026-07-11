@@ -3,6 +3,7 @@ package com.project.ciaklog.repository;
 import com.project.ciaklog.entity.Report;
 import com.project.ciaklog.entity.ReportStatus;
 import com.project.ciaklog.entity.Review;
+import com.project.ciaklog.entity.ReviewComment;
 import com.project.ciaklog.entity.User;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -29,4 +30,11 @@ public interface ReportRepository extends JpaRepository<Report, UUID> {
 
     // Fix N+1: carica tutti i report per una lista di review in una sola query
     List<Report> findAllByReviewIn(List<Review> reviews);
+
+    // Fix (moderazione risposte): stessi metodi di sopra ma per ReviewComment
+    boolean existsByReporterAndReviewComment(User reporter, ReviewComment reviewComment);
+
+    List<Report> findByReviewComment(ReviewComment reviewComment);
+
+    long countByReviewComment(ReviewComment reviewComment);
 }

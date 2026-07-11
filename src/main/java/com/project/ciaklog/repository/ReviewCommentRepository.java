@@ -10,6 +10,7 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
+import java.util.List;
 import java.util.UUID;
 
 @Repository
@@ -25,4 +26,8 @@ public interface ReviewCommentRepository extends JpaRepository<ReviewComment, UU
             @Param("review") Review review,
             @Param("status") ReviewStatus status,
             Pageable pageable);
+
+    // Fix (cascata moderazione): versione non paginata, usata da ReportServiceImpl
+    // per nascondere/rimuovere tutte le risposte quando la recensione madre sparisce
+    List<ReviewComment> findAllByReviewAndStatus(Review review, ReviewStatus status);
 }

@@ -26,7 +26,8 @@ public class ReportController {
 
     private final ReportService reportService;
 
-    // User/Admin — segnala una recensione
+    // User/Admin — segnala una recensione o una risposta (esattamente uno tra
+    // reviewId/reviewCommentId nel body, validato nel service)
     @PostMapping
     public ResponseEntity<ReportResponse> createReport(
             @AuthenticationPrincipal UserDetails userDetails,

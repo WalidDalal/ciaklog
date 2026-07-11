@@ -38,8 +38,10 @@ function RegisterPage() {
       setError('Lo username deve essere tra 3 e 30 caratteri')
       return
     }
-    if (password.length < 8) {
-      setError('La password deve essere di almeno 8 caratteri')
+    // Fix: stessa regola del backend (era solo length < 8, dava un falso via
+    // libera per password come "password123" senza maiuscola)
+    if (!/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d).{8,}$/.test(password)) {
+      setError('La password deve contenere almeno 8 caratteri, una maiuscola, una minuscola e un numero')
       return
     }
 
@@ -121,6 +123,24 @@ function RegisterPage() {
                   {showPassword ? '🙈' : '👁️'}
                 </button>
               </div>
+              {/* Fix: prima il frontend controllava solo la lunghezza (>=8), il
+                  backend pretende anche maiuscola+minuscola+numero — mostrando
+                  un falso via libera che poi il backend respingeva comunque.
+                  Indicatore live con la stessa regola del backend */}
+              {password.length > 0 && (
+                <div style={{ display: 'flex', gap: '10px', marginTop: '8px', flexWrap: 'wrap' }}>
+                  {[
+                    { ok: password.length >= 8, label: '8+ caratteri' },
+                    { ok: /[a-z]/.test(password), label: 'minuscola' },
+                    { ok: /[A-Z]/.test(password), label: 'maiuscola' },
+                    { ok: /\d/.test(password), label: 'numero' },
+                  ].map(req => (
+                    <span key={req.label} style={{ fontSize: '11px', color: req.ok ? '#22c55e' : 'var(--text-dark)' }}>
+                      {req.ok ? '✓' : '·'} {req.label}
+                    </span>
+                  ))}
+                </div>
+              )}
             </div>
 
             <div style={{ marginBottom: '24px' }}>
