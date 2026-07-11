@@ -13,6 +13,156 @@ const STATUS_LABELS = {
   WATCHED: '✅ Visto',
 }
 
+// Fix (UI risposte): prima non esisteva nessuna interfaccia per leggere o
+// scrivere risposte — il backend (ReviewComment) era pronto ma invisibile.
+// Thread collassato di default sotto ogni recensione, caricato on-demand.
+function ReplyThread({ reviewId, token, currentUsername, isAdmin }) {
+  const toast = useToastStore()
+  const [expanded, setExpanded] = useState(false)
+  const [loaded, setLoaded] = useState(false)
+  const [loading, setLoading] = useState(false)
+  const [comments, setComments] = useState([])
+  const [showComposer, setShowComposer] = useState(false)
+  const [text, setText] = useState('')
+  const [submitting, setSubmitting] = useState(false)
+  const [editingId, setEditingId] = useState(null)
+  const [editText, setEditText] = useState('')
+  const [reportingCommentId, setReportingCommentId] = useState(null)
+  const [reportedCommentIds, setReportedCommentIds] = useState(new Set())
+
+  const loadComments = () => {
+    setLoading(true)
+    api.get(`/reviews/${reviewId}/comments`, { params: { size: 50, sort: 'createdAt,asc' } })
+      .then(r => setComments(r.data.content || r.data))
+      .catch(() => {})
+      .finally(() => { setLoading(false); setLoaded(true) })
+  }
+
+  const toggleExpanded = () => {
+    setExpanded(v => !v)
+    if (!loaded) loadComments()
+  }
+
+  const handleAddComment = async () => {
+    if (!text.trim()) return
+    setSubmitting(true)
+    try {
+      const res = await api.post(`/reviews/${reviewId}/comments`, { text: text.trim() })
+      setComments(prev => [...prev, res.data])
+      setText('')
+      setShowComposer(false)
+    } catch (err) {
+      toast.show(err.response?.data?.error || 'Errore durante l\'invio della risposta')
+    } finally {
+      setSubmitting(false)
+    }
+  }
+
+  const handleEditComment = async (id) => {
+    if (!editText.trim()) return
+    try {
+      const res = await api.put(`/comments/${id}`, { text: editText.trim() })
+      setComments(prev => prev.map(c => c.id === id ? res.data : c))
+      setEditingId(null)
+    } catch (err) {
+      toast.show(err.response?.data?.error || 'Errore durante la modifica')
+    }
+  }
+
+  const handleDeleteComment = async (id) => {
+    try {
+      await api.delete(`/comments/${id}`)
+      setComments(prev => prev.filter(c => c.id !== id))
+    } catch (err) {
+      toast.show(err.response?.data?.error || 'Errore durante l\'eliminazione')
+    }
+  }
+
+  return (
+    <div style={{ marginTop: '14px', paddingTop: '12px', borderTop: '1px solid #1a1a1a' }}>
+      <button onClick={toggleExpanded} style={{ background: 'none', border: 'none', color: 'var(--text-dark)', fontSize: '12px', cursor: 'pointer', padding: 0 }}>
+        {expanded ? '▲ Nascondi risposte' : `💬 Risposte${loaded ? ` (${comments.length})` : ''}`}
+      </button>
+
+      {expanded && (
+        <div style={{ marginTop: '12px', display: 'flex', flexDirection: 'column', gap: '10px' }}>
+          {loading && <p style={{ color: 'var(--text-dark)', fontSize: '12px' }}>Caricamento...</p>}
+
+          {!loading && comments.map(c => (
+            <div key={c.id} style={{ backgroundColor: 'var(--bg-hover)', borderRadius: '8px', padding: '10px 14px', marginLeft: '16px' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
+                <Link to={`/profile/${c.authorUsername}`}>
+                  <span style={{ color: 'var(--text)', fontWeight: '600', fontSize: '12px' }}>👤 {c.authorUsername}</span>
+                </Link>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <span style={{ color: 'var(--text-dark)', fontSize: '11px' }}>{new Date(c.createdAt).toLocaleDateString('it-IT')}</span>
+                  {c.authorUsername === currentUsername ? (
+                    <>
+                      <button onClick={() => { setEditingId(c.id); setEditText(c.text) }} style={{ fontSize: '11px', color: 'var(--text-dark)', backgroundColor: 'transparent', border: 'none', cursor: 'pointer' }}>Modifica</button>
+                      <button onClick={() => handleDeleteComment(c.id)} style={{ fontSize: '11px', color: '#ff6b6b', backgroundColor: 'transparent', border: 'none', cursor: 'pointer' }}>Elimina</button>
+                    </>
+                  ) : token && !isAdmin && (
+                    reportedCommentIds.has(c.id) ? (
+                      <span style={{ fontSize: '11px', color: 'var(--text-dark)' }}>Segnalata ✓</span>
+                    ) : (
+                      <button onClick={() => setReportingCommentId(c.id)} title="Segnala risposta" aria-label="Segnala risposta"
+                        style={{ fontSize: '12px', color: 'var(--text-dark)', backgroundColor: 'transparent', border: 'none', cursor: 'pointer' }}>🚩</button>
+                    )
+                  )}
+                </div>
+              </div>
+
+              {editingId === c.id ? (
+                <div>
+                  <textarea value={editText} onChange={e => setEditText(e.target.value)} rows={2} maxLength={500}
+                    style={{ width: '100%', padding: '8px 10px', backgroundColor: 'var(--bg-card)', border: '1px solid #333', borderRadius: '6px', color: 'var(--text)', fontSize: '13px', resize: 'none', boxSizing: 'border-box' }} />
+                  <div style={{ display: 'flex', gap: '8px', marginTop: '6px' }}>
+                    <button onClick={() => handleEditComment(c.id)} style={{ padding: '4px 12px', backgroundColor: 'var(--accent)', border: 'none', borderRadius: '5px', color: 'var(--text)', fontSize: '12px', cursor: 'pointer' }}>Salva</button>
+                    <button onClick={() => setEditingId(null)} style={{ padding: '4px 12px', backgroundColor: 'transparent', border: '1px solid #333', borderRadius: '5px', color: 'var(--text-muted)', fontSize: '12px', cursor: 'pointer' }}>Annulla</button>
+                  </div>
+                </div>
+              ) : (
+                <p style={{ color: '#c8c8c8', fontSize: '13px', lineHeight: 1.5, margin: 0 }}>{c.text}</p>
+              )}
+            </div>
+          ))}
+
+          {!loading && comments.length === 0 && (
+            <p style={{ color: 'var(--text-dark)', fontSize: '12px', marginLeft: '16px' }}>Nessuna risposta ancora.</p>
+          )}
+
+          {token && !isAdmin && (
+            showComposer ? (
+              <div style={{ marginLeft: '16px' }}>
+                <textarea value={text} onChange={e => setText(e.target.value)} placeholder="Scrivi una risposta..." rows={2} maxLength={500}
+                  style={{ width: '100%', padding: '8px 10px', backgroundColor: 'var(--bg-hover)', border: '1px solid #333', borderRadius: '6px', color: 'var(--text)', fontSize: '13px', resize: 'none', boxSizing: 'border-box' }} />
+                <div style={{ display: 'flex', gap: '8px', marginTop: '6px' }}>
+                  <button onClick={handleAddComment} disabled={submitting || !text.trim()} style={{ padding: '5px 14px', backgroundColor: 'var(--accent)', border: 'none', borderRadius: '5px', color: 'var(--text)', fontSize: '12px', fontWeight: '600', cursor: 'pointer' }}>
+                    {submitting ? 'Invio...' : 'Rispondi'}
+                  </button>
+                  <button onClick={() => { setShowComposer(false); setText('') }} style={{ padding: '5px 14px', backgroundColor: 'transparent', border: '1px solid #333', borderRadius: '5px', color: 'var(--text-muted)', fontSize: '12px', cursor: 'pointer' }}>Annulla</button>
+                </div>
+              </div>
+            ) : (
+              <button onClick={() => setShowComposer(true)} style={{ marginLeft: '16px', alignSelf: 'flex-start', padding: '5px 12px', backgroundColor: 'transparent', border: '1px solid #333', borderRadius: '5px', color: 'var(--text-dark)', fontSize: '12px', cursor: 'pointer' }}>
+                💬 Rispondi
+              </button>
+            )
+          )}
+        </div>
+      )}
+
+      {reportingCommentId && (
+        <ReportModal
+          reviewCommentId={reportingCommentId}
+          onClose={() => setReportingCommentId(null)}
+          onSuccess={() => { setReportedCommentIds(prev => new Set([...prev, reportingCommentId])); setReportingCommentId(null) }}
+        />
+      )}
+    </div>
+  )
+}
+
 function StarPicker({ value, onChange }) {
   const [hover, setHover] = useState(0)
   const active = hover > 0 ? hover : value
@@ -35,7 +185,8 @@ const REPORT_CATEGORIES = [
   { value: 'OTHER', label: '📝 Altro', desc: 'Specifica il motivo nel campo testo' },
 ]
 
-function ReportModal({ reviewId, onClose, onSuccess }) {
+// Fix (UI risposte): esteso per segnalare anche una risposta, non solo una recensione
+function ReportModal({ reviewId, reviewCommentId, onClose, onSuccess }) {
   const [category, setCategory] = useState('')
   const [reasonText, setReasonText] = useState('')
   const [loading, setLoading] = useState(false)
@@ -46,7 +197,7 @@ function ReportModal({ reviewId, onClose, onSuccess }) {
     if (category === 'OTHER' && !reasonText.trim()) { setError('Descrivi il motivo'); return }
     setLoading(true); setError('')
     try {
-      await api.post('/reports', { reviewId, reasonCategory: category, reasonText: reasonText.trim() || null })
+      await api.post('/reports', { reviewId, reviewCommentId, reasonCategory: category, reasonText: reasonText.trim() || null })
       onSuccess()
     } catch (err) {
       setError(err.response?.data?.error || 'Errore durante la segnalazione')
@@ -58,7 +209,7 @@ function ReportModal({ reviewId, onClose, onSuccess }) {
       <div onClick={onClose} style={{ position: 'fixed', inset: 0, backgroundColor: 'var(--bg-modal)', zIndex: 500 }} />
       <div style={{ position: 'fixed', top: '50%', left: '50%', transform: 'translate(-50%, -50%)', backgroundColor: 'var(--bg-card)', border: '1px solid #333', borderRadius: '16px', padding: '32px', width: '100%', maxWidth: '460px', zIndex: 600 }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px' }}>
-          <h2 style={{ color: 'var(--text)', fontSize: '20px', fontWeight: '700' }}>🚩 Segnala recensione</h2>
+          <h2 style={{ color: 'var(--text)', fontSize: '20px', fontWeight: '700' }}>🚩 {reviewCommentId ? 'Segnala risposta' : 'Segnala recensione'}</h2>
           <button onClick={onClose} style={{ backgroundColor: 'transparent', border: 'none', color: 'var(--text-dark)', fontSize: '20px', cursor: 'pointer' }}>✕</button>
         </div>
         <p style={{ color: 'var(--text-muted)', fontSize: '14px', marginBottom: '20px' }}>
@@ -120,6 +271,12 @@ function MovieDetailPage() {
   const [reviewError, setReviewError] = useState('')
   const [reviewSuccess, setReviewSuccess] = useState('')
   const [editMode, setEditMode] = useState(false)
+
+  // Fix (AI più centrale): "recensione a botta calda" — appunti sparsi -> AI li struttura
+  const [showNotesHelper, setShowNotesHelper] = useState(false)
+  const [rawNotes, setRawNotes] = useState('')
+  const [structuring, setStructuring] = useState(false)
+  const [structureError, setStructureError] = useState('')
 
   const [libraryLoading, setLibraryLoading] = useState(false)
   const [libraryError, setLibraryError] = useState('')
@@ -197,6 +354,26 @@ function MovieDetailPage() {
       }
     } catch (err) { setReviewError(err.response?.data?.error || 'Errore durante la pubblicazione') }
     finally { setReviewLoading(false) }
+  }
+
+  // Fix (AI più centrale): "recensione a botta calda" — non salva nulla,
+  // pre-compila solo il campo testo, l'utente rivede/modifica prima di pubblicare
+  const handleStructureNotes = async () => {
+    if (!rawNotes.trim()) return
+    setStructuring(true); setStructureError('')
+    try {
+      const res = await api.post('/ai/structure-review', {
+        rawNotes: rawNotes.trim(),
+        movieTitle: detail?.title || '',
+      })
+      setText(res.data.text || '')
+      setShowNotesHelper(false)
+      setRawNotes('')
+    } catch (err) {
+      setStructureError(err.response?.data?.error || 'Assistente non disponibile, riprova')
+    } finally {
+      setStructuring(false)
+    }
   }
 
   // Fix: l'endpoint DELETE /api/reviews/{id} esisteva già ma nessun bottone
@@ -365,6 +542,7 @@ function MovieDetailPage() {
                 <div style={{ marginBottom: '10px' }}><StaticRating rating={myReview.rating} /></div>
                 {myReview.text && <p style={{ color: '#d1d5db', fontSize: '14px', lineHeight: 1.6 }}>{myReview.text}</p>}
                 {reviewSuccess && <p style={{ color: '#4ade80', fontSize: '13px', marginTop: '10px' }}>{reviewSuccess}</p>}
+                <ReplyThread reviewId={myReview.id} token={token} currentUsername={user?.username} isAdmin={isAdmin} />
               </>
 
             ) : canReview ? (
@@ -379,7 +557,35 @@ function MovieDetailPage() {
                     <StarPicker value={rating} onChange={setRating} />
                   </div>
                   <div style={{ marginBottom: '20px' }}>
-                    <label style={{ display: 'block', color: 'var(--text-muted)', fontSize: '13px', marginBottom: '8px' }}>Commento (opzionale)</label>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px' }}>
+                      <label style={{ display: 'block', color: 'var(--text-muted)', fontSize: '13px' }}>Commento (opzionale)</label>
+                      {!showNotesHelper && (
+                        <button type="button" onClick={() => setShowNotesHelper(true)}
+                          style={{ background: 'none', border: 'none', color: 'var(--accent)', fontSize: '12px', fontWeight: '600', cursor: 'pointer', padding: 0 }}>
+                          ✨ Aiutami a scriverla
+                        </button>
+                      )}
+                    </div>
+                    {showNotesHelper && (
+                      <div style={{ backgroundColor: 'var(--bg-hover)', border: '1px solid var(--accent)', borderRadius: '8px', padding: '12px', marginBottom: '10px' }}>
+                        <p style={{ color: 'var(--text-dark)', fontSize: '12px', marginBottom: '8px' }}>
+                          Butta giù qualche appunto sparso — l'AI lo trasforma in una recensione, mantenendo il tuo tono e le tue opinioni.
+                        </p>
+                        <textarea value={rawNotes} onChange={e => setRawNotes(e.target.value)} placeholder="es. ritmo lento primi 20 min, finale wow, colonna sonora top..." rows={3} maxLength={1000}
+                          style={{ width: '100%', padding: '10px', backgroundColor: 'var(--bg)', border: '1px solid #333', borderRadius: '6px', color: 'var(--text)', fontSize: '13px', resize: 'vertical', boxSizing: 'border-box', marginBottom: '8px' }} />
+                        {structureError && <p style={{ color: '#ff6b6b', fontSize: '12px', marginBottom: '8px' }}>{structureError}</p>}
+                        <div style={{ display: 'flex', gap: '8px' }}>
+                          <button type="button" disabled={structuring || !rawNotes.trim()} onClick={handleStructureNotes}
+                            style={{ padding: '8px 16px', backgroundColor: structuring ? '#666' : 'var(--accent)', border: 'none', borderRadius: '6px', color: 'var(--text)', fontSize: '13px', fontWeight: '600', cursor: structuring ? 'default' : 'pointer' }}>
+                            {structuring ? 'Genero...' : '✨ Genera recensione'}
+                          </button>
+                          <button type="button" onClick={() => { setShowNotesHelper(false); setRawNotes(''); setStructureError('') }}
+                            style={{ padding: '8px 16px', backgroundColor: 'transparent', border: '1px solid #333', borderRadius: '6px', color: 'var(--text-muted)', fontSize: '13px', cursor: 'pointer' }}>
+                            Annulla
+                          </button>
+                        </div>
+                      </div>
+                    )}
                     <textarea value={text} onChange={e => setText(e.target.value)} placeholder="Cosa ne pensi?" rows={4}
                       style={{ width: '100%', padding: '12px', backgroundColor: 'var(--bg-hover)', border: '1px solid #333', borderRadius: '8px', color: 'var(--text)', fontSize: '14px', resize: 'vertical', boxSizing: 'border-box' }} />
                   </div>
@@ -456,6 +662,7 @@ function MovieDetailPage() {
                 <p style={{ color: 'var(--text-dark)', fontSize: '12px', marginTop: '8px' }}>
                   {new Date(r.createdAt).toLocaleDateString('it-IT')}
                 </p>
+                <ReplyThread reviewId={r.id} token={token} currentUsername={user?.username} isAdmin={isAdmin} />
               </div>
             ))}
           </div>

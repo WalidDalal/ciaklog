@@ -1,8 +1,10 @@
 package com.project.ciaklog.controller;
 
 import com.project.ciaklog.dto.request.AiChatRequest;
+import com.project.ciaklog.dto.request.StructureReviewRequest;
 import com.project.ciaklog.dto.response.AiChatResponse;
 import com.project.ciaklog.dto.response.DailyRecommendationResponse;
+import com.project.ciaklog.dto.response.StructureReviewResponse;
 import com.project.ciaklog.service.AiService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -43,5 +45,15 @@ public class AiController {
     public ResponseEntity<DailyRecommendationResponse> getDaily(
             @AuthenticationPrincipal UserDetails userDetails) {
         return ResponseEntity.ok(aiService.getDaily(userDetails.getUsername()));
+    }
+
+    // Fix (AI più centrale): "recensione a botta calda" — solo utenti normali,
+    // stessa restrizione delle altre funzioni AI orientate all'utente
+    @PostMapping("/structure-review")
+    @PreAuthorize("hasRole('USER')")
+    public ResponseEntity<StructureReviewResponse> structureReview(
+            @AuthenticationPrincipal UserDetails userDetails,
+            @Valid @RequestBody StructureReviewRequest dto) {
+        return ResponseEntity.ok(aiService.structureReview(userDetails.getUsername(), dto));
     }
 }

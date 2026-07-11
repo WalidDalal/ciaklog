@@ -177,6 +177,12 @@ function HomePage() {
     const [recentFilms, setRecentFilms] = useState([])
     const [watching, setWatching] = useState([])
     const [toWatch, setToWatch] = useState([])
+    // Fix (Home Admin): conteggio segnalazioni in attesa, mostrato nell'hero
+    // al posto del badge "sei #X in classifica" che per l'Admin non ha senso
+    const [pendingReportsCount, setPendingReportsCount] = useState(0)
+    // Fix (Home Admin): sezioni community collassate di default per l'Admin —
+    // restano disponibili con un click, ma non sono la priorità visiva
+    const [communityOpen, setCommunityOpen] = useState(false)
 
     useEffect(() => {
         const controller = new AbortController()
@@ -209,8 +215,19 @@ function HomePage() {
                 .catch(() => {})
         }
 
+        // Fix (Home Admin): conteggio segnalazioni PENDING per la card operativa
+        // nell'hero — solo per Admin, size:1 perché ci serve solo totalElements
+        if (token && user?.role === 'ADMIN') {
+            api.get('/reports', { params: { status: 'PENDING', size: 1 }, signal })
+                .then(r => setPendingReportsCount(r.data?.totalElements ?? 0))
+                .catch(() => {})
+        }
+
         return () => controller.abort()
     }, [token])
+
+    // Fix (Home Admin): sezioni community collassate di default per l'Admin
+    const isAdmin = user?.role === 'ADMIN'
 
     // Fix podio: myRank corretto (findIndex restituisce -1 se non trovato, +1 lo rende 0)
     const myRankIndex = topUsers.findIndex(u => u.username === user?.username)
@@ -259,13 +276,27 @@ function HomePage() {
                             <h1 style={{ fontSize: '52px', fontWeight: '800', lineHeight: 1.05, marginBottom: '16px' }}>
                                 {user?.role === 'ADMIN' ? <>Ciao, <span style={{ color: 'var(--accent)' }}>{user?.username}</span> 🛡️</> : <>Ciao, <span style={{ color: 'var(--accent)' }}>{user?.username}</span> 👋</>}
                             </h1>
-                            {myRank > 0 && myRank <= 10 && (
+                            {myRank > 0 && myRank <= 10 && user?.role !== 'ADMIN' && (
                                 <div style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', backgroundColor: 'var(--accent-subtle)', border: '1px solid var(--border-cta)', borderRadius: '8px', padding: '8px 14px', marginBottom: '24px' }}>
                                     <span>🏆</span>
                                     <span style={{ color: 'var(--gold)', fontSize: '14px', fontWeight: '600' }}>
                     Sei #{myRank} nella classifica — continua così!
                   </span>
                                 </div>
+                            )}
+                            {/* Fix (Home Admin): card operativa al posto del badge classifica,
+                                che per l'Admin non ha senso (è escluso dalla classifica) */}
+                            {user?.role === 'ADMIN' && (
+                                <Link to="/admin">
+                                    <div style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', backgroundColor: pendingReportsCount > 0 ? 'rgba(239,68,68,0.12)' : 'var(--accent-subtle)', border: `1px solid ${pendingReportsCount > 0 ? '#ef4444' : 'var(--border-cta)'}`, borderRadius: '8px', padding: '8px 14px', marginBottom: '24px', cursor: 'pointer' }}>
+                                        <span>🚩</span>
+                                        <span style={{ color: pendingReportsCount > 0 ? '#ef4444' : 'var(--text-muted)', fontSize: '14px', fontWeight: '600' }}>
+                                            {pendingReportsCount > 0
+                                                ? `${pendingReportsCount} segnalazion${pendingReportsCount === 1 ? 'e' : 'i'} in attesa`
+                                                : 'Nessuna segnalazione in attesa'}
+                                        </span>
+                                    </div>
+                                </Link>
                             )}
                             {user?.role === 'ADMIN' ? (
                                 <Link to="/admin">
@@ -360,7 +391,28 @@ function HomePage() {
                 </section>
             )}
 
-            {/* ── TOP FILM & SERIE ── */}
+            {/* Fix (Home Admin): toggle visibile solo per l'Admin — le sezioni
+                community restano disponibili ma collassate di default */}
+            {isAdmin && (
+                <div style={{ padding: '0 64px' }}>
+                    <button
+                        onClick={() => setCommunityOpen(o => !o)}
+                        style={{
+                            display: 'flex', alignItems: 'center', gap: '8px', width: '100%',
+                            padding: '14px 18px', backgroundColor: 'var(--bg-nav)', border: '1px solid var(--border)',
+                            borderRadius: '10px', color: 'var(--text-muted)', fontSize: '14px', fontWeight: '600',
+                            cursor: 'pointer', marginBottom: communityOpen ? '8px' : '48px',
+                        }}
+                    >
+                        <span>{communityOpen ? '▼' : '▶'}</span>
+                        <span>📊 Vista Community (Top Film/Serie, Trending, Classifica)</span>
+                    </button>
+                </div>
+            )}
+
+            {(!isAdmin || communityOpen) && (
+                <>
+                    {/* ── TOP FILM & SERIE ── */}
             <section style={{ padding: '0 64px 48px' }}>
                 <h2 style={{ fontSize: '22px', fontWeight: '700', marginBottom: '28px' }}>🏆 I più amati dalla community</h2>
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '24px' }}>
@@ -489,6 +541,8 @@ function HomePage() {
                     <div style={{ color: 'var(--text-dark)', textAlign: 'center', padding: '40px' }}>Scrivi recensioni per entrare in classifica! 🏅</div>
                 )}
             </section>
+                </>
+            )}
 
             {/* ── CTA GUEST ── */}
             {!logged && (
