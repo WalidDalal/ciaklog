@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { useNavigate, Navigate } from 'react-router-dom'
+import { useNavigate, Navigate, Link } from 'react-router-dom'
 import Navbar from '../components/Navbar'
 import api from '../services/api'
 import useAuthStore from '../store/authStore'
@@ -24,10 +24,29 @@ function SettingsPage() {
   const [username, setUsername] = useState(user?.username || '')
   const [bio, setBio] = useState('')
 
-  // Carica bio dal backend al mount (non è nel JWT)
+  // Fix (pattern Modifica/Annulla): tengo i valori originali per poterli
+  // ripristinare se l'utente annulla senza salvare, invece di avere sempre
+  // tutto editabile
+  const [originalBio, setOriginalBio] = useState('')
+  const [editingProfile, setEditingProfile] = useState(false)
+
+  // Fix (Impostazioni — pagina povera): card riepilogo account, dati già
+  // disponibili dalla stessa chiamata usata per la bio, nessun endpoint nuovo
+  const [accountSummary, setAccountSummary] = useState(null)
+
+  // Carica bio + riepilogo dal backend al mount (non sono nel JWT)
   useEffect(() => {
     if (user?.username) {
-      api.get(`/users/${user.username}`).then(r => setBio(r.data?.bio || '')).catch(() => {})
+      api.get(`/users/${user.username}`).then(r => {
+        const b = r.data?.bio || ''
+        setBio(b)
+        setOriginalBio(b)
+        setAccountSummary({
+          memberSince: r.data?.memberSince,
+          score: r.data?.score,
+          totalReviews: r.data?.totalReviews,
+        })
+      }).catch(() => {})
     }
   }, [user?.username])
   const [currentPassword, setCurrentPassword] = useState('')
@@ -60,11 +79,21 @@ function SettingsPage() {
       // Prima si assumeva sempre "password cambiata" e si forzava il logout
       // anche per un semplice edit della bio.
       toast.show('Profilo aggiornato!', 'success')
+      setOriginalBio(bio)
+      setEditingProfile(false)
     } catch (err) {
       toast.show(err.response?.data?.error || 'Errore durante il salvataggio')
     } finally {
       setLoadingProfile(false)
     }
+  }
+
+  // Fix (pattern Modifica/Annulla): ripristina i valori originali senza
+  // salvare nulla, e richiude il form
+  const handleCancelProfile = () => {
+    setUsername(user?.username || '')
+    setBio(originalBio)
+    setEditingProfile(false)
   }
 
   const handlePasswordSubmit = async (e) => {
@@ -125,51 +154,114 @@ function SettingsPage() {
           </div>
         </div>
 
+        {/* Fix (Impostazioni — pagina povera): card riepilogo account,
+            dati già disponibili (membro dal, punteggio, recensioni scritte) */}
+        {accountSummary && (
+          <div style={CARD_STYLE}>
+            <div style={{ display: 'flex', justifyContent: 'space-around', textAlign: 'center', padding: '20px 0' }}>
+              <div>
+                <div style={{ color: 'var(--gold)', fontSize: '20px', fontWeight: '800' }}>{accountSummary.score ?? 0}</div>
+                <div style={{ color: 'var(--text-dark)', fontSize: '12px', marginTop: '2px' }}>Punteggio</div>
+              </div>
+              <div>
+                <div style={{ color: 'var(--gold)', fontSize: '20px', fontWeight: '800' }}>{accountSummary.totalReviews ?? 0}</div>
+                <div style={{ color: 'var(--text-dark)', fontSize: '12px', marginTop: '2px' }}>Recensioni</div>
+              </div>
+              <div>
+                <div style={{ color: 'var(--text)', fontSize: '14px', fontWeight: '700', marginTop: '3px' }}>{accountSummary.memberSince || '—'}</div>
+                <div style={{ color: 'var(--text-dark)', fontSize: '12px', marginTop: '2px' }}>Membro dal</div>
+              </div>
+            </div>
+            {/* Fix (Impostazioni, idea facoltativa a costo zero): riusa la pagina
+                profilo già esistente, dà un motivo in più per passare da qui */}
+            <div style={{ textAlign: 'center', borderTop: '1px solid var(--border-soft)', paddingTop: '14px' }}>
+              <Link to={`/profile/${user?.username}`} style={{ color: 'var(--accent)', fontSize: '13px', fontWeight: '600' }}>
+                🔗 Vedi il tuo profilo pubblico
+              </Link>
+            </div>
+          </div>
+        )}
+
         {/* ── Modifica profilo ── */}
         <div style={CARD_STYLE}>
-          <h2 style={{ color: 'var(--text)', fontSize: '17px', fontWeight: '700', marginBottom: '20px' }}>
-            👤 Modifica profilo
-          </h2>
-          <form onSubmit={handleProfileSubmit}>
-            <div style={{ marginBottom: '16px' }}>
-              <label style={{ display: 'block', color: 'var(--text-muted)', fontSize: '13px', marginBottom: '6px' }}>
-                Username
-              </label>
-              <input
-                type="text"
-                value={username}
-                onChange={e => setUsername(e.target.value)}
-                required
-                minLength={3}
-                maxLength={30}
-                style={INPUT_STYLE}
-              />
-            </div>
-            <div style={{ marginBottom: '20px' }}>
-              <label style={{ display: 'block', color: 'var(--text-muted)', fontSize: '13px', marginBottom: '6px' }}>
-                Bio <span style={{ color: 'var(--text-dark)' }}>({bio.length}/200)</span>
-              </label>
-              <textarea
-                value={bio}
-                onChange={e => setBio(e.target.value)}
-                maxLength={200}
-                rows={3}
-                placeholder="Scrivi qualcosa su di te..."
-                style={{ ...INPUT_STYLE, resize: 'vertical' }}
-              />
-            </div>
-            <button
-              type="submit"
-              disabled={loadingProfile}
-              style={{
-                padding: '12px 28px', backgroundColor: loadingProfile ? 'var(--border-soft)' : 'var(--accent)',
-                border: 'none', borderRadius: '8px', color: 'white',
-                fontSize: '15px', fontWeight: '600', cursor: loadingProfile ? 'default' : 'pointer',
-              }}
-            >
-              {loadingProfile ? 'Salvataggio...' : 'Salva modifiche'}
-            </button>
-          </form>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: editingProfile ? '20px' : 0 }}>
+            <h2 style={{ color: 'var(--text)', fontSize: '17px', fontWeight: '700', margin: 0 }}>
+              👤 Modifica profilo
+            </h2>
+            {/* Fix: pattern Modifica/Annulla — i campi restano di sola lettura
+                (già visibili nella card avatar sopra) finché non clicchi Modifica,
+                invece di avere sempre tutto editabile */}
+            {!editingProfile && (
+              <button
+                type="button"
+                onClick={() => setEditingProfile(true)}
+                style={{
+                  padding: '6px 16px', backgroundColor: 'transparent',
+                  border: '1px solid var(--border-soft)', borderRadius: '8px',
+                  color: 'var(--text-muted)', fontSize: '13px', fontWeight: '600', cursor: 'pointer',
+                }}
+              >
+                ✏️ Modifica
+              </button>
+            )}
+          </div>
+
+          {editingProfile && (
+            <form onSubmit={handleProfileSubmit}>
+              <div style={{ marginBottom: '16px' }}>
+                <label style={{ display: 'block', color: 'var(--text-muted)', fontSize: '13px', marginBottom: '6px' }}>
+                  Username
+                </label>
+                <input
+                  type="text"
+                  value={username}
+                  onChange={e => setUsername(e.target.value)}
+                  required
+                  minLength={3}
+                  maxLength={30}
+                  style={INPUT_STYLE}
+                />
+              </div>
+              <div style={{ marginBottom: '20px' }}>
+                <label style={{ display: 'block', color: 'var(--text-muted)', fontSize: '13px', marginBottom: '6px' }}>
+                  Bio <span style={{ color: 'var(--text-dark)' }}>({bio.length}/200)</span>
+                </label>
+                <textarea
+                  value={bio}
+                  onChange={e => setBio(e.target.value)}
+                  maxLength={200}
+                  rows={3}
+                  placeholder="Scrivi qualcosa su di te..."
+                  style={{ ...INPUT_STYLE, resize: 'vertical' }}
+                />
+              </div>
+              <div style={{ display: 'flex', gap: '10px' }}>
+                <button
+                  type="submit"
+                  disabled={loadingProfile}
+                  style={{
+                    padding: '12px 28px', backgroundColor: loadingProfile ? 'var(--border-soft)' : 'var(--accent)',
+                    border: 'none', borderRadius: '8px', color: 'white',
+                    fontSize: '15px', fontWeight: '600', cursor: loadingProfile ? 'default' : 'pointer',
+                  }}
+                >
+                  {loadingProfile ? 'Salvataggio...' : 'Salva modifiche'}
+                </button>
+                <button
+                  type="button"
+                  onClick={handleCancelProfile}
+                  disabled={loadingProfile}
+                  style={{
+                    padding: '12px 28px', backgroundColor: 'transparent',
+                    border: '1px solid var(--border-soft)', borderRadius: '8px', color: 'var(--text-muted)',
+                    fontSize: '15px', fontWeight: '600', cursor: loadingProfile ? 'default' : 'pointer',
+                  }}
+                >
+                  Annulla
+                </button>
+              </div>
+            </form>
+          )}
         </div>
 
         {/* ── Cambia password ── */}
@@ -247,27 +339,16 @@ function SettingsPage() {
         </div>
 
         {/* ── Zona pericolosa ── */}
+        {/* Fix: rimosso il bottone di logout duplicato — c'è già in Navbar,
+            sempre accessibile da ogni pagina. Il logout inoltre non è
+            un'azione "pericolosa/irreversibile" come l'eliminazione account,
+            non aveva senso raggrupparli insieme */}
         <div style={{ ...CARD_STYLE, borderColor: '#3a1a1a', marginBottom: 0 }}>
           <h2 style={{ color: 'var(--accent)', fontSize: '17px', fontWeight: '700', marginBottom: '20px' }}>
             🚨 Zona pericolosa
           </h2>
           <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
             <div>
-              <p style={{ color: 'var(--text-dark)', fontSize: '13px', marginBottom: '8px' }}>
-                Il logout termina la sessione corrente.
-              </p>
-              <button
-                onClick={() => { logout(); navigate('/login') }}
-                style={{
-                  padding: '10px 24px', backgroundColor: 'transparent',
-                  border: '1px solid var(--border)', borderRadius: '8px',
-                  color: 'var(--text-muted)', fontSize: '14px', cursor: 'pointer',
-                }}
-              >
-                Esci dall'account
-              </button>
-            </div>
-            <div style={{ borderTop: '1px solid #3a1a1a', paddingTop: '12px' }}>
               <p style={{ color: 'var(--text-dark)', fontSize: '13px', marginBottom: '8px' }}>
                 L'eliminazione anonimizza i tuoi dati in modo permanente. Le recensioni rimangono ma non saranno associate al tuo nome.
               </p>

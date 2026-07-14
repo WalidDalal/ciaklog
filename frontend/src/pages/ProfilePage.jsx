@@ -40,7 +40,11 @@ function ProfilePage() {
           setEditBio(profileRes.data.bio || '')
           const data = reviewsRes.data
           setReviews(data.content || data || [])
-          setHasMoreReviews(data.totalPages ? data.page < data.totalPages - 1 : false)
+          // Fix: stesso problema di AdminPage — con PageSerializationMode.VIA_DTO
+          // i metadati di paginazione sono annidati sotto `.page.`, non in cima.
+          // Prima "data.page" leggeva l'oggetto metadata invece del numero pagina
+          // corrente (0, appena richiesta), e "data.totalPages" era sempre undefined
+          setHasMoreReviews(data.page?.totalPages ? 0 < data.page.totalPages - 1 : false)
         })
         .catch(() => {})
         .finally(() => setLoading(false))
@@ -54,7 +58,7 @@ function ProfilePage() {
       const data = res.data
       setReviews(prev => [...prev, ...(data.content || data || [])])
       setReviewsPage(nextPage)
-      setHasMoreReviews(data.totalPages ? nextPage < data.totalPages - 1 : false)
+      setHasMoreReviews(data.page?.totalPages ? nextPage < data.page.totalPages - 1 : false)
     } catch {} finally { setLoadingMore(false) }
   }
 
@@ -178,10 +182,23 @@ function ProfilePage() {
               ) : (
                   /* ── Visualizzazione normale ── */
                   <>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '6px' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '6px', flexWrap: 'wrap' }}>
                       <h1 style={{ fontSize: '28px', fontWeight: '800', color: 'var(--text)' }}>
                         {profile.username || username}
                       </h1>
+                      {/* Fix (styling): badge generi spostati accanto al nome invece che
+                          sotto, nella riga stats — più rapido da vedere a colpo d'occhio */}
+                      {profile.topGenres?.length > 0 && (
+                          <div style={{ display: 'flex', gap: '6px', alignItems: 'center', flexWrap: 'wrap' }}>
+                            {profile.topGenres.slice(0, 3).map(g => (
+                                <span key={g} style={{
+                                  padding: '3px 10px', backgroundColor: 'var(--bg-hover)',
+                                  border: '1px solid var(--border)', borderRadius: '20px',
+                                  color: 'var(--text-muted)', fontSize: '12px',
+                                }}>{g}</span>
+                            ))}
+                          </div>
+                      )}
                       {isOwn && (
                           <button
                               onClick={() => setEditing(true)}
@@ -194,6 +211,17 @@ function ProfilePage() {
                           >
                             ✏️ Modifica
                           </button>
+                      )}
+                      {/* Fix (CiakLog Wrapped): link visibile solo sul proprio profilo */}
+                      {isOwn && (
+                          <Link to="/wrapped" style={{
+                            display: 'inline-flex', alignItems: 'center', gap: '4px',
+                            backgroundColor: 'var(--accent-subtle)', border: '1px solid var(--border-cta)',
+                            borderRadius: '6px', padding: '4px 10px',
+                            color: 'var(--gold)', fontSize: '12px', fontWeight: '600', textDecoration: 'none',
+                          }}>
+                            🎬 Il tuo Wrapped
+                          </Link>
                       )}
                     </div>
 
@@ -216,17 +244,6 @@ function ProfilePage() {
                         <span style={{ color: 'var(--text)', fontWeight: '700', fontSize: '18px' }}>{reviews.length}</span>
                         <span style={{ color: 'var(--text-dark)', fontSize: '13px', marginLeft: '6px' }}>recensioni</span>
                       </div>
-                      {profile.topGenres?.length > 0 && (
-                          <div style={{ display: 'flex', gap: '6px', alignItems: 'center', flexWrap: 'wrap' }}>
-                            {profile.topGenres.slice(0, 3).map(g => (
-                                <span key={g} style={{
-                                  padding: '3px 10px', backgroundColor: 'var(--bg-hover)',
-                                  border: '1px solid var(--border)', borderRadius: '20px',
-                                  color: 'var(--text-muted)', fontSize: '12px',
-                                }}>{g}</span>
-                            ))}
-                          </div>
-                      )}
                     </div>
                   </>
               )}

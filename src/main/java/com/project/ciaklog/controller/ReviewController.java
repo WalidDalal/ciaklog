@@ -63,4 +63,15 @@ public class ReviewController {
         reviewService.deleteReview(userDetails.getUsername(), id);
         return ResponseEntity.noContent().build();
     }
+
+    // Fix (auto-nascondimento autore, deciso): reversibile, separato dalla
+    // moderazione — l'autore nasconde/rimostra la propria recensione senza
+    // penalità e senza generare nessuna segnalazione
+    @PatchMapping("/{id}/visibility")
+    public ResponseEntity<ReviewResponse> setHidden(
+            @AuthenticationPrincipal UserDetails userDetails,
+            @PathVariable UUID id,
+            @RequestParam boolean hidden) {
+        return ResponseEntity.ok(reviewService.setHiddenByAuthor(userDetails.getUsername(), id, hidden));
+    }
 }

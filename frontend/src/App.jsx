@@ -10,6 +10,7 @@ import ProfilePage from './pages/ProfilePage'
 import ChatAiPage from './pages/ChatAiPage'
 import AdminPage from './pages/AdminPage'
 import SettingsPage from './pages/SettingsPage'
+import WrappedPage from './pages/WrappedPage'
 import { ChatFloating } from './components/ChatWidget'
 import ToastContainer from './components/ToastContainer'
 import ErrorBoundary from './components/ErrorBoundary'
@@ -24,12 +25,24 @@ function App() {
                     <Route path="/register" element={<RegisterPage />} />
                     <Route path="/search" element={<SearchPage />} />
                     <Route path="/movie/:id" element={<MovieDetailPage />} />
-                    <Route path="/profile/:username" element={<ProfilePage />} />
+                    {/* Fix: prima /profile/:username era pubblica ma faceva una
+                        Promise.all con /reviews/user/{username} che richiede login —
+                        da sloggato la seconda chiamata falliva (401), Promise.all
+                        falliva tutto insieme, e il catch silenzioso mostrava
+                        "Utente non trovato" anche se l'utente esisteva davvero.
+                        Ora la rotta è protetta: redirect pulito al login, che
+                        torna qui dopo l'accesso (ProtectedRoute + LoginPage
+                        gestiscono già state.from) */}
+                    <Route path="/profile/:username" element={<ProtectedRoute><ProfilePage /></ProtectedRoute>} />
 
                     {/* Rotte protette — richiedono login */}
                     <Route path="/library" element={<ProtectedRoute><LibraryPage /></ProtectedRoute>} />
                     <Route path="/chat" element={<ProtectedRoute><ChatAiPage /></ProtectedRoute>} />
                     <Route path="/settings" element={<ProtectedRoute><SettingsPage /></ProtectedRoute>} />
+                    {/* Fix (CiakLog Wrapped): protetta come le altre pagine personali —
+                        se un Admin ci arriva, il backend risponde 403 (stesso pattern
+                        di libreria/recensioni/chat, non ha dati da vedere comunque) */}
+                    <Route path="/wrapped" element={<ProtectedRoute><WrappedPage /></ProtectedRoute>} />
 
                     {/* Rotte admin */}
                     <Route path="/admin" element={<ProtectedRoute adminOnly><AdminPage /></ProtectedRoute>} />

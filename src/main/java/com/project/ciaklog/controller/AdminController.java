@@ -1,6 +1,7 @@
 package com.project.ciaklog.controller;
 
 import com.project.ciaklog.dto.request.SuspendRequest;
+import com.project.ciaklog.dto.response.AdminOperationalStatsResponse;
 import com.project.ciaklog.dto.response.AdminUserDetailResponse;
 import com.project.ciaklog.dto.response.AdminUserResponse;
 import com.project.ciaklog.service.AdminService;
@@ -25,13 +26,20 @@ public class AdminController {
 
     private final AdminService adminService;
 
+    // Fix (Home Admin, deciso): card operativa leggera per la Home, non una
+    // dashboard ricopiata — segnalazioni di oggi + utenti da controllare
+    @GetMapping("/operational-stats")
+    public ResponseEntity<AdminOperationalStatsResponse> getOperationalStats() {
+        return ResponseEntity.ok(adminService.getOperationalStats());
+    }
+
     @GetMapping("/users")
     public ResponseEntity<Page<AdminUserResponse>> listUsers(
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "10") int size,
             @RequestParam(required = false) String search) {
         PageRequest pageable = PageRequest.of(page, size, Sort.by("username").ascending());
-        return ResponseEntity.ok(adminService.listUsers(pageable));
+        return ResponseEntity.ok(adminService.listUsers(pageable, search));
     }
 
     // Dettaglio utente per il drawer laterale — caricato on-demand

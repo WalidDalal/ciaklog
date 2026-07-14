@@ -52,4 +52,13 @@ public class ReviewCommentController {
         reviewCommentService.deleteComment(userDetails.getUsername(), id);
         return ResponseEntity.noContent().build();
     }
+
+    // Fix (auto-nascondimento autore, deciso): reversibile, separato dalla moderazione
+    @PatchMapping("/api/comments/{id}/visibility")
+    public ResponseEntity<ReviewCommentResponse> setHidden(
+            @AuthenticationPrincipal UserDetails userDetails,
+            @PathVariable UUID id,
+            @RequestParam boolean hidden) {
+        return ResponseEntity.ok(reviewCommentService.setHiddenByAuthor(userDetails.getUsername(), id, hidden));
+    }
 }

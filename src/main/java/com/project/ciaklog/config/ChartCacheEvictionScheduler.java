@@ -9,8 +9,11 @@ import org.springframework.stereotype.Component;
 // non aveva nessuna scadenza — con il cache manager di default (in memoria,
 // no TTL) i dati restavano quelli del primo calcolo finché non si riavviava
 // il backend, anche pubblicando nuove recensioni che avrebbero cambiato la
-// classifica. Ogni 10 minuti si svuotano tutte e 4 le cache insieme: la
-// prossima richiesta le ricalcola fresche.
+// classifica. Ogni 2 minuti si svuotano tutte e 4 le cache insieme: la
+// prossima richiesta le ricalcola fresche. (Accorciato da 10 a 2 minuti su
+// richiesta esplicita — risposta più rapida, utile soprattutto in fase di
+// test/demo; se il carico in produzione dovesse diventare un problema si
+// può sempre riportare a un intervallo più lungo)
 @Component
 public class ChartCacheEvictionScheduler {
 
@@ -20,7 +23,7 @@ public class ChartCacheEvictionScheduler {
             @CacheEvict(cacheNames = "topUsers", allEntries = true),
             @CacheEvict(cacheNames = "trending", allEntries = true),
     })
-    @Scheduled(fixedRate = 10 * 60 * 1000) // ogni 10 minuti
+    @Scheduled(fixedRate = 2 * 60 * 1000) // ogni 2 minuti
     public void evictChartCaches() {
         // nessun corpo necessario — l'eviction avviene via annotazioni
     }

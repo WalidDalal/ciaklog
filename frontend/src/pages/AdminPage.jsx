@@ -1,5 +1,5 @@
 import { useEffect, useState, useCallback, useMemo } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useSearchParams } from 'react-router-dom'
 import Navbar from '../components/Navbar'
 import api from '../services/api'
 import useAuthStore from '../store/authStore'
@@ -149,7 +149,15 @@ function UserDrawer({ user: u, onClose, onSuspend, onReinstate, loading = false 
 function AdminPage() {
   const { user, token } = useAuthStore()
   const toast = useToastStore()
-  const [tab, setTab] = useState('users')
+
+  // Fix (dashboard admin, Step 6): tab e filtro nell'URL invece che solo in
+  // stato locale — così "torna alla dashboard" (browser back) dal contesto
+  // di una recensione/risposta ripristina davvero dove si era, non solo
+  // visivamente ma anche come voce di history. Lo scroll segue gratis: il
+  // browser lo ripristina da solo su un back-navigation verso la stessa URL.
+  const [searchParams, setSearchParams] = useSearchParams()
+  const [tab, setTabState] = useState(searchParams.get('tab') || 'users')
+  const setTab = (t) => { setTabState(t); setSearchParams(prev => { prev.set('tab', t); return prev }, { replace: true }) }
 
   const [stats, setStats] = useState(null)
   const [users, setUsers] = useState([])
@@ -165,8 +173,13 @@ function AdminPage() {
 
   const [reports, setReports] = useState([])
   const [reportsLoading, setReportsLoading] = useState(false)
-  const [reportFilter, setReportFilter] = useState('PENDING')
-  const [expandedReport, setExpandedReport] = useState(null)
+  const [reportFilter, setReportFilterState] = useState(searchParams.get('filter') || 'PENDING')
+  const setReportFilter = (f) => { setReportFilterState(f); setSearchParams(prev => { prev.set('filter', f); return prev }, { replace: true }) }
+  const [expandedReport, setExpandedReportState] = useState(searchParams.get('expanded') || null)
+  const setExpandedReport = (key) => {
+    setExpandedReportState(key)
+    setSearchParams(prev => { if (key) prev.set('expanded', key); else prev.delete('expanded'); return prev }, { replace: true })
+  }
 
   const openUserDrawer = async (u) => {
     setSelectedUser(u)
@@ -186,9 +199,14 @@ function AdminPage() {
         api.get('/admin/users', { params: { page: 0, size: 1 } }),
         api.get('/reports', { params: { status: 'PENDING' } }),
       ])
+      // Fix: l'app serializza le risposte paginate con PageSerializationMode.VIA_DTO
+      // (vedi CiaklogApplication.java) — totalElements/totalPages NON sono più in
+      // cima all'oggetto ma annidati sotto `.page.` (es. { content: [...], page: {
+      // totalElements, totalPages, number } }). Leggerli in cima dava sempre
+      // undefined → 0 segnalazioni/utenti mostrati anche quando ce n'erano
       setStats({
-        totalUsers: usersRes.data.totalElements ?? users.length,
-        pendingReports: Array.isArray(reportsRes.data) ? reportsRes.data.length : reportsRes.data.totalElements ?? 0,
+        totalUsers: usersRes.data.page?.totalElements ?? users.length,
+        pendingReports: Array.isArray(reportsRes.data) ? reportsRes.data.length : reportsRes.data.page?.totalElements ?? 0,
       })
     } catch { }
   }
@@ -200,7 +218,9 @@ function AdminPage() {
         params: { page: usersPage, size: 10, search: userSearch || undefined }
       })
       setUsers(res.data.content || res.data)
-      setUsersTotalPages(res.data.totalPages || 1)
+      // Fix: stesso problema di sopra — data.totalPages è undefined con VIA_DTO,
+      // quindi cadeva sempre sul fallback "1" (pagina 1/1 fissa)
+      setUsersTotalPages(res.data.page?.totalPages || 1)
     } catch { setUsers([]) }
     finally { setUsersLoading(false) }
   }, [usersPage, userSearch])
@@ -493,6 +513,23 @@ function AdminPage() {
                                               </div>
                                           )}
                                         </div>
+                                    )}
+
+                                    {/* Fix (dashboard admin, Step 6): prima non c'era nessun modo di vedere
+                                        l'elemento nel suo contesto reale — solo il testo estratto qui.
+                                        Il target passato via query param viene evidenziato ed è raggiunto
+                                        con lo scroll automatico su MovieDetailPage; adminRef=1 fa comparire
+                                        lì un bottone "torna alla dashboard" che usa la history (back), così
+                                        filtro/tab/gruppo aperto/scroll di questa pagina restano intatti */}
+                                    {first.tmdbId && (
+                                        <Link
+                                            to={isComment
+                                                ? `/movie/${first.tmdbId}?type=${first.contentType}&highlightComment=${first.reviewCommentId}&parentReview=${first.parentReviewId}&adminRef=1`
+                                                : `/movie/${first.tmdbId}?type=${first.contentType}&highlightReview=${first.reviewId}&adminRef=1`}
+                                            style={{ display: 'inline-block', marginBottom: '16px', fontSize: '13px', color: '#3b82f6' }}
+                                        >
+                                          👁️ Vedi nel contesto →
+                                        </Link>
                                     )}
 
                                     {/* Elenco delle singole segnalazioni ricevute su questo bersaglio */}

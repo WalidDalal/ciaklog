@@ -110,6 +110,24 @@ public class ReviewServiceImpl implements ReviewService {
         userRepository.save(user);
     }
 
+    // Fix (auto-nascondimento autore, deciso): toggle reversibile e separato
+    // da status/moderazione — nessun impatto su punteggio o violationCount,
+    // e non genera nessun Report (quindi non finisce mai nella coda admin)
+    @Override
+    @Transactional
+    public ReviewResponse setHiddenByAuthor(String username, UUID reviewId, boolean hidden) {
+        User user = getUser(username);
+        Review review = reviewRepository.findById(reviewId)
+                .orElseThrow(() -> new ResourceNotFoundException("Recensione non trovata"));
+
+        if (!review.getUser().getId().equals(user.getId())) {
+            throw new ForbiddenException("Non autorizzato");
+        }
+
+        review.setHiddenByAuthor(hidden);
+        return toDTO(reviewRepository.save(review), user);
+    }
+
     @Override
     public Page<ReviewResponse> getReviewsForMedia(Long tmdbId, ContentType contentType, Pageable pageable) {
         return reviewRepository
@@ -146,6 +164,7 @@ public class ReviewServiceImpl implements ReviewService {
                 .rating(r.getRating())
                 .text(r.getText())
                 .status(r.getStatus())
+                .hiddenByAuthor(r.isHiddenByAuthor())
                 .createdAt(r.getCreatedAt())
                 .updatedAt(r.getUpdatedAt())
                 .title(entry != null ? entry.getTitle() : null)
@@ -173,6 +192,7 @@ public class ReviewServiceImpl implements ReviewService {
                 .rating(r.getRating())
                 .text(r.getText())
                 .status(r.getStatus())
+                .hiddenByAuthor(r.isHiddenByAuthor())
                 .createdAt(r.getCreatedAt())
                 .updatedAt(r.getUpdatedAt())
                 .title(title)

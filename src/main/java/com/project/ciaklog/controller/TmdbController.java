@@ -1,7 +1,7 @@
 package com.project.ciaklog.controller;
 
 import com.project.ciaklog.dto.response.TmdbDetailResponse;
-import com.project.ciaklog.dto.response.TmdbSearchResultResponse;
+import com.project.ciaklog.dto.response.TmdbSearchResponse;
 import com.project.ciaklog.entity.ContentType;
 import com.project.ciaklog.service.TmdbService;
 import jakarta.validation.constraints.NotBlank;
@@ -10,8 +10,6 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
-
-import java.util.List;
 
 @RestController
 @RequestMapping("/api/tmdb")
@@ -23,10 +21,11 @@ public class TmdbController {
 
     // Pubblico — ricerca per titolo
     @GetMapping("/search")
-    public ResponseEntity<List<TmdbSearchResultResponse>> search(
+    public ResponseEntity<TmdbSearchResponse> search(
             @RequestParam @NotBlank @Size(min = 2, max = 100) String q,
-            @RequestParam(required = false) String type) {
-        return ResponseEntity.ok(tmdbService.search(q, type));
+            @RequestParam(required = false) String type,
+            @RequestParam(defaultValue = "1") int page) {
+        return ResponseEntity.ok(tmdbService.search(q, type, page));
     }
 
     // Pubblico — dettaglio film o serie

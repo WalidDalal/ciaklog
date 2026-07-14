@@ -20,6 +20,10 @@ public class TmdbDetailResponse {
     private Double tmdbRating;
     private Double ciakLogAverageRating;
     private Integer ciakLogVoteCount;
+    // Fix (validazione stagione libreria): numero totale di stagioni per le serie
+    // TV — null per i film. Usato per non far scegliere una stagione oltre
+    // quelle che esistono davvero
+    private Integer numberOfSeasons;
 
     @Getter
     @Builder

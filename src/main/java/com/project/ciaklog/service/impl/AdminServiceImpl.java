@@ -1,5 +1,6 @@
 package com.project.ciaklog.service.impl;
 
+import com.project.ciaklog.dto.response.AdminOperationalStatsResponse;
 import com.project.ciaklog.dto.response.AdminUserDetailResponse;
 import com.project.ciaklog.dto.response.AdminUserResponse;
 import com.project.ciaklog.entity.*;
@@ -29,7 +30,14 @@ public class AdminServiceImpl implements AdminService {
     private final ReportRepository reportRepository;
 
     @Override
-    public Page<AdminUserResponse> listUsers(Pageable pageable) {
+    public Page<AdminUserResponse> listUsers(Pageable pageable, String search) {
+        // Fix: la ricerca non era mai collegata — il parametro arrivava dal
+        // controller ma veniva ignorato qui, sempre e solo findAll()
+        if (search != null && !search.isBlank()) {
+            return userRepository
+                    .findByUsernameContainingIgnoreCaseOrEmailContainingIgnoreCase(search, search, pageable)
+                    .map(this::toAdminDTO);
+        }
         return userRepository.findAll(pageable).map(this::toAdminDTO);
     }
 
@@ -132,6 +140,19 @@ public class AdminServiceImpl implements AdminService {
 
         target.setStatus(UserStatus.ACTIVE);
         userRepository.save(target);
+    }
+
+    // Fix (Home Admin, deciso): card operativa leggera, non una dashboard
+    // ricopiata — solo segnalazioni di oggi e utenti da controllare
+    @Override
+    public AdminOperationalStatsResponse getOperationalStats() {
+        java.time.LocalDateTime midnight = java.time.LocalDate.now().atStartOfDay();
+
+        return AdminOperationalStatsResponse.builder()
+                .totalUsers(userRepository.count())
+                .reportsToday(reportRepository.countByCreatedAtAfter(midnight))
+                .usersToReview(userRepository.countByStatus(UserStatus.SUSPENDED))
+                .build();
     }
 
     private AdminUserResponse toAdminDTO(User u) {

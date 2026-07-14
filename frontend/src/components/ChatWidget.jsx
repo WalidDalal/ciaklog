@@ -150,6 +150,10 @@ export function ChatCore({ compact = false, initialPrompt = null }) {
                         <div style={{ padding: '6px 8px' }}>
                           <div style={{ color: 'var(--text)', fontSize: '11px', fontWeight: '600', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{s.title}</div>
                           <div style={{ color: 'var(--text-dark)', fontSize: '11px' }}>{s.releaseYear}</div>
+                          {/* Fix (AI più centrale): spiegazione del perché, se presente */}
+                          {s.reason && (
+                            <div style={{ color: 'var(--text-muted)', fontSize: '10px', marginTop: '3px', lineHeight: 1.3 }}>{s.reason}</div>
+                          )}
                         </div>
                       </div>
                     </Link>

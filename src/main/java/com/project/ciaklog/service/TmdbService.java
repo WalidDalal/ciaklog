@@ -1,12 +1,12 @@
 package com.project.ciaklog.service;
 
 import com.project.ciaklog.dto.response.TmdbDetailResponse;
-import com.project.ciaklog.dto.response.TmdbSearchResultResponse;
+import com.project.ciaklog.dto.response.TmdbSearchResponse;
 import com.project.ciaklog.entity.ContentType;
 
-import java.util.List;
-
 public interface TmdbService {
-    List<TmdbSearchResultResponse> search(String query, String type);
+    // Fix: aggiunto il parametro page, prima mancava del tutto — la ricerca
+    // era sempre bloccata sulla prima pagina di TMDB (20 risultati fissi)
+    TmdbSearchResponse search(String query, String type, int page);
     TmdbDetailResponse getDetail(Long tmdbId, ContentType contentType);
 }
