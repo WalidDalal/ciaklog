@@ -67,10 +67,16 @@ function TrendingQuoteCard({ item, reviews }) {
                     }
                     <div style={{ flex: 1, minWidth: 0 }}>
                         <div style={{ color: 'var(--text)', fontWeight: '700', fontSize: '15px', marginBottom: '6px', lineHeight: 1.3 }}>{item.title}</div>
-                        <StarRating rating={item.ciakLogAverageRating} />
-                        <div style={{ color: 'var(--text-dark)', fontSize: '12px', marginTop: '6px' }}>
-                            💬 {item.weeklyReviewCount} {item.weeklyReviewCount === 1 ? 'recensione' : 'recensioni'} questa settimana
-                        </div>
+                        <StarRating rating={item.ciakLogAverageRating ?? item.averageRating} />
+                        {/* Fix: quando il fallback (titoli popolari) sostituisce il trending vero,
+                            weeklyReviewCount non esiste su quei dati — mostrarlo comunque dava
+                            "💬  recensioni questa settimana" con un buco vuoto al posto del numero,
+                            che sembrava un errore invece di semplicemente non applicarsi */}
+                        {item.weeklyReviewCount != null && (
+                            <div style={{ color: 'var(--text-dark)', fontSize: '12px', marginTop: '6px' }}>
+                                💬 {item.weeklyReviewCount} {item.weeklyReviewCount === 1 ? 'recensione' : 'recensioni'} questa settimana
+                            </div>
+                        )}
                     </div>
                 </div>
                 <div style={{ padding: '0 16px 16px', display: 'flex', flexDirection: 'column', gap: '10px', flex: 1 }}>
@@ -180,6 +186,9 @@ function HomePage() {
     // Fix (Home Admin): conteggio segnalazioni in attesa, mostrato nell'hero
     // al posto del badge "sei #X in classifica" che per l'Admin non ha senso
     const [pendingReportsCount, setPendingReportsCount] = useState(0)
+    // Fix (Home Admin, deciso): card operativa leggera — segnalazioni di oggi
+    // + utenti da controllare (2ª violazione, sospensione temporanea)
+    const [opStats, setOpStats] = useState(null)
     // Fix (Home Admin): sezioni community collassate di default per l'Admin —
     // restano disponibili con un click, ma non sono la priorità visiva
     const [communityOpen, setCommunityOpen] = useState(false)
@@ -216,10 +225,16 @@ function HomePage() {
         }
 
         // Fix (Home Admin): conteggio segnalazioni PENDING per la card operativa
-        // nell'hero — solo per Admin, size:1 perché ci serve solo totalElements
+        // nell'hero — solo per Admin, size:1 perché ci serve solo totalElements.
+        // Fix: PageSerializationMode.VIA_DTO annida totalElements sotto `.page.`,
+        // non in cima — stesso bug già trovato in AdminPage.jsx/ProfilePage.jsx
         if (token && user?.role === 'ADMIN') {
             api.get('/reports', { params: { status: 'PENDING', size: 1 }, signal })
-                .then(r => setPendingReportsCount(r.data?.totalElements ?? 0))
+                .then(r => setPendingReportsCount(r.data?.page?.totalElements ?? 0))
+                .catch(() => {})
+
+            api.get('/admin/operational-stats', { signal })
+                .then(r => setOpStats(r.data))
                 .catch(() => {})
         }
 
@@ -287,24 +302,44 @@ function HomePage() {
                             {/* Fix (Home Admin): card operativa al posto del badge classifica,
                                 che per l'Admin non ha senso (è escluso dalla classifica) */}
                             {user?.role === 'ADMIN' && (
-                                <Link to="/admin">
-                                    <div style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', backgroundColor: pendingReportsCount > 0 ? 'rgba(239,68,68,0.12)' : 'var(--accent-subtle)', border: `1px solid ${pendingReportsCount > 0 ? '#ef4444' : 'var(--border-cta)'}`, borderRadius: '8px', padding: '8px 14px', marginBottom: '24px', cursor: 'pointer' }}>
-                                        <span>🚩</span>
-                                        <span style={{ color: pendingReportsCount > 0 ? '#ef4444' : 'var(--text-muted)', fontSize: '14px', fontWeight: '600' }}>
-                                            {pendingReportsCount > 0
-                                                ? `${pendingReportsCount} segnalazion${pendingReportsCount === 1 ? 'e' : 'i'} in attesa`
-                                                : 'Nessuna segnalazione in attesa'}
-                                        </span>
-                                    </div>
-                                </Link>
+                                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '10px', marginBottom: '24px' }}>
+                                    <Link to="/admin?tab=reports&filter=PENDING">
+                                        <div style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', backgroundColor: pendingReportsCount > 0 ? 'rgba(239,68,68,0.12)' : 'var(--accent-subtle)', border: `1px solid ${pendingReportsCount > 0 ? '#ef4444' : 'var(--border-cta)'}`, borderRadius: '8px', padding: '8px 14px', cursor: 'pointer' }}>
+                                            <span>🚩</span>
+                                            <span style={{ color: pendingReportsCount > 0 ? '#ef4444' : 'var(--text-muted)', fontSize: '14px', fontWeight: '600' }}>
+                                                {pendingReportsCount > 0
+                                                    ? `${pendingReportsCount} segnalazion${pendingReportsCount === 1 ? 'e' : 'i'} in attesa`
+                                                    : 'Nessuna segnalazione in attesa'}
+                                            </span>
+                                        </div>
+                                    </Link>
+                                    {/* Fix (Home Admin, deciso): card operativa leggera, non una
+                                        dashboard ricopiata — solo i numeri utili per decidere cosa
+                                        fare oggi. "Utenti da controllare" = sospesi temporaneamente
+                                        (2ª violazione) in attesa di una decisione manuale */}
+                                    {opStats && (
+                                        <>
+                                            <div style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', backgroundColor: 'var(--bg-nav)', border: '1px solid var(--border)', borderRadius: '8px', padding: '8px 14px' }}>
+                                                <span>📅</span>
+                                                <span style={{ color: 'var(--text-muted)', fontSize: '14px', fontWeight: '600' }}>
+                                                    {opStats.reportsToday} segnalazion{opStats.reportsToday === 1 ? 'e' : 'i'} oggi
+                                                </span>
+                                            </div>
+                                            {opStats.usersToReview > 0 && (
+                                                <Link to="/admin?tab=users">
+                                                    <div style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', backgroundColor: 'rgba(234,179,8,0.12)', border: '1px solid #eab308', borderRadius: '8px', padding: '8px 14px', cursor: 'pointer' }}>
+                                                        <span>⚠️</span>
+                                                        <span style={{ color: '#eab308', fontSize: '14px', fontWeight: '600' }}>
+                                                            {opStats.usersToReview} utent{opStats.usersToReview === 1 ? 'e' : 'i'} da controllare
+                                                        </span>
+                                                    </div>
+                                                </Link>
+                                            )}
+                                        </>
+                                    )}
+                                </div>
                             )}
-                            {user?.role === 'ADMIN' ? (
-                                <Link to="/admin">
-                                    <button style={{ padding: '13px 32px', backgroundColor: 'var(--accent)', border: 'none', borderRadius: '8px', color: 'var(--text)', fontSize: '15px', fontWeight: '700' }}>
-                                        🛡️ Vai alla dashboard Admin
-                                    </button>
-                                </Link>
-                            ) : (
+                            {user?.role !== 'ADMIN' && (
                                 <Link to="/library">
                                     <button style={{ padding: '13px 32px', backgroundColor: 'var(--accent)', border: 'none', borderRadius: '8px', color: 'var(--text)', fontSize: '15px', fontWeight: '700' }}>
                                         📚 Vai alla tua libreria
@@ -448,7 +483,14 @@ function HomePage() {
             <section style={{ padding: '0 64px 48px' }}>
                 <div style={{ marginBottom: '28px' }}>
                     <h2 style={{ fontSize: '22px', fontWeight: '700', marginBottom: '6px' }}>🔥 Cosa dice la community</h2>
-                    <p style={{ color: 'var(--text-dark)', fontSize: '14px' }}>I più discussi questa settimana, con le opinioni dei nostri utenti</p>
+                    {/* Fix: quando il trending vero è vuoto (poche recensioni questa
+                        settimana) il fallback ai titoli popolari appariva silenzioso,
+                        senza spiegazione — sembrava un errore invece di una scelta */}
+                    <p style={{ color: 'var(--text-dark)', fontSize: '14px' }}>
+                        {trending.length > 0
+                            ? 'I più discussi questa settimana, con le opinioni dei nostri utenti'
+                            : 'Ancora poche recensioni questa settimana — nel frattempo, ecco i titoli più popolari'}
+                    </p>
                 </div>
                 <TrendingCarousel trending={trending.length > 0 ? trending : recentFilms} trendingReviews={trendingReviews} />
             </section>

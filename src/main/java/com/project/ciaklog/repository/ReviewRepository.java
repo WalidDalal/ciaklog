@@ -44,6 +44,12 @@ public interface ReviewRepository extends JpaRepository<Review, UUID> {
 
     boolean existsByUserAndTmdbIdAndContentType(User user, Long tmdbId, ContentType contentType);
 
+    // Fix (coerenza stato/recensione): serve per bloccare l'uscita da VISTO se
+    // esiste già una recensione attiva — una REMOVED non deve contare, altrimenti
+    // chi ha eliminato la propria recensione resterebbe bloccato per sempre
+    boolean existsByUserAndTmdbIdAndContentTypeAndStatusNot(
+            User user, Long tmdbId, ContentType contentType, ReviewStatus status);
+
     Optional<Review> findByUserAndTmdbIdAndContentType(User user, Long tmdbId, ContentType contentType);
 
     @Query("SELECT r FROM Review r WHERE r.tmdbId = :tmdbId AND r.contentType = :contentType AND r.status = 'VISIBLE'")

@@ -12,4 +12,9 @@ public interface ReportService {
     ReportResponse createReport(String username, ReportRequest dto);
     Page<ReportResponse> getReports(ReportStatus status, Pageable pageable);
     ReportResponse resolveReport(UUID reportId, ReportStatus newStatus, String adminUsername);
+
+    // Fix: "Nascondi direttamente" — l'admin rimuove una recensione/risposta senza
+    // aspettare una segnalazione. Motivo SEMPRE obbligatorio (validato nel service),
+    // stessa penalità di un report approvato (deciso)
+    ReportResponse adminHide(String adminUsername, ReportRequest dto);
 }

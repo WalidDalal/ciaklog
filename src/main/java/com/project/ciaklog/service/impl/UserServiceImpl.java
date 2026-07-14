@@ -9,8 +9,10 @@ import com.project.ciaklog.entity.WatchStatus;
 import com.project.ciaklog.exception.BusinessRuleException;
 import com.project.ciaklog.exception.DuplicateResourceException;
 import com.project.ciaklog.exception.ResourceNotFoundException;
+import com.project.ciaklog.repository.ReviewRepository;
 import com.project.ciaklog.repository.UserRepository;
 import com.project.ciaklog.repository.WatchEntryRepository;
+import com.project.ciaklog.entity.ReviewStatus;
 import com.project.ciaklog.security.JwtService;
 import com.project.ciaklog.service.UserService;
 import lombok.RequiredArgsConstructor;
@@ -19,9 +21,11 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
+import java.time.format.TextStyle;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.stream.Collectors;
 
@@ -31,6 +35,7 @@ public class UserServiceImpl implements UserService {
 
     private final UserRepository userRepository;
     private final WatchEntryRepository watchEntryRepository;
+    private final ReviewRepository reviewRepository;
     private final PasswordEncoder passwordEncoder;
     private final JwtService jwtService;
 
@@ -63,12 +68,29 @@ public class UserServiceImpl implements UserService {
                         .build())
                 .collect(Collectors.toList());
 
+        // Fix (Impostazioni — card riepilogo account): riusa gli stessi dati
+        // già calcolabili qui, invece di un endpoint dedicato
+        long totalReviews = reviewRepository.findAllByUser(user).stream()
+                .filter(r -> r.getStatus() != ReviewStatus.REMOVED)
+                .count();
+        String memberSince = user.getCreatedAt() != null
+                ? capitalize(user.getCreatedAt().getMonth().getDisplayName(TextStyle.FULL, Locale.ITALIAN))
+                    + " " + user.getCreatedAt().getYear()
+                : null;
+
         return UserProfileResponse.builder()
                 .username(user.getUsername())
                 .bio(user.getBio())
                 .topGenres(topGenres.isEmpty() ? Collections.emptyList() : topGenres)
                 .watching(watchingItems)
+                .memberSince(memberSince)
+                .score(user.getScore())
+                .totalReviews(totalReviews)
                 .build();
+    }
+
+    private String capitalize(String s) {
+        return s == null || s.isEmpty() ? s : Character.toUpperCase(s.charAt(0)) + s.substring(1);
     }
 
     @Override

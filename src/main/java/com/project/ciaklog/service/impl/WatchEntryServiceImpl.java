@@ -3,13 +3,16 @@ package com.project.ciaklog.service.impl;
 import com.project.ciaklog.dto.request.WatchEntryRequest;
 import com.project.ciaklog.dto.response.TmdbDetailResponse;
 import com.project.ciaklog.dto.response.WatchEntryResponse;
+import com.project.ciaklog.entity.ContentType;
 import com.project.ciaklog.entity.Role;
 import com.project.ciaklog.entity.User;
 import com.project.ciaklog.entity.WatchEntry;
 import com.project.ciaklog.entity.WatchStatus;
 import com.project.ciaklog.exception.*;
+import com.project.ciaklog.repository.ReviewRepository;
 import com.project.ciaklog.repository.UserRepository;
 import com.project.ciaklog.repository.WatchEntryRepository;
+import com.project.ciaklog.entity.ReviewStatus;
 import com.project.ciaklog.service.TmdbService;
 import com.project.ciaklog.service.WatchEntryService;
 import lombok.RequiredArgsConstructor;
@@ -30,6 +33,7 @@ public class WatchEntryServiceImpl implements WatchEntryService {
 
     private final WatchEntryRepository watchEntryRepository;
     private final UserRepository userRepository;
+    private final ReviewRepository reviewRepository;
     private final TmdbService tmdbService;
 
     @Override
@@ -89,6 +93,20 @@ public class WatchEntryServiceImpl implements WatchEntryService {
             validateWatchingLimit(user);
         }
 
+        // Fix (bug coerenza stato/recensione): prima si poteva tornare a
+        // TO_WATCH/WATCHING dopo aver recensito, lasciando una recensione
+        // "orfana" collegata a un contenuto non più segnato come VISTO.
+        // Blocca il cambio invece di lasciare lo stato incoerente — se
+        // l'utente vuole davvero rivederlo, deve prima eliminare la recensione.
+        if (entry.getStatus() == WatchStatus.WATCHED && newStatus != WatchStatus.WATCHED) {
+            boolean hasActiveReview = reviewRepository.existsByUserAndTmdbIdAndContentTypeAndStatusNot(
+                    user, entry.getTmdbId(), entry.getContentType(), ReviewStatus.REMOVED);
+            if (hasActiveReview) {
+                throw new BusinessRuleException(
+                        "Hai già recensito questo contenuto — elimina la recensione prima di cambiare stato");
+            }
+        }
+
         if (newStatus == WatchStatus.WATCHED && entry.getStatus() != WatchStatus.WATCHED) {
             entry.setWatchedDate(LocalDate.now());
         }
@@ -96,6 +114,7 @@ public class WatchEntryServiceImpl implements WatchEntryService {
         // Fix: prima non era possibile aggiornare la stagione corrente di un
         // titolo già "In Visione" — bisognava rimuoverlo e riaggiungerlo da capo.
         if (currentSeason != null) {
+            validateSeason(entry, currentSeason);
             entry.setCurrentSeason(currentSeason);
         }
 
@@ -117,10 +136,38 @@ public class WatchEntryServiceImpl implements WatchEntryService {
             throw new ForbiddenException("Non autorizzato");
         }
 
+        validateSeason(entry, currentSeason);
         entry.setCurrentSeason(currentSeason);
         entry.setLastStatusUpdate(LocalDateTime.now());
 
         return toDTO(watchEntryRepository.save(entry));
+    }
+
+    // Fix: la stagione corrente non aveva NESSUN limite — si poteva impostare
+    // 0, un numero negativo, o 999 anche se la serie ne ha solo 3. Verifica
+    // sia il minimo (>= 1) sia un tetto di sicurezza fisso (1-50, nel caso TMDB
+    // non risponda), oltre al massimo reale da TMDB quando disponibile
+    private static final int SEASON_HARD_CAP = 50;
+
+    private void validateSeason(WatchEntry entry, Integer season) {
+        if (season < 1 || season > SEASON_HARD_CAP) {
+            throw new BusinessRuleException("Il numero di stagione deve essere tra 1 e " + SEASON_HARD_CAP);
+        }
+        if (entry.getContentType() == ContentType.TV) {
+            try {
+                TmdbDetailResponse detail = tmdbService.getDetail(entry.getTmdbId(), ContentType.TV);
+                if (detail.getNumberOfSeasons() != null && season > detail.getNumberOfSeasons()) {
+                    throw new BusinessRuleException(
+                            "Questa serie ha solo " + detail.getNumberOfSeasons() + " stagioni");
+                }
+            } catch (BusinessRuleException e) {
+                throw e; // rilancia il vero errore di validazione
+            } catch (Exception e) {
+                // TMDB irraggiungibile o contenuto non più trovato: non blocchiamo
+                // l'utente per un problema esterno — resta comunque valido il
+                // limite di sicurezza 1-50 verificato sopra
+            }
+        }
     }
 
     @Override

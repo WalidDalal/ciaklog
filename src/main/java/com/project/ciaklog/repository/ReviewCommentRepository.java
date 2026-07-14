@@ -17,10 +17,13 @@ import java.util.UUID;
 public interface ReviewCommentRepository extends JpaRepository<ReviewComment, UUID> {
 
     // JOIN FETCH author — evita LazyInitializationException in toDTO()
+    // Fix (auto-nascondimento autore): esclusa anche dalla lista pubblica se
+    // hiddenByAuthor = true, pur restando VISIBLE come status
     @Query("""
             SELECT c FROM ReviewComment c
             JOIN FETCH c.author
             WHERE c.review = :review AND c.status = :status
+              AND c.hiddenByAuthor = false
             """)
     Page<ReviewComment> findByReviewAndStatus(
             @Param("review") Review review,

@@ -308,10 +308,15 @@ function LibraryPage() {
                                         </div>
                                     </Link>
 
-                                    {/* Fix: voto dato (se presente) — visibile solo per contenuti Visto e recensiti */}
-                                    {entry.status === 'WATCHED' && ratingMap[`${entry.tmdbId}_${entry.contentType || entry.mediaType}`] && (
-                                        <div style={{ marginBottom: '10px', transform: 'scale(0.72)', transformOrigin: 'left center' }}>
-                                            <StaticRating rating={ratingMap[`${entry.tmdbId}_${entry.contentType || entry.mediaType}`]} />
+                                    {/* Fix: voto dato (se presente) — visibile solo per contenuti Visto e recensiti.
+                                        Prima appariva solo condizionalmente, spostando i bottoni sotto a
+                                        altezze diverse tra le card della stessa riga della griglia — ora lo
+                                        spazio è sempre riservato quando lo status è WATCHED */}
+                                    {entry.status === 'WATCHED' && (
+                                        <div style={{ marginBottom: '10px', minHeight: '17px', transform: 'scale(0.72)', transformOrigin: 'left center' }}>
+                                            {ratingMap[`${entry.tmdbId}_${entry.contentType || entry.mediaType}`] && (
+                                                <StaticRating rating={ratingMap[`${entry.tmdbId}_${entry.contentType || entry.mediaType}`]} />
+                                            )}
                                         </div>
                                     )}
 

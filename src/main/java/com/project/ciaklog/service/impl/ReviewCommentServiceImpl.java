@@ -89,6 +89,23 @@ public class ReviewCommentServiceImpl implements ReviewCommentService {
         reviewCommentRepository.save(comment);
     }
 
+    // Fix (auto-nascondimento autore, deciso): toggle reversibile, separato
+    // da status/moderazione — non tocca il punteggio e non genera nessun Report
+    @Override
+    @Transactional
+    public ReviewCommentResponse setHiddenByAuthor(String username, UUID commentId, boolean hidden) {
+        User user = getUser(username);
+        ReviewComment comment = reviewCommentRepository.findById(commentId)
+                .orElseThrow(() -> new ResourceNotFoundException("Risposta non trovata"));
+
+        if (!comment.getAuthor().getId().equals(user.getId())) {
+            throw new ForbiddenException("Non autorizzato");
+        }
+
+        comment.setHiddenByAuthor(hidden);
+        return toDTO(reviewCommentRepository.save(comment));
+    }
+
     @Override
     public Page<ReviewCommentResponse> getCommentsForReview(UUID reviewId, Pageable pageable) {
         Review review = reviewRepository.findById(reviewId)
@@ -112,6 +129,7 @@ public class ReviewCommentServiceImpl implements ReviewCommentService {
                 .authorUsername(c.getAuthor().getUsername())
                 .text(c.getText())
                 .status(c.getStatus())
+                .hiddenByAuthor(c.isHiddenByAuthor())
                 .createdAt(c.getCreatedAt())
                 .updatedAt(c.getUpdatedAt())
                 .build();

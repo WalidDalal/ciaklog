@@ -56,4 +56,16 @@ public class ReportController {
             @Valid @RequestBody ReportActionRequest dto) {
         return ResponseEntity.ok(reportService.resolveReport(id, dto.getAction(), userDetails.getUsername()));
     }
+
+    // Solo Admin — "Nascondi direttamente" senza aspettare una segnalazione.
+    // Stesso body di createReport (reviewId oppure reviewCommentId + motivo
+    // SEMPRE obbligatorio, validato nel service)
+    @PostMapping("/admin-hide")
+    @PreAuthorize("hasRole('ADMIN')")
+    public ResponseEntity<ReportResponse> adminHide(
+            @AuthenticationPrincipal UserDetails userDetails,
+            @Valid @RequestBody ReportRequest dto) {
+        return ResponseEntity.status(HttpStatus.CREATED)
+                .body(reportService.adminHide(userDetails.getUsername(), dto));
+    }
 }

@@ -61,6 +61,8 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.GET, "/api/users/{username}").permitAll()
                         .requestMatchers(HttpMethod.GET, "/api/reviews/media/**").permitAll()
                         .requestMatchers(HttpMethod.GET, "/api/reviews/*/comments").permitAll()
+                        .requestMatchers(HttpMethod.GET, "/api/reviews/*/reaction").permitAll()
+                        .requestMatchers(HttpMethod.GET, "/api/comments/*/reaction").permitAll()
                         .requestMatchers("/api/admin/**").hasRole("ADMIN")
                         .requestMatchers(HttpMethod.GET, "/api/reports").hasRole("ADMIN")
                         .requestMatchers(HttpMethod.PUT, "/api/reports/**").hasRole("ADMIN")

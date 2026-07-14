@@ -12,6 +12,12 @@ public class UserProfileResponse {
     private String bio;
     private List<String> topGenres;
 
+    // Fix (Impostazioni — card riepilogo account): dati già disponibili,
+    // riusati anche qui invece di creare un endpoint apposta
+    private String memberSince; // es. "Gennaio 2026"
+    private int score;
+    private long totalReviews;
+
     // Lista contenuti WATCHING aggiornati negli ultimi 30gg (max 5)
     // Vuota se l'utente non sta guardando nulla o tutti gli aggiornamenti sono vecchi
     private List<WatchingItem> watching;

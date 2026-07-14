@@ -1,5 +1,6 @@
 package com.project.ciaklog.dto.response;
 
+import com.project.ciaklog.entity.ContentType;
 import com.project.ciaklog.entity.ReportReasonCategory;
 import com.project.ciaklog.entity.ReportStatus;
 import com.project.ciaklog.entity.ReportTargetType;
@@ -17,6 +18,12 @@ public class ReportResponse {
     // Fix (moderazione risposte): distingue se il bersaglio è una recensione
     // o una risposta — la dashboard admin usa questo per non essere ambigua
     private ReportTargetType targetType;
+
+    // Fix (dashboard admin, Step 6): per il link "Vedi nel contesto" — valorizzati
+    // sempre, sia per REVIEW che per COMMENT (per il commento è del film/serie
+    // a cui appartiene la sua recensione madre, non della recensione stessa)
+    private Long tmdbId;
+    private ContentType contentType;
 
     // Popolati quando targetType = REVIEW
     private UUID reviewId;

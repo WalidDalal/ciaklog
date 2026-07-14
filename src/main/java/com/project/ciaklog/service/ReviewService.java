@@ -15,4 +15,8 @@ public interface ReviewService {
     void deleteReview(String username, UUID reviewId);
     Page<ReviewResponse> getReviewsForMedia(Long tmdbId, ContentType contentType, Pageable pageable);
     Page<ReviewResponse> getUserReviews(String username, Pageable pageable);
+
+    // Fix (auto-nascondimento autore, deciso): toggle reversibile, separato
+    // da status/moderazione, nessun impatto sul punteggio
+    ReviewResponse setHiddenByAuthor(String username, UUID reviewId, boolean hidden);
 }

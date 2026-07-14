@@ -8,6 +8,7 @@ import com.project.ciaklog.exception.DuplicateResourceException;
 import com.project.ciaklog.exception.ResourceNotFoundException;
 import com.project.ciaklog.repository.ReportRepository;
 import com.project.ciaklog.repository.ReviewCommentRepository;
+import com.project.ciaklog.repository.ReviewReactionRepository;
 import com.project.ciaklog.repository.ReviewRepository;
 import com.project.ciaklog.repository.UserRepository;
 import com.project.ciaklog.service.ReportService;
@@ -28,6 +29,7 @@ public class ReportServiceImpl implements ReportService {
     private final ReportRepository reportRepository;
     private final ReviewRepository reviewRepository;
     private final ReviewCommentRepository reviewCommentRepository;
+    private final ReviewReactionRepository reviewReactionRepository;
     private final UserRepository userRepository;
 
     @Override
@@ -156,7 +158,7 @@ public class ReportServiceImpl implements ReportService {
                 review.setStatus(ReviewStatus.REMOVED);
                 reviewRepository.save(review);
                 cascadeHideComments(review, ReviewStatus.REMOVED);
-                penalizeOffender(review.getUser());
+                penalizeOffender(review.getUser(), reviewReactionRepository.countByReview(review));
             }
 
         } else if (newStatus == ReportStatus.REJECTED) {
@@ -177,7 +179,7 @@ public class ReportServiceImpl implements ReportService {
             if (comment.getStatus() != ReviewStatus.REMOVED) {
                 comment.setStatus(ReviewStatus.REMOVED);
                 reviewCommentRepository.save(comment);
-                penalizeOffender(comment.getAuthor());
+                penalizeOffender(comment.getAuthor(), reviewReactionRepository.countByReviewComment(comment));
             }
 
         } else if (newStatus == ReportStatus.REJECTED) {
@@ -197,7 +199,14 @@ public class ReportServiceImpl implements ReportService {
         reviewCommentRepository.saveAll(comments);
     }
 
-    private void penalizeOffender(User offender) {
+    // Fix (coerenza punteggio alla rimozione): il -15 base resta identico a
+    // prima, ma ora si aggiunge indietro 1 punto per ogni reazione ricevuta
+    // dal contenuto rimosso — un contenuto molto apprezzato dalla community
+    // pesa meno nella sanzione. Contate al volo (COUNT), MAI un contatore
+    // salvato a parte (deciso). Il bonus si applica SOLO alla 1a violazione:
+    // il -20 di sospensione e lo 0 di sospensione permanente restano sanzioni
+    // sull'utente nel suo complesso, non sul singolo contenuto rimosso
+    private void penalizeOffender(User offender, long reactionBonus) {
         offender.setViolationCount(offender.getViolationCount() + 1);
 
         if (offender.getViolationCount() >= 3) {
@@ -207,10 +216,89 @@ public class ReportServiceImpl implements ReportService {
             offender.setStatus(UserStatus.SUSPENDED);
             offender.setScore(Math.max(0, offender.getScore() - 20));
         } else {
-            offender.setScore(Math.max(0, offender.getScore() - 15));
+            long delta = -15 + reactionBonus;
+            offender.setScore((int) Math.max(0, offender.getScore() + delta));
         }
 
         userRepository.save(offender);
+    }
+
+    // Fix: "Nascondi direttamente" — crea un Report con reporter = admin, già
+    // risolto APPROVED. Riusa al 100% la logica esistente (penalità, cascata,
+    // audit trail nella stessa dashboard) invece di duplicarla altrove.
+    @Override
+    @Transactional
+    public ReportResponse adminHide(String adminUsername, ReportRequest dto) {
+        User admin = getUser(adminUsername);
+
+        boolean hasReview = dto.getReviewId() != null;
+        boolean hasComment = dto.getReviewCommentId() != null;
+        if (hasReview == hasComment) {
+            throw new BusinessRuleException("Specifica esattamente un bersaglio: reviewId oppure reviewCommentId");
+        }
+        if (dto.getReasonCategory() == null) {
+            throw new BusinessRuleException("Il motivo è obbligatorio per nascondere un contenuto");
+        }
+        if (dto.getReasonCategory() == ReportReasonCategory.OTHER &&
+                (dto.getReasonText() == null || dto.getReasonText().isBlank())) {
+            throw new BusinessRuleException("Il motivo è obbligatorio quando la categoria è OTHER");
+        }
+
+        Report report = hasReview
+                ? adminHideReview(admin, dto)
+                : adminHideComment(admin, dto);
+
+        return toDTO(report);
+    }
+
+    private Report adminHideReview(User admin, ReportRequest dto) {
+        Review review = reviewRepository.findById(dto.getReviewId())
+                .orElseThrow(() -> new ResourceNotFoundException("Recensione non trovata"));
+
+        Report report = Report.builder()
+                .reporter(admin)
+                .review(review)
+                .reasonCategory(dto.getReasonCategory())
+                .reasonText(dto.getReasonText())
+                .status(ReportStatus.APPROVED)
+                .resolvedBy(admin)
+                .resolvedAt(LocalDateTime.now())
+                .build();
+        Report saved = reportRepository.save(report);
+
+        // Guard: se già REMOVED (es. da un report precedente), non penalizzare di nuovo
+        if (review.getStatus() != ReviewStatus.REMOVED) {
+            review.setStatus(ReviewStatus.REMOVED);
+            reviewRepository.save(review);
+            cascadeHideComments(review, ReviewStatus.REMOVED);
+            penalizeOffender(review.getUser(), reviewReactionRepository.countByReview(review));
+        }
+
+        return saved;
+    }
+
+    private Report adminHideComment(User admin, ReportRequest dto) {
+        ReviewComment comment = reviewCommentRepository.findById(dto.getReviewCommentId())
+                .orElseThrow(() -> new ResourceNotFoundException("Risposta non trovata"));
+
+        Report report = Report.builder()
+                .reporter(admin)
+                .reviewComment(comment)
+                .reasonCategory(dto.getReasonCategory())
+                .reasonText(dto.getReasonText())
+                .status(ReportStatus.APPROVED)
+                .resolvedBy(admin)
+                .resolvedAt(LocalDateTime.now())
+                .build();
+        Report saved = reportRepository.save(report);
+
+        if (comment.getStatus() != ReviewStatus.REMOVED) {
+            comment.setStatus(ReviewStatus.REMOVED);
+            reviewCommentRepository.save(comment);
+            penalizeOffender(comment.getAuthor(), reviewReactionRepository.countByReviewComment(comment));
+        }
+
+        return saved;
     }
 
     private User getUser(String username) {
@@ -232,13 +320,19 @@ public class ReportServiceImpl implements ReportService {
         if (r.getReview() != null) {
             Review review = r.getReview();
             builder.targetType(ReportTargetType.REVIEW)
+                    .tmdbId(review.getTmdbId())
+                    .contentType(review.getContentType())
                     .reviewId(review.getId())
                     .reviewAuthorUsername(review.getUser().getUsername())
                     .reviewText(review.getText())
                     .reviewRating(review.getRating());
         } else {
             ReviewComment comment = r.getReviewComment();
+            // Fix (dashboard admin, Step 6): il tmdbId/contentType di una risposta
+            // sono quelli del film/serie della sua recensione madre, non suoi propri
             builder.targetType(ReportTargetType.COMMENT)
+                    .tmdbId(comment.getReview().getTmdbId())
+                    .contentType(comment.getReview().getContentType())
                     .reviewCommentId(comment.getId())
                     .parentReviewId(comment.getReview().getId())
                     .commentAuthorUsername(comment.getAuthor().getUsername())

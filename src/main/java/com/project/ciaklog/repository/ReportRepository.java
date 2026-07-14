@@ -37,4 +37,8 @@ public interface ReportRepository extends JpaRepository<Report, UUID> {
     List<Report> findByReviewComment(ReviewComment reviewComment);
 
     long countByReviewComment(ReviewComment reviewComment);
+
+    // Fix (Home Admin, deciso): segnalazioni ricevute da mezzanotte di oggi,
+    // per la card operativa "X segnalazioni oggi"
+    long countByCreatedAtAfter(java.time.LocalDateTime since);
 }

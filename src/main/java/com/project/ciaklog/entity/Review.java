@@ -51,6 +51,15 @@ public class Review {
     @Builder.Default
     private ReviewStatus status = ReviewStatus.VISIBLE;
 
+    // Fix (auto-nascondimento autore, deciso): campo separato da `status` di
+    // proposito — nascondere una propria recensione non è una violazione,
+    // non tocca il punteggio/violationCount, e non deve MAI finire nella coda
+    // di moderazione admin (che legge solo i Report, non questo campo).
+    // Reversibile dall'autore in qualsiasi momento, a differenza di REMOVED.
+    @Column(name = "hidden_by_author", nullable = false)
+    @Builder.Default
+    private boolean hiddenByAuthor = false;
+
     @CreationTimestamp
     @Column(name = "created_at", nullable = false, updatable = false)
     private LocalDateTime createdAt;
