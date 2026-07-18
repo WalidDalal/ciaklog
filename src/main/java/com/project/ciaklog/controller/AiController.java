@@ -5,10 +5,12 @@ import com.project.ciaklog.dto.request.MovieQuestionRequest;
 import com.project.ciaklog.dto.request.StructureCommentRequest;
 import com.project.ciaklog.dto.request.StructureReviewRequest;
 import com.project.ciaklog.dto.response.AiChatResponse;
+import com.project.ciaklog.dto.response.AiTipResponse;
 import com.project.ciaklog.dto.response.DailyRecommendationResponse;
 import com.project.ciaklog.dto.response.MovieQuestionResponse;
 import com.project.ciaklog.dto.response.ReviewOpinionResponse;
 import com.project.ciaklog.dto.response.StructureReviewResponse;
+import com.project.ciaklog.exception.BusinessRuleException;
 import com.project.ciaklog.service.AiService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -94,5 +96,24 @@ public class AiController {
             @AuthenticationPrincipal UserDetails userDetails,
             @PathVariable UUID reviewId) {
         return ResponseEntity.ok(aiService.getAiOpinionOnReview(userDetails.getUsername(), reviewId));
+    }
+
+    // Fix (suggerimento contestuale AI negli stati vuoti, approvato): il
+    // parametro `context` è un set FISSO di chiavi, non testo libero — evita
+    // che l'endpoint diventi un modo per far scrivere all'AI qualsiasi cosa
+    // (prompt injection) passando testo arbitrario nella query string
+    @GetMapping("/empty-state-tip")
+    @PreAuthorize("hasRole('USER')")
+    public ResponseEntity<AiTipResponse> getEmptyStateTip(
+            @RequestParam String context,
+            @RequestParam(required = false) String query) {
+        String description = switch (context) {
+            case "LIBRARY_EMPTY" -> "la libreria dell'utente è vuota, non ha ancora aggiunto nessun film o serie TV";
+            case "SEARCH_NO_RESULTS" -> "la ricerca" + (query != null && !query.isBlank()
+                    ? " per \"" + query.replaceAll("[\\n\\r\"]", " ") + "\""
+                    : "") + " non ha dato nessun risultato";
+            default -> throw new BusinessRuleException("Contesto non riconosciuto");
+        };
+        return ResponseEntity.ok(AiTipResponse.builder().tip(aiService.getEmptyStateTip(description)).build());
     }
 }

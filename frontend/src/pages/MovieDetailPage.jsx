@@ -17,7 +17,7 @@ const STATUS_LABELS = {
 // Fix (UI risposte): prima non esisteva nessuna interfaccia per leggere o
 // scrivere risposte — il backend (ReviewComment) era pronto ma invisibile.
 // Thread collassato di default sotto ogni recensione, caricato on-demand.
-function ReplyThread({ reviewId, reviewText, token, currentUsername, isAdmin, autoExpand, highlightCommentId }) {
+function ReplyThread({ reviewId, reviewText, reviewOwnerUsername, token, currentUsername, isAdmin, autoExpand, highlightCommentId }) {
   const toast = useToastStore()
   const [expanded, setExpanded] = useState(!!autoExpand)
   const [loaded, setLoaded] = useState(false)
@@ -138,22 +138,44 @@ function ReplyThread({ reviewId, reviewText, token, currentUsername, isAdmin, au
     }
   }
 
+  // Fix (Dettaglio, risposte): il backend filtra già le risposte nascoste
+  // dagli AUTORI DIVERSI dal viewer — l'unico caso in cui hiddenByAuthor=true
+  // arriva qui è la propria risposta nascosta (solo tu la vedi). Il badge
+  // "Risposte (N)" contava anche quella, dando l'impressione che nascondere
+  // non avesse effetto: il conteggio ora riflette solo ciò che è pubblico.
+  const visibleCommentsCount = comments.filter(c => !c.hiddenByAuthor).length
+
+  // Fix (Dettaglio, risposte): la risposta di chi ha scritto la recensione
+  // era in mezzo alle altre in ordine cronologico, poco visibile. La
+  // portiamo sempre in cima (comments arriva già ordinato per data asc dal
+  // backend, quindi il sort è stabile e non tocca l'ordine tra le altre)
+  const sortedComments = reviewOwnerUsername
+      ? [...comments].sort((a, b) => (b.authorUsername === reviewOwnerUsername) - (a.authorUsername === reviewOwnerUsername))
+      : comments
+
   return (
     <div style={{ marginTop: '14px', paddingTop: '12px', borderTop: '1px solid #1a1a1a' }}>
       <button onClick={toggleExpanded} style={{ background: 'none', border: 'none', color: 'var(--text-dark)', fontSize: '12px', cursor: 'pointer', padding: 0 }}>
-        {expanded ? '▲ Nascondi risposte' : `💬 Risposte${loaded ? ` (${comments.length})` : ''}`}
+        {expanded ? '▲ Nascondi risposte' : `💬 Risposte${loaded ? ` (${visibleCommentsCount})` : ''}`}
       </button>
 
       {expanded && (
         <div style={{ marginTop: '12px', display: 'flex', flexDirection: 'column', gap: '10px' }}>
           {loading && <p style={{ color: 'var(--text-dark)', fontSize: '12px' }}>Caricamento...</p>}
 
-          {!loading && comments.map(c => (
+          {!loading && sortedComments.map(c => (
             <div key={c.id} id={`comment-${c.id}`} style={{ backgroundColor: 'var(--bg-hover)', borderRadius: '8px', padding: '10px 14px', marginLeft: '16px', border: highlightCommentId === c.id ? '2px solid #3b82f6' : '2px solid transparent', boxShadow: highlightCommentId === c.id ? '0 0 0 4px rgba(59,130,246,0.15)' : 'none' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
-                <Link to={`/profile/${c.authorUsername}`}>
-                  <span style={{ color: 'var(--text)', fontWeight: '600', fontSize: '12px' }}>👤 {c.authorUsername}</span>
-                </Link>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                  <Link to={`/profile/${c.authorUsername}`}>
+                    <span style={{ color: 'var(--text)', fontWeight: '600', fontSize: '12px' }}>👤 {c.authorUsername}</span>
+                  </Link>
+                  {c.authorUsername === reviewOwnerUsername && (
+                      <span style={{ padding: '1px 6px', borderRadius: '8px', fontSize: '9px', fontWeight: '700', backgroundColor: 'var(--accent-subtle)', color: 'var(--accent)' }}>
+                        AUTORE
+                      </span>
+                  )}
+                </div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                   <span style={{ color: 'var(--text-dark)', fontSize: '11px' }}>{new Date(c.createdAt).toLocaleDateString('it-IT')}</span>
                   {c.authorUsername === currentUsername ? (
@@ -528,6 +550,20 @@ function MovieDetailPage() {
   const [reportedIds, setReportedIds] = useState(new Set())
 
   useEffect(() => {
+    // Fix (Assistente AI — suggerimento cliccato): questa pagina resta montata
+    // quando si passa da un film all'altro tramite i link "consigliami qualcosa
+    // di simile" (stesso componente, cambia solo :id nell'URL) — senza reset,
+    // watchEntry/myReview/rating restavano quelli del film di partenza finché
+    // non si ricaricava manualmente la pagina, mostrando uno stato "vecchio"
+    // (es. "Salvato come: Visto" di un film che non era mai stato aggiunto).
+    setDetail(null)
+    setWatchEntry(null)
+    setMyReview(null)
+    setRating(0)
+    setText('')
+    setEditMode(false)
+    setLoading(true)
+
     Promise.all([
       api.get(`/tmdb/${mediaType}/${id}`),
       api.get(`/reviews/media/${mediaType}/${id}`),
@@ -984,6 +1020,7 @@ function MovieDetailPage() {
                 <ReplyThread
                   reviewId={myReview.id}
                   reviewText={myReview.text}
+                  reviewOwnerUsername={myReview.username}
                   token={token}
                   currentUsername={user?.username}
                   isAdmin={isAdmin}
@@ -1130,6 +1167,7 @@ function MovieDetailPage() {
                 <ReplyThread
                   reviewId={r.id}
                   reviewText={r.text}
+                  reviewOwnerUsername={r.username}
                   token={token}
                   currentUsername={user?.username}
                   isAdmin={isAdmin}

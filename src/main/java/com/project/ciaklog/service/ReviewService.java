@@ -13,7 +13,7 @@ public interface ReviewService {
     ReviewResponse createReview(String username, ReviewRequest dto);
     ReviewResponse updateReview(String username, UUID reviewId, ReviewUpdateRequest dto);
     void deleteReview(String username, UUID reviewId);
-    Page<ReviewResponse> getReviewsForMedia(Long tmdbId, ContentType contentType, Pageable pageable);
+    Page<ReviewResponse> getReviewsForMedia(Long tmdbId, ContentType contentType, String viewerUsername, Pageable pageable);
     Page<ReviewResponse> getUserReviews(String username, Pageable pageable);
 
     // Fix (auto-nascondimento autore, deciso): toggle reversibile, separato

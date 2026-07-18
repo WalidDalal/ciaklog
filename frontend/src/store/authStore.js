@@ -1,6 +1,7 @@
 import { create } from 'zustand'
 import { jwtDecode } from 'jwt-decode'
 import api from '../services/api'
+import useChatStore from './chatStore'
 
 function userFromToken(token) {
   try {
@@ -23,6 +24,11 @@ const useAuthStore = create((set, get) => ({
     const user = userFromToken(token)
     localStorage.setItem('token', token)
     set({ user, token })
+    // Fix: la chat (Zustand, in memoria) non era mai legata all'utente
+    // loggato — cambiando account nella stessa sessione del browser (es. da
+    // Admin a un utente normale) i messaggi della chat precedente restavano
+    // visibili finché non si ricaricava manualmente la pagina
+    useChatStore.getState().clear()
     return user
   },
 
@@ -33,6 +39,7 @@ const useAuthStore = create((set, get) => ({
       const user = userFromToken(token)
       localStorage.setItem('token', token)
       set({ user, token })
+      useChatStore.getState().clear()
     }
     return res.data
   },
@@ -47,6 +54,7 @@ const useAuthStore = create((set, get) => ({
   logout: () => {
     localStorage.removeItem('token')
     set({ user: null, token: null })
+    useChatStore.getState().clear()
   },
 
   isLoggedIn: () => !!get().token,

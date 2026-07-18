@@ -142,10 +142,16 @@ public class TmdbServiceImpl implements TmdbService {
                             .build())
                     .toList();
 
-            double ciakLogAvg = computeCiakLogAverage(tmdbId, contentType);
+            Double ciakLogAvg = computeCiakLogAverage(tmdbId, contentType);
             int ciakLogVotes = reviewRepository
                     .findVisibleByTmdbIdAndContentType(tmdbId, contentType)
                     .size();
+
+            // Fix: stesso problema — asDouble() di Jackson ritorna 0.0 se il campo
+            // manca invece di null, falsando il voto combinato allo stesso modo
+            JsonNode voteAverageNode = root.path("vote_average");
+            Double tmdbVoteAverage = voteAverageNode.isMissingNode() || voteAverageNode.isNull()
+                    ? null : voteAverageNode.asDouble();
 
             return TmdbDetailResponse.builder()
                     .tmdbId(tmdbId)
@@ -156,7 +162,7 @@ public class TmdbServiceImpl implements TmdbService {
                     .overview(root.path("overview").asText(null))
                     .genres(genres)
                     .cast(cast)
-                    .tmdbRating(root.path("vote_average").asDouble())
+                    .tmdbRating(tmdbVoteAverage)
                     .ciakLogAverageRating(ciakLogAvg)
                     .ciakLogVoteCount(ciakLogVotes)
                     .numberOfSeasons(contentType == ContentType.TV && root.hasNonNull("number_of_seasons")
@@ -173,9 +179,14 @@ public class TmdbServiceImpl implements TmdbService {
 
     // ── helpers ──
 
-    private double computeCiakLogAverage(Long tmdbId, ContentType contentType) {
+    // Fix (Dettaglio — voto combinato): prima ritornava `double` primitivo con
+    // 0.0 quando non c'erano recensioni — quello zero finiva nel DTO come un
+    // voto vero (0 != null), e il calcolo del voto combinato lo mediava con
+    // TMDB come se fosse un dato reale, dimezzando il risultato invece di
+    // mostrare solo TMDB. Ora torna null quando non ci sono recensioni.
+    private Double computeCiakLogAverage(Long tmdbId, ContentType contentType) {
         var reviews = reviewRepository.findVisibleByTmdbIdAndContentType(tmdbId, contentType);
-        if (reviews.isEmpty()) return 0.0;
+        if (reviews.isEmpty()) return null;
         double sum = reviews.stream().mapToInt(r -> r.getRating()).sum();
         return Math.round((sum / reviews.size()) * 10.0) / 10.0;
     }

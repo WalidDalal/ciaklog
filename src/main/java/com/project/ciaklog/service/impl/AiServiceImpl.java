@@ -178,7 +178,15 @@ public class AiServiceImpl implements AiService {
 
             List<TmdbSearchResultResponse> suggestions = resolveTitlesOnTmdb(titles, reasons);
 
-            if (suggestions.isEmpty()) {
+            // Fix: questo controllo sovrascriveva SEMPRE il reply quando non c'erano
+            // suggerimenti — ma da quando il prompt del primo messaggio istruisce il
+            // modello a lasciare "titles" vuoto di proposito per saluti/small talk
+            // (con una risposta naturale nel campo "reply"), un semplice "ciao"
+            // otteneva comunque il messaggio generico "Non ho trovato suggerimenti
+            // validi" al posto del saluto vero e proprio del modello. Ora si
+            // sovrascrive solo se il modello AVEVA proposto dei titoli (falliti a
+            // risolversi su TMDB) — se erano vuoti di proposito, il reply resta intatto
+            if (suggestions.isEmpty() && (!isFirstMessage || !titles.isEmpty())) {
                 reply = "Non ho trovato suggerimenti validi, prova a riformulare la richiesta.";
             }
 
@@ -271,12 +279,28 @@ public class AiServiceImpl implements AiService {
 
         if (pendingReports.hasContent()) {
             sb.append("Ultime segnalazioni in attesa:\n");
-            pendingReports.forEach(r -> sb.append("  - ")
-                    .append(r.getReporter().getUsername())
-                    .append(" ha segnalato la recensione di ")
-                    .append(r.getReview().getUser().getUsername())
-                    .append(" (categoria: ").append(r.getReasonCategory()).append(")")
-                    .append("\n"));
+            // Fix: da quando esistono anche segnalazioni su risposte (ReviewComment),
+            // r.getReview() può essere null — causava un NullPointerException (500)
+            // ogni volta che una sola segnalazione pendente puntava a una risposta
+            // invece che a una recensione. Già successo una volta, ripristinato dopo
+            // essere sparito in un giro di modifiche successive — occhio a non perderlo di nuovo
+            pendingReports.forEach(r -> {
+                if (r.getReview() != null) {
+                    sb.append("  - ")
+                            .append(r.getReporter().getUsername())
+                            .append(" ha segnalato la recensione di ")
+                            .append(r.getReview().getUser().getUsername())
+                            .append(" (categoria: ").append(r.getReasonCategory()).append(")")
+                            .append("\n");
+                } else {
+                    sb.append("  - ")
+                            .append(r.getReporter().getUsername())
+                            .append(" ha segnalato la risposta di ")
+                            .append(r.getReviewComment().getAuthor().getUsername())
+                            .append(" (categoria: ").append(r.getReasonCategory()).append(")")
+                            .append("\n");
+                }
+            });
             sb.append("\n");
         }
 
@@ -525,6 +549,25 @@ public class AiServiceImpl implements AiService {
             log.warn("Narrativa AI non generata (proseguo senza): {}", e.getMessage());
             return "";
         }
+    }
+
+    // Fix (suggerimento contestuale AI negli stati vuoti, approvato): frase
+    // breve invece del solito messaggio piatto — riusa generateNarrative(),
+    // che già gestisce il fallback silenzioso se l'AI non risponde
+    @Override
+    public String getEmptyStateTip(String context) {
+        String prompt = """
+                Sei l'assistente di CiakLog, un'app di tracking film/serie TV.
+                L'utente si trova in questa situazione: %s
+
+                Scrivi UNA sola frase breve (max 15 parole), amichevole e utile, che lo
+                incoraggi o gli suggerisca cosa fare — vai dritto al punto, niente saluti.
+                Resta sempre in tema film/serie/piattaforma.
+
+                Rispondi SOLO con la frase, niente virgolette, niente altro testo.
+                """.formatted(context);
+
+        return generateNarrative(prompt);
     }
 
     // Fix (AI che replica a una recensione negativa): SOLO su richiesta

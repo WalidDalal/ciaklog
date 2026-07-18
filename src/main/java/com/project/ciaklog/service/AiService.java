@@ -43,4 +43,10 @@ public interface AiService {
     // automatica. Tono leggero, offre una prospettiva alternativa senza
     // essere condiscendente né insistere se l'utente non lo chiede.
     ReviewOpinionResponse getAiOpinionOnReview(String username, UUID reviewId);
+
+    // Fix (suggerimento contestuale AI negli stati vuoti, approvato): una
+    // frase breve al posto del solito messaggio piatto quando non c'è nulla
+    // da mostrare (libreria vuota, ricerca senza risultati, ecc.). Riusa
+    // generateNarrative() — stringa vuota se l'AI non risponde, mai un errore
+    String getEmptyStateTip(String context);
 }

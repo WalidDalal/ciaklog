@@ -17,17 +17,22 @@ import java.util.UUID;
 public interface ReviewCommentRepository extends JpaRepository<ReviewComment, UUID> {
 
     // JOIN FETCH author — evita LazyInitializationException in toDTO()
-    // Fix (auto-nascondimento autore): esclusa anche dalla lista pubblica se
-    // hiddenByAuthor = true, pur restando VISIBLE come status
+    // Fix (auto-nascondimento autore): esclusa dalla lista pubblica se
+    // hiddenByAuthor = true — MA l'autore stesso deve continuare a vederla
+    // quando è lui a guardare il thread (altrimenti l'indicatore "solo tu la
+    // vedi" non potrebbe mai comparire: l'elemento non arriverebbe proprio).
+    // viewerUsername è null per i visitatori anonimi — non matcha mai
+    // nessun autore, quindi i nascosti restano nascosti per loro
     @Query("""
             SELECT c FROM ReviewComment c
             JOIN FETCH c.author
             WHERE c.review = :review AND c.status = :status
-              AND c.hiddenByAuthor = false
+              AND (c.hiddenByAuthor = false OR c.author.username = :viewerUsername)
             """)
     Page<ReviewComment> findByReviewAndStatus(
             @Param("review") Review review,
             @Param("status") ReviewStatus status,
+            @Param("viewerUsername") String viewerUsername,
             Pageable pageable);
 
     // Fix (cascata moderazione): versione non paginata, usata da ReportServiceImpl

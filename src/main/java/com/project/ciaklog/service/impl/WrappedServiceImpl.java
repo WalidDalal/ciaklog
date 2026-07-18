@@ -76,7 +76,15 @@ public class WrappedServiceImpl implements WrappedService {
 
         // Titoli per recuperare un nome leggibile dato tmdbId+contentType
         // (Review non salva il titolo, WatchEntry sì — evita una chiamata TMDB in più)
-        Map<String, String> titleByKey = watched.stream()
+        // Fix (Wrapped — titolo preferito che spariva): la mappa titoli usava solo
+        // le entry con status WATCHED. Se dopo aver recensito un titolo il suo stato
+        // cambiava (rimesso "da vedere", rimosso dalla libreria), la entry usciva da
+        // "watched" e la recensione — che esiste ancora — non trovava più un titolo,
+        // facendo sparire silenziosamente la card "titolo preferito/meno amato" anche
+        // con voto e recensione ancora presenti. I titoli ora vengono da TUTTE le
+        // entry dell'utente, indipendentemente dallo stato attuale.
+        List<WatchEntry> allEntries = watchEntryRepository.findAllByUser(user);
+        Map<String, String> titleByKey = allEntries.stream()
                 .collect(Collectors.toMap(
                         w -> w.getTmdbId() + "-" + w.getContentType(),
                         WatchEntry::getTitle,

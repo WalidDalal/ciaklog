@@ -20,15 +20,25 @@ import java.util.UUID;
 public interface ReviewRepository extends JpaRepository<Review, UUID> {
 
     // JOIN FETCH user — evita LazyInitializationException in toDTO()
+    // Fix (auto-nascondimento autore): esclusa dalla lista pubblica se
+    // hiddenByAuthor = true — MA l'autore stesso deve continuare a vederla
+    // (altrimenti perderebbe il modo di ripristinarla: niente più bottone
+    // "Mostra di nuovo", perché l'elemento non arriverebbe proprio più).
+    // viewerUsername è null per i visitatori anonimi — non matcha mai
+    // nessun autore, quindi i nascosti restano nascosti per loro.
+    // ⚠️ Questo filtro era già stato aggiunto una volta e si è perso in un
+    // giro di modifiche successive — occhio a non perderlo di nuovo
     @Query("""
             SELECT r FROM Review r
             JOIN FETCH r.user
             WHERE r.tmdbId = :tmdbId AND r.contentType = :contentType AND r.status = :status
+              AND (r.hiddenByAuthor = false OR r.user.username = :viewerUsername)
             """)
     Page<Review> findByTmdbIdAndContentTypeAndStatus(
             @Param("tmdbId") Long tmdbId,
             @Param("contentType") ContentType contentType,
             @Param("status") ReviewStatus status,
+            @Param("viewerUsername") String viewerUsername,
             Pageable pageable);
 
     // JOIN FETCH user — evita LazyInitializationException in toDTO()
@@ -52,13 +62,17 @@ public interface ReviewRepository extends JpaRepository<Review, UUID> {
 
     Optional<Review> findByUserAndTmdbIdAndContentType(User user, Long tmdbId, ContentType contentType);
 
-    @Query("SELECT r FROM Review r WHERE r.tmdbId = :tmdbId AND r.contentType = :contentType AND r.status = 'VISIBLE'")
+    // Fix (auto-nascondimento autore): usata per calcoli statistici (media voti),
+    // qui l'eccezione per il proprietario non serve — una recensione auto-nascosta
+    // non deve influenzare la media mostrata a tutti, punto, indipendentemente da chi guarda
+    @Query("SELECT r FROM Review r WHERE r.tmdbId = :tmdbId AND r.contentType = :contentType AND r.status = 'VISIBLE' AND r.hiddenByAuthor = false")
     List<Review> findVisibleByTmdbIdAndContentType(@Param("tmdbId") Long tmdbId, @Param("contentType") ContentType contentType);
 
     @Query("""
             SELECT r.tmdbId, r.contentType, COUNT(r), AVG(r.rating), MAX(r.createdAt)
             FROM Review r
             WHERE r.status = com.project.ciaklog.entity.ReviewStatus.VISIBLE
+              AND r.hiddenByAuthor = false
               AND r.contentType = :contentType
             GROUP BY r.tmdbId, r.contentType
             HAVING COUNT(r) >= :minVotes
@@ -71,6 +85,7 @@ public interface ReviewRepository extends JpaRepository<Review, UUID> {
             SELECT r.tmdbId, r.contentType, COUNT(r)
             FROM Review r
             WHERE r.status = com.project.ciaklog.entity.ReviewStatus.VISIBLE
+              AND r.hiddenByAuthor = false
               AND r.createdAt >= :since
             GROUP BY r.tmdbId, r.contentType
             ORDER BY COUNT(r) DESC

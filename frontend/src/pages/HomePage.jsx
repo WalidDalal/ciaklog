@@ -205,14 +205,6 @@ function HomePage() {
         api.get('/charts/trending', cfg).then(r => {
             const validTrending = (r.data || []).filter(item => item.weeklyReviewCount > 0)
             setTrending(validTrending)
-            validTrending.forEach(item => {
-                api.get(`/reviews/media/${item.contentType}/${item.tmdbId}`, { params: { size: 5, sort: 'createdAt,desc' }, signal })
-                    .then(res => {
-                        const reviews = res.data.content || res.data
-                        setTrendingReviews(prev => ({ ...prev, [`${item.tmdbId}_${item.contentType}`]: reviews }))
-                    })
-                    .catch(() => {})
-            })
         }).catch(() => {})
 
         if (token) {
@@ -240,6 +232,29 @@ function HomePage() {
 
         return () => controller.abort()
     }, [token])
+
+    // Fix (community, bug reale): prima le recensioni/commenti venivano caricati
+    // SOLO per il trending vero — quando era vuoto (poca attività questa
+    // settimana) si passava ai titoli popolari (recentFilms) come fallback, ma
+    // nessuno andava mai a recuperare le loro recensioni: 3 titoli, zero
+    // commenti sotto, sempre. Ora carica le recensioni per qualunque lista sia
+    // effettivamente mostrata (evitando di richiederle due volte se già in cache).
+    useEffect(() => {
+        const itemsShown = trending.length > 0 ? trending : recentFilms
+        if (itemsShown.length === 0) return
+        const controller = new AbortController()
+        itemsShown.forEach(item => {
+            const key = `${item.tmdbId}_${item.contentType}`
+            if (trendingReviews[key]) return
+            api.get(`/reviews/media/${item.contentType}/${item.tmdbId}`, { params: { size: 5, sort: 'createdAt,desc' }, signal: controller.signal })
+                .then(res => {
+                    const reviews = res.data.content || res.data
+                    setTrendingReviews(prev => ({ ...prev, [key]: reviews }))
+                })
+                .catch(() => {})
+        })
+        return () => controller.abort()
+    }, [trending, recentFilms]) // eslint-disable-line
 
     // Fix (Home Admin): sezioni community collassate di default per l'Admin
     const isAdmin = user?.role === 'ADMIN'
@@ -386,7 +401,10 @@ function HomePage() {
                                                 </div>
                                                 <div style={{ padding: '8px' }}>
                                                     <div style={{ color: 'var(--text)', fontSize: '11px', fontWeight: '600', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{item.title}</div>
-                                                    {item.currentSeason && <div style={{ color: 'var(--text-dark)', fontSize: '10px' }}>S{item.currentSeason}</div>}
+                                                    {/* Fix (Homepage — In visione, stesso problema della Libreria): senza
+                                                        questa riga sempre presente, i film (senza stagione) restavano più
+                                                        bassi delle serie nella stessa fila della scroll orizzontale */}
+                                                    <div style={{ color: 'var(--text-dark)', fontSize: '10px', visibility: item.currentSeason ? 'visible' : 'hidden' }}>S{item.currentSeason || 1}</div>
                                                 </div>
                                             </div>
                                         </Link>

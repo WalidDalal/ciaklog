@@ -199,30 +199,6 @@ function ProfilePage() {
                             ))}
                           </div>
                       )}
-                      {isOwn && (
-                          <button
-                              onClick={() => setEditing(true)}
-                              title="Modifica profilo"
-                              style={{
-                                backgroundColor: 'transparent', border: '1px solid var(--border)',
-                                borderRadius: '6px', padding: '4px 10px',
-                                color: 'var(--text-dark)', fontSize: '12px', cursor: 'pointer',
-                              }}
-                          >
-                            ✏️ Modifica
-                          </button>
-                      )}
-                      {/* Fix (CiakLog Wrapped): link visibile solo sul proprio profilo */}
-                      {isOwn && (
-                          <Link to="/wrapped" style={{
-                            display: 'inline-flex', alignItems: 'center', gap: '4px',
-                            backgroundColor: 'var(--accent-subtle)', border: '1px solid var(--border-cta)',
-                            borderRadius: '6px', padding: '4px 10px',
-                            color: 'var(--gold)', fontSize: '12px', fontWeight: '600', textDecoration: 'none',
-                          }}>
-                            🎬 Il tuo Wrapped
-                          </Link>
-                      )}
                     </div>
 
                     {profile.bio ? (
@@ -248,6 +224,34 @@ function ProfilePage() {
                   </>
               )}
             </div>
+
+            {/* Fix (Profilo): "Modifica" era in mezzo a username/generi/Wrapped,
+                affollando la riga — spostato in alto a destra, dove ci si aspetta
+                un'azione sull'intera pagina. Il Wrapped è ora un bottone circolare
+                sempre a destra, più invitante di un link testuale in linea. */}
+            {isOwn && !editing && (
+                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '10px', flexShrink: 0 }}>
+                  <Link to="/wrapped" title="Il tuo Wrapped" style={{
+                    width: '52px', height: '52px', borderRadius: '50%',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    backgroundColor: 'var(--accent-subtle)', border: '1px solid var(--border-cta)',
+                    color: 'var(--gold)', fontSize: '22px', textDecoration: 'none',
+                  }}>
+                    🎬
+                  </Link>
+                  <button
+                      onClick={() => setEditing(true)}
+                      title="Modifica profilo"
+                      style={{
+                        backgroundColor: 'transparent', border: '1px solid var(--border)',
+                        borderRadius: '6px', padding: '4px 10px',
+                        color: 'var(--text-dark)', fontSize: '12px', cursor: 'pointer', whiteSpace: 'nowrap',
+                      }}
+                  >
+                    ✏️ Modifica
+                  </button>
+                </div>
+            )}
           </div>
 
           {/* ── Area scrollabile: in visione + recensioni ── */}

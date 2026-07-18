@@ -54,14 +54,19 @@ export function ChatCore({ compact = false, initialPrompt = null }) {
         sessionHistory: messages.slice(-10),
       })
       setSessionId(res.data.sessionId)
+      // Fix: il frontend usava role: 'AI', ma l'enum MessageRole del backend
+      // accetta solo USER/ASSISTANT — al primo giro andava bene (il messaggio
+      // non torna mai indietro), ma dal secondo messaggio in poi 'AI' finiva
+      // nella sessionHistory rimandata al backend, che falliva la deserializzazione
+      // JSON (500 "Errore interno") su OGNI messaggio successivo al primo
       addMessage({
-        role: 'AI',
+        role: 'ASSISTANT',
         content: res.data.reply,
         suggestions: res.data.suggestions || [],
       })
     } catch (err) {
       addMessage({
-        role: 'AI',
+        role: 'ASSISTANT',
         content: err.response?.data?.error || 'Assistente temporaneamente non disponibile.',
         suggestions: [],
       })
@@ -122,7 +127,7 @@ export function ChatCore({ compact = false, initialPrompt = null }) {
                 padding: compact ? '10px 14px' : '12px 16px',
                 borderRadius: msg.role === 'USER' ? '16px 16px 4px 16px' : '16px 16px 16px 4px',
                 backgroundColor: msg.role === 'USER' ? 'var(--accent)' : 'var(--bg-hover)',
-                border: msg.role === 'AI' ? '1px solid #2a2a2a' : 'none',
+                border: msg.role === 'ASSISTANT' ? '1px solid #2a2a2a' : 'none',
                 color: 'var(--text)', fontSize: compact ? '13px' : '14px', lineHeight: 1.6,
                 whiteSpace: 'pre-wrap',
               }}>

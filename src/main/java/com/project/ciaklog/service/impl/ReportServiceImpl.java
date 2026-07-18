@@ -128,7 +128,7 @@ public class ReportServiceImpl implements ReportService {
 
     @Override
     @Transactional
-    public ReportResponse resolveReport(UUID reportId, ReportStatus newStatus, String adminUsername) {
+    public ReportResponse resolveReport(UUID reportId, ReportStatus newStatus, String adminUsername, ReportReasonCategory finalReasonCategory) {
         User admin = getUser(adminUsername);
         Report report = reportRepository.findById(reportId)
                 .orElseThrow(() -> new ResourceNotFoundException("Segnalazione non trovata"));
@@ -140,6 +140,15 @@ public class ReportServiceImpl implements ReportService {
         report.setStatus(newStatus);
         report.setResolvedBy(admin);
         report.setResolvedAt(LocalDateTime.now());
+
+        // Fix (dashboard admin): quando le segnalazioni sullo stesso bersaglio
+        // hanno motivi diversi, l'admin sceglie quale è quello valido — lo
+        // applichiamo qui a QUESTO report così tutti quelli approvati insieme
+        // nello stesso gruppo finiscono coerenti sullo stesso motivo (invece
+        // di lasciare che sia il primo trovato più avanti a "vincere" a caso)
+        if (newStatus == ReportStatus.APPROVED && finalReasonCategory != null) {
+            report.setReasonCategory(finalReasonCategory);
+        }
 
         if (report.getReview() != null) {
             resolveReviewTarget(report, newStatus);
@@ -325,7 +334,8 @@ public class ReportServiceImpl implements ReportService {
                     .reviewId(review.getId())
                     .reviewAuthorUsername(review.getUser().getUsername())
                     .reviewText(review.getText())
-                    .reviewRating(review.getRating());
+                    .reviewRating(review.getRating())
+                    .targetRemoved(review.getStatus() == ReviewStatus.REMOVED);
         } else {
             ReviewComment comment = r.getReviewComment();
             // Fix (dashboard admin, Step 6): il tmdbId/contentType di una risposta
@@ -336,7 +346,8 @@ public class ReportServiceImpl implements ReportService {
                     .reviewCommentId(comment.getId())
                     .parentReviewId(comment.getReview().getId())
                     .commentAuthorUsername(comment.getAuthor().getUsername())
-                    .commentText(comment.getText());
+                    .commentText(comment.getText())
+                    .targetRemoved(comment.getStatus() == ReviewStatus.REMOVED);
         }
 
         return builder.build();

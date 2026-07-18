@@ -8,10 +8,6 @@ import org.springframework.scheduling.annotation.EnableScheduling;
 
 @SpringBootApplication
 @EnableScheduling
-// Fix: mancava @EnableCaching — senza questa annotazione i @Cacheable su
-// ChartServiceImpl (topFilms/topSeries/topUsers/trending) non hanno ALCUN
-// effetto: Spring li ignora silenziosamente e ogni chiamata ricalcola da zero.
-// Necessaria prima ancora di poter aggiungere la scadenza (@CacheEvict).
 @EnableCaching
 @EnableSpringDataWebSupport(pageSerializationMode = EnableSpringDataWebSupport.PageSerializationMode.VIA_DTO)
 public class CiaklogApplication {

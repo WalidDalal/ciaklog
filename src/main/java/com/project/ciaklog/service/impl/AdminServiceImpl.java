@@ -97,6 +97,7 @@ public class AdminServiceImpl implements AdminService {
                 .reportCount(reportCount)
                 .createdAt(user.getCreatedAt())
                 .violations(violations)
+                .role(user.getRole())
                 .build();
     }
 
@@ -110,6 +111,11 @@ public class AdminServiceImpl implements AdminService {
 
         if (target.getId().equals(admin.getId())) {
             throw new BusinessRuleException("Non puoi sospendere te stesso");
+        }
+        // Fix (dashboard admin): un Admin non può sospendere un altro Admin —
+        // prima la regola valeva solo per "te stesso"
+        if (target.getRole() == Role.ADMIN) {
+            throw new BusinessRuleException("Non puoi sospendere un altro Admin");
         }
         if (target.getStatus() == UserStatus.PERMANENTLY_SUSPENDED) {
             throw new BusinessRuleException("Utente già sospeso permanentemente");
@@ -161,6 +167,7 @@ public class AdminServiceImpl implements AdminService {
                 .username(u.getUsername())
                 .status(u.getStatus())
                 .violationCount(u.getViolationCount())
+                .role(u.getRole())
                 .build();
     }
 }
