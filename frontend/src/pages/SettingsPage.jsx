@@ -53,6 +53,11 @@ function SettingsPage() {
   const [newPassword, setNewPassword] = useState('')
   const [confirmPassword, setConfirmPassword] = useState('')
 
+  // Fix (Impostazioni): la sezione password era l'unica sempre aperta,
+  // diversa dalle altre card che seguono il pattern Modifica/Annulla —
+  // ora è chiusa di default e si apre solo cliccando "Modifica"
+  const [editingPassword, setEditingPassword] = useState(false)
+
   const [loadingProfile, setLoadingProfile] = useState(false)
   const [loadingPassword, setLoadingPassword] = useState(false)
   const [confirmingDelete, setConfirmingDelete] = useState(false)
@@ -105,11 +110,17 @@ function SettingsPage() {
       await api.put('/users/me', { currentPassword, newPassword })
       toast.show('Password aggiornata!', 'success')
       setCurrentPassword(''); setNewPassword(''); setConfirmPassword('')
+      setEditingPassword(false)
     } catch (err) {
       toast.show(err.response?.data?.error || 'Errore durante il salvataggio')
     } finally {
       setLoadingPassword(false)
     }
+  }
+
+  const handleCancelPassword = () => {
+    setCurrentPassword(''); setNewPassword(''); setConfirmPassword('')
+    setEditingPassword(false)
   }
 
   const handleDeleteAccount = async () => {
@@ -266,9 +277,26 @@ function SettingsPage() {
 
         {/* ── Cambia password ── */}
         <div style={CARD_STYLE}>
-          <h2 style={{ color: 'var(--text)', fontSize: '17px', fontWeight: '700', marginBottom: '20px' }}>
-            🔒 Cambia password
-          </h2>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: editingPassword ? '20px' : 0 }}>
+            <h2 style={{ color: 'var(--text)', fontSize: '17px', fontWeight: '700', margin: 0 }}>
+              🔒 Cambia password
+            </h2>
+            {!editingPassword && (
+              <button
+                type="button"
+                onClick={() => setEditingPassword(true)}
+                style={{
+                  padding: '6px 16px', backgroundColor: 'transparent',
+                  border: '1px solid var(--border-soft)', borderRadius: '8px',
+                  color: 'var(--text-muted)', fontSize: '13px', fontWeight: '600', cursor: 'pointer',
+                }}
+              >
+                ✏️ Modifica
+              </button>
+            )}
+          </div>
+
+          {editingPassword && (
           <form onSubmit={handlePasswordSubmit}>
             <div style={{ marginBottom: '16px' }}>
               <label style={{ display: 'block', color: 'var(--text-muted)', fontSize: '13px', marginBottom: '6px' }}>Password attuale</label>
@@ -324,18 +352,33 @@ function SettingsPage() {
                 <p style={{ color: 'var(--accent)', fontSize: '12px', marginTop: '4px' }}>Le password non coincidono</p>
               )}
             </div>
-            <button
-              type="submit"
-              disabled={loadingPassword}
-              style={{
-                padding: '12px 28px', backgroundColor: loadingPassword ? 'var(--border-soft)' : 'var(--accent)',
-                border: 'none', borderRadius: '8px', color: 'white',
-                fontSize: '15px', fontWeight: '600', cursor: loadingPassword ? 'default' : 'pointer',
-              }}
-            >
-              {loadingPassword ? 'Aggiornamento...' : 'Aggiorna password'}
-            </button>
+            <div style={{ display: 'flex', gap: '10px' }}>
+              <button
+                type="submit"
+                disabled={loadingPassword}
+                style={{
+                  padding: '12px 28px', backgroundColor: loadingPassword ? 'var(--border-soft)' : 'var(--accent)',
+                  border: 'none', borderRadius: '8px', color: 'white',
+                  fontSize: '15px', fontWeight: '600', cursor: loadingPassword ? 'default' : 'pointer',
+                }}
+              >
+                {loadingPassword ? 'Aggiornamento...' : 'Aggiorna password'}
+              </button>
+              <button
+                type="button"
+                onClick={handleCancelPassword}
+                disabled={loadingPassword}
+                style={{
+                  padding: '12px 28px', backgroundColor: 'transparent',
+                  border: '1px solid var(--border-soft)', borderRadius: '8px', color: 'var(--text-muted)',
+                  fontSize: '15px', fontWeight: '600', cursor: loadingPassword ? 'default' : 'pointer',
+                }}
+              >
+                Annulla
+              </button>
+            </div>
           </form>
+          )}
         </div>
 
         {/* ── Zona pericolosa ── */}

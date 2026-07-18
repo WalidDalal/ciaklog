@@ -129,9 +129,9 @@ public class ReviewServiceImpl implements ReviewService {
     }
 
     @Override
-    public Page<ReviewResponse> getReviewsForMedia(Long tmdbId, ContentType contentType, Pageable pageable) {
+    public Page<ReviewResponse> getReviewsForMedia(Long tmdbId, ContentType contentType, String viewerUsername, Pageable pageable) {
         return reviewRepository
-                .findByTmdbIdAndContentTypeAndStatus(tmdbId, contentType, ReviewStatus.VISIBLE, pageable)
+                .findByTmdbIdAndContentTypeAndStatus(tmdbId, contentType, ReviewStatus.VISIBLE, viewerUsername, pageable)
                 .map(r -> toDTO(r, r.getUser()));
     }
 

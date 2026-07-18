@@ -24,12 +24,17 @@ public class ReviewController {
 
     private final ReviewService reviewService;
 
+    // Fix (auto-nascondimento autore): serve sapere CHI guarda per far vedere
+    // all'autore la propria recensione anche se l'ha nascosta — userDetails è
+    // nullable qui (endpoint pubblico, un visitatore anonimo può guardarla)
     @GetMapping("/media/{contentType}/{tmdbId}")
     public ResponseEntity<Page<ReviewResponse>> getReviewsForMedia(
+            @AuthenticationPrincipal UserDetails userDetails,
             @PathVariable ContentType contentType,
             @PathVariable Long tmdbId,
             Pageable pageable) {
-        return ResponseEntity.ok(reviewService.getReviewsForMedia(tmdbId, contentType, pageable));
+        String viewerUsername = userDetails != null ? userDetails.getUsername() : null;
+        return ResponseEntity.ok(reviewService.getReviewsForMedia(tmdbId, contentType, viewerUsername, pageable));
     }
 
     @GetMapping("/user/{username}")

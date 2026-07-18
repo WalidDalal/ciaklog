@@ -62,25 +62,28 @@ function StatusActions({ entry, onStatusChange, onDelete, onSeasonChange, deleti
         return (
             <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
                 {/* Fix: prima non c'era modo di aggiornare la stagione corrente
-                    senza rimuovere e riaggiungere il titolo da capo */}
-                {/* Fix: prima non c'era modo di aggiornare la stagione corrente
                     senza rimuovere e riaggiungere il titolo da capo (solo serie TV) */}
-                {(entry.contentType || entry.mediaType) === 'TV' && (
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                        <span style={{ color: 'var(--text-dark)', fontSize: '11px' }}>Stagione</span>
-                        <button
-                            onClick={() => onSeasonChange(entry, Math.max(1, (entry.currentSeason || 1) - 1))}
-                            aria-label="Stagione precedente"
-                            style={{ width: '22px', height: '22px', padding: 0, backgroundColor: 'transparent', border: '1px solid #2a2a2a', borderRadius: '4px', color: 'var(--text-dark)', fontSize: '12px', cursor: 'pointer' }}
-                        >−</button>
-                        <span style={{ color: 'var(--text)', fontSize: '12px', fontWeight: '600', minWidth: '14px', textAlign: 'center' }}>{entry.currentSeason || 1}</span>
-                        <button
-                            onClick={() => onSeasonChange(entry, (entry.currentSeason || 1) + 1)}
-                            aria-label="Stagione successiva"
-                            style={{ width: '22px', height: '22px', padding: 0, backgroundColor: 'transparent', border: '1px solid #2a2a2a', borderRadius: '4px', color: 'var(--text-dark)', fontSize: '12px', cursor: 'pointer' }}
-                        >+</button>
-                    </div>
-                )}
+                {/* Fix (Libreria — altezze): lo stepper stagione esiste solo per le
+                    serie TV, ma la sua assenza sui film accorciava la card, spostando
+                    in alto i bottoni sotto e lasciando spazio vuoto nelle serie accanto
+                    nella stessa riga della griglia. Ora lo spazio è sempre riservato
+                    (22px, l'altezza dei pulsanti +/-), invisibile per i film. */}
+                <div style={{ display: 'flex', alignItems: 'center', gap: '6px', height: '22px', visibility: (entry.contentType || entry.mediaType) === 'TV' ? 'visible' : 'hidden' }}>
+                    <span style={{ color: 'var(--text-dark)', fontSize: '11px' }}>Stagione</span>
+                    <button
+                        onClick={() => onSeasonChange(entry, Math.max(1, (entry.currentSeason || 1) - 1))}
+                        aria-label="Stagione precedente"
+                        tabIndex={(entry.contentType || entry.mediaType) === 'TV' ? 0 : -1}
+                        style={{ width: '22px', height: '22px', padding: 0, backgroundColor: 'transparent', border: '1px solid #2a2a2a', borderRadius: '4px', color: 'var(--text-dark)', fontSize: '12px', cursor: 'pointer' }}
+                    >−</button>
+                    <span style={{ color: 'var(--text)', fontSize: '12px', fontWeight: '600', minWidth: '14px', textAlign: 'center' }}>{entry.currentSeason || 1}</span>
+                    <button
+                        onClick={() => onSeasonChange(entry, (entry.currentSeason || 1) + 1)}
+                        aria-label="Stagione successiva"
+                        tabIndex={(entry.contentType || entry.mediaType) === 'TV' ? 0 : -1}
+                        style={{ width: '22px', height: '22px', padding: 0, backgroundColor: 'transparent', border: '1px solid #2a2a2a', borderRadius: '4px', color: 'var(--text-dark)', fontSize: '12px', cursor: 'pointer' }}
+                    >+</button>
+                </div>
                 <div style={{ display: 'flex', gap: '6px' }}>
                     <Link
                         to={`/movie/${entry.tmdbId}?type=${entry.contentType || entry.mediaType}`}
@@ -149,6 +152,11 @@ function LibraryPage() {
     const [confirmDelete, setConfirmDelete] = useState(null) // id da eliminare
     const toast = useToastStore()
 
+    // Fix (suggerimento contestuale AI negli stati vuoti, approvato): frase
+    // breve al posto del solito messaggio piatto — fallback silenzioso se
+    // l'AI non risponde (il messaggio statico esistente resta comunque)
+    const [emptyTip, setEmptyTip] = useState('')
+
     useEffect(() => {
         setLoading(true)
         api.get('/library', { params: { size: 200 } })
@@ -176,6 +184,13 @@ function LibraryPage() {
     }
 
     const entries = filter ? allEntries.filter(e => e.status === filter) : allEntries
+
+    useEffect(() => {
+        if (loading || entries.length > 0) { setEmptyTip(''); return }
+        api.get('/ai/empty-state-tip', { params: { context: 'LIBRARY_EMPTY' } })
+            .then(r => setEmptyTip(r.data?.tip || ''))
+            .catch(() => setEmptyTip(''))
+    }, [loading, entries.length, filter])
 
     const handleStatusChange = async (entry, newStatus) => {
         // Se si segna come WATCHED, verifica prima se esiste già una recensione.
@@ -265,9 +280,14 @@ function LibraryPage() {
                 {!loading && entries.length === 0 && (
                     <div style={{ textAlign: 'center', marginTop: '80px' }}>
                         <div style={{ fontSize: '48px', marginBottom: '16px' }}>🎬</div>
-                        <p style={{ color: 'var(--text-dark)', fontSize: '16px', marginBottom: '20px' }}>
+                        <p style={{ color: 'var(--text-dark)', fontSize: '16px', marginBottom: emptyTip ? '8px' : '20px' }}>
                             {filter ? 'Nessun contenuto in questa categoria' : 'La tua libreria è vuota'}
                         </p>
+                        {emptyTip && (
+                            <p style={{ color: 'var(--accent)', fontSize: '13px', marginBottom: '20px' }}>
+                                ✨ {emptyTip}
+                            </p>
+                        )}
                         <Link to="/search">
                             <button style={{ padding: '12px 28px', backgroundColor: 'var(--accent)', border: 'none', borderRadius: '8px', color: 'var(--text)', fontSize: '15px', fontWeight: '600' }}>
                                 Cerca qualcosa da aggiungere

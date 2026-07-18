@@ -78,68 +78,81 @@ function UserDrawer({ user: u, onClose, onSuspend, onReinstate, loading = false 
 
           {loading && <div style={{ color: 'var(--text-dark)', fontSize: '13px', marginBottom: '16px' }}>Caricamento dettagli...</div>}
 
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginBottom: '28px' }}>
-            {/* Card violazioni — cliccabile se > 0 */}
-            <div
-                onClick={() => u.violationCount > 0 && setExpandViolations(v => !v)}
-                style={{ backgroundColor: 'var(--bg-hover)', borderRadius: '8px', padding: '14px', cursor: u.violationCount > 0 ? 'pointer' : 'default', border: u.violationCount > 0 ? '1px solid #f59e0b44' : '1px solid transparent' }}
-            >
-              <div style={{ color: 'var(--text-dark)', fontSize: '11px', marginBottom: '4px', textTransform: 'uppercase', letterSpacing: '1px' }}>
-                Violazioni {u.violationCount > 0 && <span style={{ color: '#f59e0b' }}>{expandViolations ? '▲' : '▼'}</span>}
+          {/* Fix (dashboard admin): cliccando su un Admin comparivano comunque
+              violazioni/recensioni/segnalazioni ricevute/profilo pubblico —
+              dati che per un Admin non hanno senso (non produce contenuti
+              moderabili) e che restavano visibili "per abitudine" invece di
+              essere nascosti come le azioni di sospensione lo erano già. */}
+          {u.role === 'ADMIN' ? (
+              <div style={{ backgroundColor: 'var(--bg-hover)', borderRadius: '8px', padding: '16px', color: 'var(--text-muted)', fontSize: '13px', lineHeight: 1.6 }}>
+                🛡️ Account Admin — nessuna statistica di moderazione o azione disponibile per questo tipo di account.
               </div>
-              <div style={{ color: u.violationCount > 0 ? '#f59e0b' : 'var(--text-muted)', fontWeight: '700', fontSize: '18px' }}>{u.violationCount}</div>
-            </div>
-            {[
-              { label: 'Recensioni', value: u.reviewCount ?? '—', color: 'var(--text-muted)' },
-              { label: 'Segnalazioni ricevute', value: u.reportCount ?? '—', color: 'var(--text-muted)' },
-              { label: 'Membro dal', value: u.createdAt ? new Date(u.createdAt).toLocaleDateString('it-IT') : '—', color: 'var(--text-muted)' },
-            ].map(s => (
-                <div key={s.label} style={{ backgroundColor: 'var(--bg-hover)', borderRadius: '8px', padding: '14px' }}>
-                  <div style={{ color: 'var(--text-dark)', fontSize: '11px', marginBottom: '4px', textTransform: 'uppercase', letterSpacing: '1px' }}>{s.label}</div>
-                  <div style={{ color: s.color, fontWeight: '700', fontSize: '18px' }}>{s.value}</div>
+          ) : (
+            <>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginBottom: '28px' }}>
+                {/* Card violazioni — cliccabile se > 0 */}
+                <div
+                    onClick={() => u.violationCount > 0 && setExpandViolations(v => !v)}
+                    style={{ backgroundColor: 'var(--bg-hover)', borderRadius: '8px', padding: '14px', cursor: u.violationCount > 0 ? 'pointer' : 'default', border: u.violationCount > 0 ? '1px solid #f59e0b44' : '1px solid transparent' }}
+                >
+                  <div style={{ color: 'var(--text-dark)', fontSize: '11px', marginBottom: '4px', textTransform: 'uppercase', letterSpacing: '1px' }}>
+                    Violazioni {u.violationCount > 0 && <span style={{ color: '#f59e0b' }}>{expandViolations ? '▲' : '▼'}</span>}
+                  </div>
+                  <div style={{ color: u.violationCount > 0 ? '#f59e0b' : 'var(--text-muted)', fontWeight: '700', fontSize: '18px' }}>{u.violationCount}</div>
                 </div>
-            ))}
-          </div>
-
-          {/* Dettaglio violazioni — espandibile cliccando la card */}
-          {expandViolations && (
-              <div style={{ marginBottom: '24px', gridColumn: '1 / -1' }}>
-                <div style={{ color: 'var(--text-muted)', fontSize: '12px', fontWeight: '600', textTransform: 'uppercase', letterSpacing: '1px', marginBottom: '12px' }}>
-                  Dettaglio violazioni
-                </div>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                  {!u.violations?.length && (
-                      <div style={{ color: 'var(--text-dark)', fontSize: '13px', padding: '8px 0' }}>Nessun dettaglio disponibile.</div>
-                  )}
-                  {u.violations?.map((v, i) => (
-                      <div key={i} style={{ backgroundColor: 'var(--bg-hover)', borderLeft: '3px solid #f59e0b', borderRadius: '6px', padding: '12px 14px' }}>
-                        <div style={{ color: '#f59e0b', fontSize: '11px', fontWeight: '700', marginBottom: '4px', textTransform: 'uppercase' }}>{v.category}</div>
-                        {v.reviewText && v.reviewText !== '—' && (
-                            <div style={{ color: 'var(--text-muted)', fontSize: '13px', fontStyle: 'italic', marginBottom: '6px' }}>"{v.reviewText}"</div>
-                        )}
-                        {v.reasonText && v.reasonText !== '—' && (
-                            <div style={{ color: 'var(--text-dark)', fontSize: '12px', marginBottom: '4px' }}>
-                              <span style={{ color: '#555' }}>Motivo segnalazione: </span>{v.reasonText}
-                            </div>
-                        )}
-                        <div style={{ color: '#555', fontSize: '11px' }}>{v.date ? new Date(v.date).toLocaleDateString('it-IT') : ''}</div>
-                      </div>
-                  ))}
-                </div>
+                {[
+                  { label: 'Recensioni', value: u.reviewCount ?? '—', color: 'var(--text-muted)' },
+                  { label: 'Segnalazioni ricevute', value: u.reportCount ?? '—', color: 'var(--text-muted)' },
+                  { label: 'Membro dal', value: u.createdAt ? new Date(u.createdAt).toLocaleDateString('it-IT') : '—', color: 'var(--text-muted)' },
+                ].map(s => (
+                    <div key={s.label} style={{ backgroundColor: 'var(--bg-hover)', borderRadius: '8px', padding: '14px' }}>
+                      <div style={{ color: 'var(--text-dark)', fontSize: '11px', marginBottom: '4px', textTransform: 'uppercase', letterSpacing: '1px' }}>{s.label}</div>
+                      <div style={{ color: s.color, fontWeight: '700', fontSize: '18px' }}>{s.value}</div>
+                    </div>
+                ))}
               </div>
-          )}
 
-          <Link to={`/profile/${u.username}`} target="_blank">
-            <button style={{ width: '100%', padding: '10px', backgroundColor: 'transparent', border: '1px solid #333', borderRadius: '8px', color: 'var(--text-muted)', fontSize: '14px', marginBottom: '12px', cursor: 'pointer' }}>
-              👤 Vedi profilo pubblico
-            </button>
-          </Link>
+              {/* Dettaglio violazioni — espandibile cliccando la card */}
+              {expandViolations && (
+                  <div style={{ marginBottom: '24px', gridColumn: '1 / -1' }}>
+                    <div style={{ color: 'var(--text-muted)', fontSize: '12px', fontWeight: '600', textTransform: 'uppercase', letterSpacing: '1px', marginBottom: '12px' }}>
+                      Dettaglio violazioni
+                    </div>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                      {!u.violations?.length && (
+                          <div style={{ color: 'var(--text-dark)', fontSize: '13px', padding: '8px 0' }}>Nessun dettaglio disponibile.</div>
+                      )}
+                      {u.violations?.map((v, i) => (
+                          <div key={i} style={{ backgroundColor: 'var(--bg-hover)', borderLeft: '3px solid #f59e0b', borderRadius: '6px', padding: '12px 14px' }}>
+                            <div style={{ color: '#f59e0b', fontSize: '11px', fontWeight: '700', marginBottom: '4px', textTransform: 'uppercase' }}>{v.category}</div>
+                            {v.reviewText && v.reviewText !== '—' && (
+                                <div style={{ color: 'var(--text-muted)', fontSize: '13px', fontStyle: 'italic', marginBottom: '6px' }}>"{v.reviewText}"</div>
+                            )}
+                            {v.reasonText && v.reasonText !== '—' && (
+                                <div style={{ color: 'var(--text-dark)', fontSize: '12px', marginBottom: '4px' }}>
+                                  <span style={{ color: '#555' }}>Motivo segnalazione: </span>{v.reasonText}
+                                </div>
+                            )}
+                            <div style={{ color: '#555', fontSize: '11px' }}>{v.date ? new Date(v.date).toLocaleDateString('it-IT') : ''}</div>
+                          </div>
+                      ))}
+                    </div>
+                  </div>
+              )}
 
-          {/* Sospensione disponibile solo dalla tabella (richiede motivo) — qui solo riabilita */}
-          {u.status === 'SUSPENDED' && (
-              <button onClick={() => { onReinstate(u.id); onClose() }} style={{ width: '100%', padding: '12px', backgroundColor: 'transparent', border: '1px solid #f59e0b', borderRadius: '8px', color: '#f59e0b', fontSize: '14px', fontWeight: '600', cursor: 'pointer' }}>
-                Riabilita utente
-              </button>
+              <Link to={`/profile/${u.username}`} target="_blank">
+                <button style={{ width: '100%', padding: '10px', backgroundColor: 'transparent', border: '1px solid #333', borderRadius: '8px', color: 'var(--text-muted)', fontSize: '14px', marginBottom: '12px', cursor: 'pointer' }}>
+                  👤 Vedi profilo pubblico
+                </button>
+              </Link>
+
+              {/* Sospensione disponibile solo dalla tabella (richiede motivo) — qui solo riabilita */}
+              {u.status === 'SUSPENDED' && (
+                  <button onClick={() => { onReinstate(u.id); onClose() }} style={{ width: '100%', padding: '12px', backgroundColor: 'transparent', border: '1px solid #f59e0b', borderRadius: '8px', color: '#f59e0b', fontSize: '14px', fontWeight: '600', cursor: 'pointer' }}>
+                    Riabilita utente
+                  </button>
+              )}
+            </>
           )}
         </div>
       </>
@@ -170,6 +183,10 @@ function AdminPage() {
 
   // Modal sospensione manuale dalla tabella
   const [suspendTarget, setSuspendTarget] = useState(null) // { id, username }
+
+  // Fix (dashboard admin): motivo scelto dall'admin per gruppo, quando i
+  // pending hanno categorie diverse — { [groupKey]: 'SPAM' }
+  const [chosenReasonByGroup, setChosenReasonByGroup] = useState({})
 
   const [reports, setReports] = useState([])
   const [reportsLoading, setReportsLoading] = useState(false)
@@ -273,11 +290,15 @@ function AdminPage() {
     return Array.from(map.values())
   }, [reports])
 
-  // Approva/rifiuta in blocco tutte le segnalazioni pendenti di una recensione
-  const handleReportGroup = async (group, action) => {
+  // Approva/rifiuta in blocco tutte le segnalazioni pendenti di una recensione.
+  // Fix (dashboard admin): quando i pending del gruppo hanno motivi diversi
+  // (es. SPAM e INAPPROPRIATE_CONTENT), finalReasonCategory è quello scelto
+  // dall'admin tra quelli effettivamente usati — normalizza tutti i report
+  // del gruppo sullo stesso motivo invece di lasciarne "vincere" uno a caso.
+  const handleReportGroup = async (group, action, finalReasonCategory) => {
     const pendingIds = group.filter(r => r.status === 'PENDING').map(r => r.id)
     try {
-      await Promise.all(pendingIds.map(id => api.put(`/reports/${id}`, { action })))
+      await Promise.all(pendingIds.map(id => api.put(`/reports/${id}`, { action, finalReasonCategory })))
       loadReports(); loadStats()
     } catch (err) { toast.show(err.response?.data?.error || 'Errore') }
   }
@@ -315,7 +336,13 @@ function AdminPage() {
                 {[
                   { label: 'Utenti totali', value: stats.totalUsers, icon: '👥', color: '#3b82f6' },
                   { label: 'Segnalazioni in attesa', value: stats.pendingReports, icon: '🚩', color: stats.pendingReports > 0 ? '#f59e0b' : '#22c55e' },
-                  { label: 'Pagina', value: `${usersPage + 1} / ${usersTotalPages}`, icon: '📄', color: 'var(--text-muted)' },
+                  /* Fix (dashboard admin): la terza card mostrava sempre "Pagina X/Y"
+                     riferito alla paginazione utenti, anche nel tab Segnalazioni —
+                     dove non esiste paginazione (lista caricata per intero) e quel
+                     numero era quindi fuorviante. Ora è contestuale al tab attivo. */
+                  tab === 'users'
+                    ? { label: 'Pagina', value: `${usersPage + 1} / ${usersTotalPages}`, icon: '📄', color: 'var(--text-muted)' }
+                    : { label: 'Segnalazioni visualizzate', value: reports.length, icon: '📋', color: 'var(--text-muted)' },
                 ].map(s => (
                     <div key={s.label} style={{ backgroundColor: 'var(--bg-nav)', border: '1px solid #1a1a1a', borderRadius: '10px', padding: '20px' }}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '8px' }}>
@@ -375,8 +402,16 @@ function AdminPage() {
                                 onMouseLeave={e => e.currentTarget.style.backgroundColor = 'transparent'}
                             >
                               <td style={{ padding: '14px 16px' }}>
-                                <button onClick={() => openUserDrawer(u)} style={{ backgroundColor: 'transparent', border: 'none', color: 'var(--text)', fontWeight: '600', fontSize: '14px', cursor: 'pointer', padding: 0, textAlign: 'left' }}>
+                                <button onClick={() => openUserDrawer(u)} style={{ backgroundColor: 'transparent', border: 'none', color: 'var(--text)', fontWeight: '600', fontSize: '14px', cursor: 'pointer', padding: 0, textAlign: 'left', display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
                                   {u.username}
+                                  {/* Fix (dashboard admin, notato durante il fix sospensioni): senza
+                                      etichetta il "—" nella colonna Azioni per gli Admin sembra un bug
+                                      invece di una scelta voluta — un piccolo badge chiarisce subito perché */}
+                                  {u.role === 'ADMIN' && (
+                                      <span style={{ padding: '2px 8px', borderRadius: '10px', fontSize: '10px', fontWeight: '700', backgroundColor: 'var(--accent-subtle)', color: 'var(--accent)', border: '1px solid #e5091444' }}>
+                                        🛡️ ADMIN
+                                      </span>
+                                  )}
                                 </button>
                               </td>
                               <td style={{ padding: '14px 16px' }}>
@@ -396,21 +431,30 @@ function AdminPage() {
                           </span>
                               </td>
                               <td style={{ padding: '14px 16px' }}>
-                                {u.status === 'ACTIVE' && (
-                                    // Sospensione dalla tabella → richiede motivo
-                                    <button onClick={() => setSuspendTarget({ id: u.id, username: u.username })}
-                                            style={{ padding: '5px 14px', backgroundColor: 'transparent', border: '1px solid #e50914', borderRadius: '6px', color: 'var(--accent)', fontSize: '12px', fontWeight: '600', cursor: 'pointer' }}>
-                                      Sospendi
-                                    </button>
-                                )}
-                                {u.status === 'SUSPENDED' && (
-                                    <button onClick={() => handleReinstate(u.id)}
-                                            style={{ padding: '5px 14px', backgroundColor: 'transparent', border: '1px solid #f59e0b', borderRadius: '6px', color: '#f59e0b', fontSize: '12px', fontWeight: '600', cursor: 'pointer' }}>
-                                      Riabilita
-                                    </button>
-                                )}
-                                {u.status === 'PERMANENTLY_SUSPENDED' && (
+                                {/* Fix (dashboard admin): un Admin non può sospendere né sé
+                                    stesso né altri Admin — per le righe Admin non ha senso
+                                    mostrare nessuna azione di moderazione */}
+                                {u.role === 'ADMIN' ? (
                                     <span style={{ color: 'var(--border-soft)', fontSize: '13px' }}>—</span>
+                                ) : (
+                                    <>
+                                      {u.status === 'ACTIVE' && (
+                                          // Sospensione dalla tabella → richiede motivo
+                                          <button onClick={() => setSuspendTarget({ id: u.id, username: u.username })}
+                                                  style={{ padding: '5px 14px', backgroundColor: 'transparent', border: '1px solid #e50914', borderRadius: '6px', color: 'var(--accent)', fontSize: '12px', fontWeight: '600', cursor: 'pointer' }}>
+                                            Sospendi
+                                          </button>
+                                      )}
+                                      {u.status === 'SUSPENDED' && (
+                                          <button onClick={() => handleReinstate(u.id)}
+                                                  style={{ padding: '5px 14px', backgroundColor: 'transparent', border: '1px solid #f59e0b', borderRadius: '6px', color: '#f59e0b', fontSize: '12px', fontWeight: '600', cursor: 'pointer' }}>
+                                            Riabilita
+                                          </button>
+                                      )}
+                                      {u.status === 'PERMANENTLY_SUSPENDED' && (
+                                          <span style={{ color: 'var(--border-soft)', fontSize: '13px' }}>—</span>
+                                      )}
+                                    </>
                                 )}
                               </td>
                             </tr>
@@ -473,6 +517,12 @@ function AdminPage() {
                         const contentText = isComment ? first.commentText : first.reviewText
                         const expanded = expandedReport === groupKey
                         const pendingCount = group.filter(r => r.status === 'PENDING').length
+                        // Fix (dashboard admin): motivi diversi tra i pending dello stesso
+                        // bersaglio — l'admin deve scegliere quale è quello valido, solo
+                        // tra quelli effettivamente usati dagli utenti nelle segnalazioni
+                        const pendingReasons = [...new Set(group.filter(r => r.status === 'PENDING').map(r => r.reasonCategory))]
+                        const needsReasonChoice = pendingReasons.length > 1
+                        const chosenReason = chosenReasonByGroup[groupKey] || pendingReasons[0]
                         return (
                             <div key={groupKey} style={{ backgroundColor: 'var(--bg-nav)', border: '1px solid #1a1a1a', borderRadius: '12px', overflow: 'hidden' }}>
 
@@ -521,15 +571,24 @@ function AdminPage() {
                                         con lo scroll automatico su MovieDetailPage; adminRef=1 fa comparire
                                         lì un bottone "torna alla dashboard" che usa la history (back), così
                                         filtro/tab/gruppo aperto/scroll di questa pagina restano intatti */}
+                                    {/* Fix (dashboard admin): se la segnalazione è stata approvata,
+                                        il contenuto è stato rimosso e il link non porterebbe più a
+                                        nulla — mostriamo una nota invece del collegamento morto */}
                                     {first.tmdbId && (
-                                        <Link
-                                            to={isComment
-                                                ? `/movie/${first.tmdbId}?type=${first.contentType}&highlightComment=${first.reviewCommentId}&parentReview=${first.parentReviewId}&adminRef=1`
-                                                : `/movie/${first.tmdbId}?type=${first.contentType}&highlightReview=${first.reviewId}&adminRef=1`}
-                                            style={{ display: 'inline-block', marginBottom: '16px', fontSize: '13px', color: '#3b82f6' }}
-                                        >
-                                          👁️ Vedi nel contesto →
-                                        </Link>
+                                        first.targetRemoved ? (
+                                            <div style={{ marginBottom: '16px', fontSize: '13px', color: 'var(--text-dark)' }}>
+                                              🚫 Contenuto rimosso — non più visibile nel contesto
+                                            </div>
+                                        ) : (
+                                            <Link
+                                                to={isComment
+                                                    ? `/movie/${first.tmdbId}?type=${first.contentType}&highlightComment=${first.reviewCommentId}&parentReview=${first.parentReviewId}&adminRef=1`
+                                                    : `/movie/${first.tmdbId}?type=${first.contentType}&highlightReview=${first.reviewId}&adminRef=1`}
+                                                style={{ display: 'inline-block', marginBottom: '16px', fontSize: '13px', color: '#3b82f6' }}
+                                            >
+                                              👁️ Vedi nel contesto →
+                                            </Link>
+                                        )
                                     )}
 
                                     {/* Elenco delle singole segnalazioni ricevute su questo bersaglio */}
@@ -556,16 +615,40 @@ function AdminPage() {
                                     </div>
 
                                     {pendingCount > 0 && (
-                                        <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
-                                          <button onClick={() => handleReportGroup(group, 'APPROVED')} style={{ padding: '9px 20px', backgroundColor: 'var(--accent)', border: 'none', borderRadius: '6px', color: 'var(--text)', fontSize: '13px', fontWeight: '600', cursor: 'pointer' }}>
-                                            ✅ Approva {pendingCount > 1 ? `tutte (${pendingCount})` : ''} — rimuovi recensione
-                                          </button>
-                                          <button onClick={() => handleReportGroup(group, 'REJECTED')} style={{ padding: '9px 20px', backgroundColor: 'transparent', border: '1px solid #333', borderRadius: '6px', color: 'var(--text-muted)', fontSize: '13px', cursor: 'pointer' }}>
-                                            ❌ Rifiuta {pendingCount > 1 ? `tutte (${pendingCount})` : ''}
-                                          </button>
+                                        <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                                          {/* Fix (dashboard admin): motivi diversi tra le segnalazioni
+                                              pendenti dello stesso bersaglio — l'admin sceglie qual è
+                                              quello valido, dalla lista di quelli usati dagli utenti,
+                                              invece che uno venga scelto a caso in automatico */}
+                                          {needsReasonChoice && (
+                                              <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
+                                                <span style={{ color: 'var(--text-muted)', fontSize: '13px' }}>Motivo valido:</span>
+                                                <select
+                                                    value={chosenReason}
+                                                    onChange={e => setChosenReasonByGroup(prev => ({ ...prev, [groupKey]: e.target.value }))}
+                                                    style={{ padding: '6px 10px', backgroundColor: 'var(--bg-hover)', border: '1px solid #333', borderRadius: '6px', color: 'var(--text)', fontSize: '13px' }}
+                                                >
+                                                  {pendingReasons.map(cat => <option key={cat} value={cat}>{cat}</option>)}
+                                                </select>
+                                              </div>
+                                          )}
+                                          <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
+                                            <button onClick={() => handleReportGroup(group, 'APPROVED', needsReasonChoice ? chosenReason : undefined)} style={{ padding: '9px 20px', backgroundColor: 'var(--accent)', border: 'none', borderRadius: '6px', color: 'var(--text)', fontSize: '13px', fontWeight: '600', cursor: 'pointer' }}>
+                                              ✅ Approva {pendingCount > 1 ? `tutte (${pendingCount})` : ''} — rimuovi recensione
+                                            </button>
+                                            <button onClick={() => handleReportGroup(group, 'REJECTED')} style={{ padding: '9px 20px', backgroundColor: 'transparent', border: '1px solid #333', borderRadius: '6px', color: 'var(--text-muted)', fontSize: '13px', cursor: 'pointer' }}>
+                                              ❌ Rifiuta {pendingCount > 1 ? `tutte (${pendingCount})` : ''}
+                                            </button>
+                                          </div>
                                         </div>
                                     )}
-                                    {pendingCount === 0 && (
+                                    {/* Fix (dashboard admin): il filtro backend ritorna solo
+                                        segnalazioni dello status selezionato, quindi pendingCount
+                                        è sempre 0 quando si è nei filtri Approvate/Rifiutate — il
+                                        messaggio compariva su OGNI card in quei filtri, ripetendo
+                                        l'ovvio. Ha senso solo nel filtro Pendenti (caso limite: un
+                                        gruppo appena risolto prima del refresh della lista). */}
+                                    {pendingCount === 0 && reportFilter === 'PENDING' && (
                                         <div style={{ color: 'var(--text-dark)', fontSize: '13px' }}>
                                           Tutte le segnalazioni di questa recensione sono state gestite.
                                         </div>

@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { useSearchParams, Link } from 'react-router-dom'
 import Navbar from '../components/Navbar'
 import api from '../services/api'
+import useAuthStore from '../store/authStore'
 
 const FILTERS = [
   { label: 'Tutti', value: 'all' },
@@ -26,9 +27,22 @@ function SearchPage() {
   const [movieHasMore, setMovieHasMore] = useState(false)
   const [tvHasMore, setTvHasMore] = useState(false)
   const [totalResults, setTotalResults] = useState(0)
+  const { token } = useAuthStore()
+
+  // Fix (suggerimento contestuale AI negli stati vuoti, approvato): frase
+  // breve al posto del solito messaggio piatto — solo per utenti loggati
+  // (l'endpoint richiede autenticazione), fallback silenzioso altrimenti
+  const [emptyTip, setEmptyTip] = useState('')
 
   const q = searchParams.get('q') || ''
   const hasMore = movieHasMore || tvHasMore
+
+  useEffect(() => {
+    if (!token || loading || !q || results.length > 0) { setEmptyTip(''); return }
+    api.get('/ai/empty-state-tip', { params: { context: 'SEARCH_NO_RESULTS', query: q } })
+      .then(r => setEmptyTip(r.data?.tip || ''))
+      .catch(() => setEmptyTip(''))
+  }, [token, loading, q, results.length])
 
   useEffect(() => {
     if (!q.trim()) return
@@ -155,7 +169,12 @@ function SearchPage() {
         {loading && <div style={{ textAlign: 'center', color: 'var(--text-muted)', marginTop: '60px' }}>Ricerca in corso...</div>}
         {!loading && q && results.length === 0 && (
           <div style={{ textAlign: 'center', color: 'var(--text-dark)', marginTop: '60px' }}>
-            Nessun risultato per "<span style={{ color: 'var(--text)' }}>{q}</span>"
+            <p>Nessun risultato per "<span style={{ color: 'var(--text)' }}>{q}</span>"</p>
+            {emptyTip && (
+              <p style={{ color: 'var(--accent)', fontSize: '13px', marginTop: '10px' }}>
+                ✨ {emptyTip}
+              </p>
+            )}
           </div>
         )}
 

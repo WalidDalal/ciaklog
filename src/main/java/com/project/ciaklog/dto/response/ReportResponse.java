@@ -44,4 +44,10 @@ public class ReportResponse {
     private LocalDateTime createdAt;
     private LocalDateTime resolvedAt;
     private String resolvedByUsername;
+
+    // Fix (dashboard admin): quando la segnalazione è stata approvata, il
+    // contenuto è stato rimosso e "Vedi nel contesto" punta a qualcosa che
+    // non esiste più — il frontend usa questo flag per nascondere il link
+    // invece di mostrarlo comunque e farlo fallire in modo silenzioso
+    private boolean targetRemoved;
 }

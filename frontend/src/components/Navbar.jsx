@@ -143,14 +143,20 @@ function Navbar() {
                     boxShadow: 'var(--shadow-lg)',
                     zIndex: 200,
                   }}>
-                    <Link to={`/profile/${user?.username}`} onClick={() => setShowDropdown(false)}>
-                      <div style={{ padding: '12px 16px', color: 'var(--text)', fontSize: '14px', borderBottom: '1px solid #222', cursor: 'pointer' }}
-                        onMouseEnter={e => e.currentTarget.style.backgroundColor = 'var(--bg-hover)'}
-                        onMouseLeave={e => e.currentTarget.style.backgroundColor = 'transparent'}
-                      >
-                        👤 Il mio profilo
-                      </div>
-                    </Link>
+                    {/* Fix (Home Admin): il profilo pubblico (recensioni, wrapped, ecc.)
+                        non ha senso per l'Admin, escluso da classifica e community — dava
+                        anche contrasto/wrap nel dropdown mostrando "recensioni 0". Resta
+                        solo Impostazioni, da cui può comunque modificare username e bio */}
+                    {user?.role !== 'ADMIN' && (
+                      <Link to={`/profile/${user?.username}`} onClick={() => setShowDropdown(false)}>
+                        <div style={{ padding: '12px 16px', color: 'var(--text)', fontSize: '14px', borderBottom: '1px solid #222', cursor: 'pointer' }}
+                          onMouseEnter={e => e.currentTarget.style.backgroundColor = 'var(--bg-hover)'}
+                          onMouseLeave={e => e.currentTarget.style.backgroundColor = 'transparent'}
+                        >
+                          👤 Il mio profilo
+                        </div>
+                      </Link>
+                    )}
                     <Link to="/settings" onClick={() => setShowDropdown(false)}>
                       <div style={{ padding: '12px 16px', color: 'var(--text)', fontSize: '14px', borderBottom: '1px solid #222', cursor: 'pointer' }}
                         onMouseEnter={e => e.currentTarget.style.backgroundColor = 'var(--bg-hover)'}

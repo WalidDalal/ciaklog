@@ -21,11 +21,15 @@ public class ReviewCommentController {
 
     private final ReviewCommentService reviewCommentService;
 
+    // Fix (auto-nascondimento autore): stesso principio delle recensioni —
+    // l'autore deve continuare a vedere le proprie risposte nascoste
     @GetMapping("/api/reviews/{reviewId}/comments")
     public ResponseEntity<Page<ReviewCommentResponse>> getCommentsForReview(
+            @AuthenticationPrincipal UserDetails userDetails,
             @PathVariable UUID reviewId,
             Pageable pageable) {
-        return ResponseEntity.ok(reviewCommentService.getCommentsForReview(reviewId, pageable));
+        String viewerUsername = userDetails != null ? userDetails.getUsername() : null;
+        return ResponseEntity.ok(reviewCommentService.getCommentsForReview(reviewId, viewerUsername, pageable));
     }
 
     @PostMapping("/api/reviews/{reviewId}/comments")

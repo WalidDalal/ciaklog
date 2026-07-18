@@ -107,11 +107,11 @@ public class ReviewCommentServiceImpl implements ReviewCommentService {
     }
 
     @Override
-    public Page<ReviewCommentResponse> getCommentsForReview(UUID reviewId, Pageable pageable) {
+    public Page<ReviewCommentResponse> getCommentsForReview(UUID reviewId, String viewerUsername, Pageable pageable) {
         Review review = reviewRepository.findById(reviewId)
                 .orElseThrow(() -> new ResourceNotFoundException("Recensione non trovata"));
 
-        return reviewCommentRepository.findByReviewAndStatus(review, ReviewStatus.VISIBLE, pageable)
+        return reviewCommentRepository.findByReviewAndStatus(review, ReviewStatus.VISIBLE, viewerUsername, pageable)
                 .map(this::toDTO);
     }
 

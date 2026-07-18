@@ -11,7 +11,7 @@ import java.util.UUID;
 public interface ReportService {
     ReportResponse createReport(String username, ReportRequest dto);
     Page<ReportResponse> getReports(ReportStatus status, Pageable pageable);
-    ReportResponse resolveReport(UUID reportId, ReportStatus newStatus, String adminUsername);
+    ReportResponse resolveReport(UUID reportId, ReportStatus newStatus, String adminUsername, com.project.ciaklog.entity.ReportReasonCategory finalReasonCategory);
 
     // Fix: "Nascondi direttamente" — l'admin rimuove una recensione/risposta senza
     // aspettare una segnalazione. Motivo SEMPRE obbligatorio (validato nel service),

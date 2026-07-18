@@ -54,7 +54,7 @@ public class ReportController {
             @AuthenticationPrincipal UserDetails userDetails,
             @PathVariable UUID id,
             @Valid @RequestBody ReportActionRequest dto) {
-        return ResponseEntity.ok(reportService.resolveReport(id, dto.getAction(), userDetails.getUsername()));
+        return ResponseEntity.ok(reportService.resolveReport(id, dto.getAction(), userDetails.getUsername(), dto.getFinalReasonCategory()));
     }
 
     // Solo Admin — "Nascondi direttamente" senza aspettare una segnalazione.
