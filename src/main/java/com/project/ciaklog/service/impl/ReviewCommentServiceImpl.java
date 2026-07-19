@@ -69,6 +69,19 @@ public class ReviewCommentServiceImpl implements ReviewCommentService {
             throw new ForbiddenException("Non autorizzato a modificare questa risposta");
         }
 
+        // Fix (Logica Moderazione — trovato in revisione): si poteva modificare
+        // il testo di una risposta anche se già REMOVED/HIDDEN, o se la sua
+        // recensione madre non era più VISIBLE (rimossa/nascosta) — permetterlo
+        // durante una moderazione attiva equivale ad alterare le prove dopo la
+        // segnalazione (per questo esiste lo snapshot reportedText lato admin,
+        // ma è più pulito non permettere proprio la modifica in questi casi)
+        if (comment.getStatus() != ReviewStatus.VISIBLE) {
+            throw new BusinessRuleException("Non puoi modificare una risposta rimossa o nascosta per moderazione");
+        }
+        if (comment.getReview().getStatus() != ReviewStatus.VISIBLE) {
+            throw new BusinessRuleException("Non puoi modificare una risposta la cui recensione non è più visibile");
+        }
+
         comment.setText(dto.getText());
 
         return toDTO(reviewCommentRepository.save(comment));
@@ -107,11 +120,11 @@ public class ReviewCommentServiceImpl implements ReviewCommentService {
     }
 
     @Override
-    public Page<ReviewCommentResponse> getCommentsForReview(UUID reviewId, String viewerUsername, Pageable pageable) {
+    public Page<ReviewCommentResponse> getCommentsForReview(UUID reviewId, String viewerUsername, boolean isAdmin, Pageable pageable) {
         Review review = reviewRepository.findById(reviewId)
                 .orElseThrow(() -> new ResourceNotFoundException("Recensione non trovata"));
 
-        return reviewCommentRepository.findByReviewAndStatus(review, ReviewStatus.VISIBLE, viewerUsername, pageable)
+        return reviewCommentRepository.findByReviewAndStatus(review, ReviewStatus.VISIBLE, viewerUsername, isAdmin, pageable)
                 .map(this::toDTO);
     }
 

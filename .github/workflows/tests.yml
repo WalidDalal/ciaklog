@@ -1,0 +1,24 @@
+name: Tests
+
+on:
+  push:
+    branches: [ "dev/walid", "develop", "main" ]
+  pull_request:
+    branches: [ "develop", "main" ]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Scarica il codice del repository
+        uses: actions/checkout@v4
+
+      - name: Installa Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+
+      - name: Lancia i test con Maven
+        run: mvn -B test

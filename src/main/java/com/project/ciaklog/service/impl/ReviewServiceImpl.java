@@ -129,21 +129,21 @@ public class ReviewServiceImpl implements ReviewService {
     }
 
     @Override
-    public Page<ReviewResponse> getReviewsForMedia(Long tmdbId, ContentType contentType, String viewerUsername, Pageable pageable) {
+    public Page<ReviewResponse> getReviewsForMedia(Long tmdbId, ContentType contentType, String viewerUsername, boolean isAdmin, Pageable pageable) {
         return reviewRepository
-                .findByTmdbIdAndContentTypeAndStatus(tmdbId, contentType, ReviewStatus.VISIBLE, viewerUsername, pageable)
+                .findByTmdbIdAndContentTypeAndStatus(tmdbId, contentType, ReviewStatus.VISIBLE, viewerUsername, isAdmin, pageable)
                 .map(r -> toDTO(r, r.getUser()));
     }
 
     @Override
-    public Page<ReviewResponse> getUserReviews(String username, Pageable pageable) {
+    public Page<ReviewResponse> getUserReviews(String username, String viewerUsername, boolean isAdmin, Pageable pageable) {
         User user = getUser(username);
         // Caricare tutte le WatchEntry in una sola query per evitare N+1
         java.util.Map<String, WatchEntry> entryMap = new java.util.HashMap<>();
         watchEntryRepository.findAllByUser(user).forEach(e ->
-            entryMap.put(e.getTmdbId() + "_" + e.getContentType(), e)
+                entryMap.put(e.getTmdbId() + "_" + e.getContentType(), e)
         );
-        return reviewRepository.findByUser(user, pageable)
+        return reviewRepository.findByUser(user, ReviewStatus.VISIBLE, viewerUsername, isAdmin, pageable)
                 .map(r -> toDTOWithMap(r, entryMap));
     }
 

@@ -28,26 +28,50 @@ public interface ReviewRepository extends JpaRepository<Review, UUID> {
     // nessun autore, quindi i nascosti restano nascosti per loro.
     // ⚠️ Questo filtro era già stato aggiunto una volta e si è perso in un
     // giro di modifiche successive — occhio a non perderlo di nuovo
+    //
+    // Fix (dashboard admin — commenti/recensioni nascosti): un Admin deve
+    // vedere anche le recensioni nascoste dall'autore E quelle con status
+    // HIDDEN (2+ segnalazioni, in attesa di decisione), altrimenti "Vedi nel
+    // contesto" dalla dashboard porterebbe a una pagina dove la recensione
+    // segnalata semplicemente non compare
     @Query("""
             SELECT r FROM Review r
             JOIN FETCH r.user
-            WHERE r.tmdbId = :tmdbId AND r.contentType = :contentType AND r.status = :status
-              AND (r.hiddenByAuthor = false OR r.user.username = :viewerUsername)
+            WHERE r.tmdbId = :tmdbId AND r.contentType = :contentType
+              AND (r.status = :status OR (:isAdmin = true AND r.status = com.project.ciaklog.entity.ReviewStatus.HIDDEN))
+              AND (r.hiddenByAuthor = false OR r.user.username = :viewerUsername OR :isAdmin = true)
             """)
     Page<Review> findByTmdbIdAndContentTypeAndStatus(
             @Param("tmdbId") Long tmdbId,
             @Param("contentType") ContentType contentType,
             @Param("status") ReviewStatus status,
             @Param("viewerUsername") String viewerUsername,
+            @Param("isAdmin") boolean isAdmin,
             Pageable pageable);
 
     // JOIN FETCH user — evita LazyInitializationException in toDTO()
+    // Fix (Profilo pubblico — trovato in revisione, bug serio): questa query
+    // non aveva NESSUN filtro su status o hiddenByAuthor, a differenza della
+    // query gemella per la pagina film (findByTmdbIdAndContentTypeAndStatus),
+    // che quel filtro ce l'ha da tempo (con un commento che avvisa "si è già
+    // perso una volta, occhio a non perderlo di nuovo" — successo di nuovo,
+    // ma su questa query invece). Risultato: recensioni RIMOSSE per violazione
+    // e nascoste dall'autore erano visibili nel profilo pubblico a chiunque,
+    // incluso un visitatore anonimo. Stesso filtro allineato qui, incluso
+    // il caso admin (vede anche HIDDEN e nascoste dall'autore).
     @Query("""
             SELECT r FROM Review r
             JOIN FETCH r.user
             WHERE r.user = :user
+              AND (r.status = :status OR (:isAdmin = true AND r.status = com.project.ciaklog.entity.ReviewStatus.HIDDEN))
+              AND (r.hiddenByAuthor = false OR r.user.username = :viewerUsername OR :isAdmin = true)
             """)
-    Page<Review> findByUser(@Param("user") User user, Pageable pageable);
+    Page<Review> findByUser(
+            @Param("user") User user,
+            @Param("status") ReviewStatus status,
+            @Param("viewerUsername") String viewerUsername,
+            @Param("isAdmin") boolean isAdmin,
+            Pageable pageable);
 
     // Tutte le review di un utente senza filtro status — usata dall'admin
     List<Review> findAllByUser(User user);

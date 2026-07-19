@@ -137,7 +137,7 @@ function SearchPage() {
             placeholder="Cerca un film o una serie..."
             style={{
               flex: 1, padding: '14px 20px', backgroundColor: 'var(--bg-hover)',
-              border: '1px solid #333', borderRadius: '8px', color: 'var(--text)', fontSize: '16px',
+              border: '1px solid var(--border-soft)', borderRadius: '8px', color: 'var(--text)', fontSize: '16px',
             }}
           />
           <button type="submit" style={{
@@ -189,7 +189,7 @@ function SearchPage() {
               {results.map(item => (
                 <Link to={`/movie/${item.tmdbId}?type=${item.contentType || item.mediaType}`} key={`${item.tmdbId}-${item.contentType || item.mediaType}`}>
                   <div
-                    style={{ backgroundColor: 'var(--bg-card)', borderRadius: '8px', overflow: 'hidden', border: '1px solid #222' }}
+                    style={{ backgroundColor: 'var(--bg-card)', borderRadius: '8px', overflow: 'hidden', border: '1px solid var(--border)' }}
                     onMouseEnter={e => e.currentTarget.style.borderColor = 'var(--accent)'}
                     onMouseLeave={e => e.currentTarget.style.borderColor = 'var(--border)'}
                   >
@@ -197,7 +197,7 @@ function SearchPage() {
                       <img src={`https://image.tmdb.org/t/p/w300${item.posterPath}`} alt={item.title}
                         style={{ width: '100%', height: '220px', objectFit: 'cover' }} />
                     ) : (
-                      <div style={{ width: '100%', height: '220px', backgroundColor: 'var(--border)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#555', fontSize: '32px' }}>🎬</div>
+                      <div style={{ width: '100%', height: '220px', backgroundColor: 'var(--border)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text-dark)', fontSize: '32px' }}>🎬</div>
                     )}
                     <div style={{ padding: '12px' }}>
                       <div style={{ color: 'var(--text)', fontWeight: '600', fontSize: '13px', marginBottom: '4px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>

@@ -154,7 +154,7 @@ function ReplyThread({ reviewId, reviewText, reviewOwnerUsername, token, current
       : comments
 
   return (
-    <div style={{ marginTop: '14px', paddingTop: '12px', borderTop: '1px solid #1a1a1a' }}>
+    <div style={{ marginTop: '14px', paddingTop: '12px', borderTop: '1px solid var(--border-soft)' }}>
       <button onClick={toggleExpanded} style={{ background: 'none', border: 'none', color: 'var(--text-dark)', fontSize: '12px', cursor: 'pointer', padding: 0 }}>
         {expanded ? '▲ Nascondi risposte' : `💬 Risposte${loaded ? ` (${visibleCommentsCount})` : ''}`}
       </button>
@@ -205,16 +205,22 @@ function ReplyThread({ reviewId, reviewText, reviewOwnerUsername, token, current
               {editingId === c.id ? (
                 <div>
                   <textarea value={editText} onChange={e => setEditText(e.target.value)} rows={2} maxLength={500}
-                    style={{ width: '100%', padding: '8px 10px', backgroundColor: 'var(--bg-card)', border: '1px solid #333', borderRadius: '6px', color: 'var(--text)', fontSize: '13px', resize: 'none', boxSizing: 'border-box' }} />
+                    style={{ width: '100%', padding: '8px 10px', backgroundColor: 'var(--bg-card)', border: '1px solid var(--border-soft)', borderRadius: '6px', color: 'var(--text)', fontSize: '13px', resize: 'none', boxSizing: 'border-box' }} />
                   <div style={{ display: 'flex', gap: '8px', marginTop: '6px' }}>
                     <button onClick={() => handleEditComment(c.id)} style={{ padding: '4px 12px', backgroundColor: 'var(--accent)', border: 'none', borderRadius: '5px', color: 'var(--text)', fontSize: '12px', cursor: 'pointer' }}>Salva</button>
-                    <button onClick={() => setEditingId(null)} style={{ padding: '4px 12px', backgroundColor: 'transparent', border: '1px solid #333', borderRadius: '5px', color: 'var(--text-muted)', fontSize: '12px', cursor: 'pointer' }}>Annulla</button>
+                    <button onClick={() => setEditingId(null)} style={{ padding: '4px 12px', backgroundColor: 'transparent', border: '1px solid var(--border-soft)', borderRadius: '5px', color: 'var(--text-muted)', fontSize: '12px', cursor: 'pointer' }}>Annulla</button>
                   </div>
                 </div>
               ) : (
                 <>
                   {c.hiddenByAuthor && c.authorUsername === currentUsername && (
                     <p style={{ color: 'var(--text-dark)', fontSize: '11px', fontStyle: 'italic', marginBottom: '4px' }}>🙈 Nascosta — solo tu la vedi</p>
+                  )}
+                  {/* Fix (dashboard admin — commenti nascosti): l'Admin ora riceve anche
+                      le risposte nascoste dagli altri autori (bypass lato query) — qui
+                      lo segnaliamo chiaramente, per non farlo sembrare un contenuto normale */}
+                  {c.hiddenByAuthor && c.authorUsername !== currentUsername && isAdmin && (
+                    <p style={{ color: '#f59e0b', fontSize: '11px', fontStyle: 'italic', marginBottom: '4px' }}>🙈 Nascosta dall'autore — visibile solo a te come Admin</p>
                   )}
                   <p style={{ color: '#c8c8c8', fontSize: '13px', lineHeight: 1.5, margin: 0 }}>{c.text}</p>
                   <ReactionBar
@@ -245,31 +251,31 @@ function ReplyThread({ reviewId, reviewText, reviewOwnerUsername, token, current
                 {showReplyNotesHelper && (
                   <div style={{ backgroundColor: 'var(--bg-hover)', border: '1px solid var(--accent)', borderRadius: '6px', padding: '8px', marginBottom: '8px' }}>
                     <textarea value={replyRawNotes} onChange={e => setReplyRawNotes(e.target.value)} placeholder="Butta giù qualche appunto, l'AI lo sistema..." rows={2} maxLength={500}
-                      style={{ width: '100%', padding: '6px 8px', backgroundColor: 'var(--bg)', border: '1px solid #333', borderRadius: '5px', color: 'var(--text)', fontSize: '12px', resize: 'none', boxSizing: 'border-box', marginBottom: '6px' }} />
+                      style={{ width: '100%', padding: '6px 8px', backgroundColor: 'var(--bg)', border: '1px solid var(--border-soft)', borderRadius: '5px', color: 'var(--text)', fontSize: '12px', resize: 'none', boxSizing: 'border-box', marginBottom: '6px' }} />
                     {replyStructureError && <p style={{ color: '#ff6b6b', fontSize: '11px', marginBottom: '6px' }}>{replyStructureError}</p>}
                     <div style={{ display: 'flex', gap: '6px' }}>
                       <button type="button" disabled={structuringReply || !replyRawNotes.trim()} onClick={handleStructureReply}
-                        style={{ padding: '4px 10px', backgroundColor: structuringReply ? '#666' : 'var(--accent)', border: 'none', borderRadius: '5px', color: 'var(--text)', fontSize: '11px', fontWeight: '600', cursor: structuringReply ? 'default' : 'pointer' }}>
+                        style={{ padding: '4px 10px', backgroundColor: structuringReply ? 'var(--border-soft)' : 'var(--accent)', border: 'none', borderRadius: '5px', color: 'var(--text)', fontSize: '11px', fontWeight: '600', cursor: structuringReply ? 'default' : 'pointer' }}>
                         {structuringReply ? 'Genero...' : 'Genera'}
                       </button>
                       <button type="button" onClick={() => { setShowReplyNotesHelper(false); setReplyRawNotes(''); setReplyStructureError('') }}
-                        style={{ padding: '4px 10px', backgroundColor: 'transparent', border: '1px solid #333', borderRadius: '5px', color: 'var(--text-muted)', fontSize: '11px', cursor: 'pointer' }}>
+                        style={{ padding: '4px 10px', backgroundColor: 'transparent', border: '1px solid var(--border-soft)', borderRadius: '5px', color: 'var(--text-muted)', fontSize: '11px', cursor: 'pointer' }}>
                         Annulla
                       </button>
                     </div>
                   </div>
                 )}
                 <textarea value={text} onChange={e => setText(e.target.value)} placeholder="Scrivi una risposta..." rows={2} maxLength={500}
-                  style={{ width: '100%', padding: '8px 10px', backgroundColor: 'var(--bg-hover)', border: '1px solid #333', borderRadius: '6px', color: 'var(--text)', fontSize: '13px', resize: 'none', boxSizing: 'border-box' }} />
+                  style={{ width: '100%', padding: '8px 10px', backgroundColor: 'var(--bg-hover)', border: '1px solid var(--border-soft)', borderRadius: '6px', color: 'var(--text)', fontSize: '13px', resize: 'none', boxSizing: 'border-box' }} />
                 <div style={{ display: 'flex', gap: '8px', marginTop: '6px' }}>
                   <button onClick={handleAddComment} disabled={submitting || !text.trim()} style={{ padding: '5px 14px', backgroundColor: 'var(--accent)', border: 'none', borderRadius: '5px', color: 'var(--text)', fontSize: '12px', fontWeight: '600', cursor: 'pointer' }}>
                     {submitting ? 'Invio...' : 'Rispondi'}
                   </button>
-                  <button onClick={() => { setShowComposer(false); setText(''); setShowReplyNotesHelper(false); setReplyRawNotes(''); setReplyStructureError('') }} style={{ padding: '5px 14px', backgroundColor: 'transparent', border: '1px solid #333', borderRadius: '5px', color: 'var(--text-muted)', fontSize: '12px', cursor: 'pointer' }}>Annulla</button>
+                  <button onClick={() => { setShowComposer(false); setText(''); setShowReplyNotesHelper(false); setReplyRawNotes(''); setReplyStructureError('') }} style={{ padding: '5px 14px', backgroundColor: 'transparent', border: '1px solid var(--border-soft)', borderRadius: '5px', color: 'var(--text-muted)', fontSize: '12px', cursor: 'pointer' }}>Annulla</button>
                 </div>
               </div>
             ) : (
-              <button onClick={() => setShowComposer(true)} style={{ marginLeft: '16px', alignSelf: 'flex-start', padding: '5px 12px', backgroundColor: 'transparent', border: '1px solid #333', borderRadius: '5px', color: 'var(--text-dark)', fontSize: '12px', cursor: 'pointer' }}>
+              <button onClick={() => setShowComposer(true)} style={{ marginLeft: '16px', alignSelf: 'flex-start', padding: '5px 12px', backgroundColor: 'transparent', border: '1px solid var(--border-soft)', borderRadius: '5px', color: 'var(--text-dark)', fontSize: '12px', cursor: 'pointer' }}>
                 💬 Rispondi
               </button>
             )
@@ -343,7 +349,7 @@ function ReactionBar({ endpoint, token, canReact }) {
               display: 'flex', alignItems: 'center', gap: '4px',
               padding: '3px 9px', borderRadius: '12px', fontSize: '12px',
               backgroundColor: mine ? 'rgba(229,9,20,0.15)' : 'transparent',
-              border: mine ? '1px solid var(--accent)' : '1px solid #2a2a2a',
+              border: mine ? '1px solid var(--accent)' : '1px solid var(--border-soft)',
               color: mine ? 'var(--accent)' : 'var(--text-dark)',
               cursor: canReact ? 'pointer' : 'default',
             }}
@@ -405,7 +411,7 @@ function ReportModal({ reviewId, reviewCommentId, adminMode, onClose, onSuccess 
   return (
     <>
       <div onClick={onClose} style={{ position: 'fixed', inset: 0, backgroundColor: 'var(--bg-modal)', zIndex: 500 }} />
-      <div style={{ position: 'fixed', top: '50%', left: '50%', transform: 'translate(-50%, -50%)', backgroundColor: 'var(--bg-card)', border: '1px solid #333', borderRadius: '16px', padding: '32px', width: '100%', maxWidth: '460px', zIndex: 600 }}>
+      <div style={{ position: 'fixed', top: '50%', left: '50%', transform: 'translate(-50%, -50%)', backgroundColor: 'var(--bg-card)', border: '1px solid var(--border-soft)', borderRadius: '16px', padding: '32px', width: '100%', maxWidth: '460px', zIndex: 600 }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px' }}>
           <h2 style={{ color: 'var(--text)', fontSize: '20px', fontWeight: '700' }}>
             {adminMode ? `🔨 Nascondi ${targetLabel}` : `🚩 Segnala ${targetLabel}`}
@@ -420,7 +426,7 @@ function ReportModal({ reviewId, reviewCommentId, adminMode, onClose, onSuccess 
         <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginBottom: '20px' }}>
           {REPORT_CATEGORIES.map(c => (
             <button key={c.value} onClick={() => setCategory(c.value)} style={{ display: 'flex', alignItems: 'flex-start', gap: '12px', padding: '12px 16px', borderRadius: '8px', textAlign: 'left', border: `1px solid ${category === c.value ? 'var(--accent)' : 'var(--border-soft)'}`, backgroundColor: category === c.value ? 'var(--accent-subtle)' : 'var(--bg-card)', cursor: 'pointer', width: '100%' }}>
-              <div style={{ marginTop: '2px', width: '16px', height: '16px', borderRadius: '50%', border: `2px solid ${category === c.value ? 'var(--accent)' : '#444'}`, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+              <div style={{ marginTop: '2px', width: '16px', height: '16px', borderRadius: '50%', border: `2px solid ${category === c.value ? 'var(--accent)' : 'var(--border-soft)'}`, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
                 {category === c.value && <div style={{ width: '8px', height: '8px', borderRadius: '50%', backgroundColor: 'var(--accent)' }} />}
               </div>
               <div>
@@ -435,15 +441,15 @@ function ReportModal({ reviewId, reviewCommentId, adminMode, onClose, onSuccess 
             {category === 'OTHER' ? 'Descrivi il motivo (obbligatorio)' : 'Dettagli aggiuntivi (opzionale)'}
           </label>
           <textarea value={reasonText} onChange={e => setReasonText(e.target.value)} placeholder="Spiega il problema..." rows={3} maxLength={500}
-            style={{ width: '100%', padding: '10px 14px', backgroundColor: 'var(--bg-hover)', border: '1px solid #333', borderRadius: '8px', color: 'var(--text)', fontSize: '14px', resize: 'none', boxSizing: 'border-box' }} />
-          <div style={{ color: '#555', fontSize: '11px', textAlign: 'right', marginTop: '4px' }}>{reasonText.length}/500</div>
+            style={{ width: '100%', padding: '10px 14px', backgroundColor: 'var(--bg-hover)', border: '1px solid var(--border-soft)', borderRadius: '8px', color: 'var(--text)', fontSize: '14px', resize: 'none', boxSizing: 'border-box' }} />
+          <div style={{ color: 'var(--text-dark)', fontSize: '11px', textAlign: 'right', marginTop: '4px' }}>{reasonText.length}/500</div>
         </div>
         {error && <p style={{ color: '#ff6b6b', fontSize: '13px', marginBottom: '16px' }}>{error}</p>}
         <div style={{ display: 'flex', gap: '10px' }}>
-          <button onClick={handleSubmit} disabled={loading} style={{ flex: 1, padding: '12px', backgroundColor: loading ? '#666' : 'var(--accent)', border: 'none', borderRadius: '8px', color: 'var(--text)', fontSize: '15px', fontWeight: '600', cursor: loading ? 'default' : 'pointer' }}>
+          <button onClick={handleSubmit} disabled={loading} style={{ flex: 1, padding: '12px', backgroundColor: loading ? 'var(--border-soft)' : 'var(--accent)', border: 'none', borderRadius: '8px', color: 'var(--text)', fontSize: '15px', fontWeight: '600', cursor: loading ? 'default' : 'pointer' }}>
             {loading ? 'Invio...' : (adminMode ? 'Nascondi contenuto' : 'Invia segnalazione')}
           </button>
-          <button onClick={onClose} style={{ padding: '12px 20px', backgroundColor: 'transparent', border: '1px solid #333', borderRadius: '8px', color: 'var(--text-muted)', fontSize: '14px', cursor: 'pointer' }}>
+          <button onClick={onClose} style={{ padding: '12px 20px', backgroundColor: 'transparent', border: '1px solid var(--border-soft)', borderRadius: '8px', color: 'var(--text-muted)', fontSize: '14px', cursor: 'pointer' }}>
             Annulla
           </button>
         </div>
@@ -779,10 +785,10 @@ function MovieDetailPage() {
                 onKeyDown={e => e.key === 'Enter' && !askingMovie && handleAskMovie()}
                 placeholder="es. chi è il regista? com'è il ritmo?"
                 maxLength={300}
-                style={{ flex: 1, padding: '10px 12px', backgroundColor: 'var(--bg-hover)', border: '1px solid #333', borderRadius: '8px', color: 'var(--text)', fontSize: '13px' }}
+                style={{ flex: 1, padding: '10px 12px', backgroundColor: 'var(--bg-hover)', border: '1px solid var(--border-soft)', borderRadius: '8px', color: 'var(--text)', fontSize: '13px' }}
               />
               <button onClick={handleAskMovie} disabled={askingMovie || !movieQuestion.trim()} style={{
-                padding: '10px 18px', backgroundColor: askingMovie ? '#666' : 'var(--accent)', border: 'none',
+                padding: '10px 18px', backgroundColor: askingMovie ? 'var(--border-soft)' : 'var(--accent)', border: 'none',
                 borderRadius: '8px', color: 'var(--text)', fontSize: '13px', fontWeight: '600',
                 cursor: askingMovie ? 'default' : 'pointer', whiteSpace: 'nowrap',
               }}>
@@ -827,7 +833,7 @@ function MovieDetailPage() {
       <div style={{ padding: '48px 64px', display: 'flex', gap: '48px', alignItems: 'flex-start', maxWidth: '1100px', margin: '0 auto' }}>
         <div style={{ flexShrink: 0 }}>
           {detail.posterPath
-            ? <img src={`https://image.tmdb.org/t/p/w300${detail.posterPath}`} alt={detail.title} style={{ width: '200px', borderRadius: '12px', border: '1px solid #222' }} />
+            ? <img src={`https://image.tmdb.org/t/p/w300${detail.posterPath}`} alt={detail.title} style={{ width: '200px', borderRadius: '12px', border: '1px solid var(--border)' }} />
             : <div style={{ width: '200px', height: '300px', backgroundColor: 'var(--border)', borderRadius: '12px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '48px' }}>🎬</div>
           }
         </div>
@@ -856,7 +862,7 @@ function MovieDetailPage() {
 
           {detail.genres?.length > 0 && (
             <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', marginBottom: '20px' }}>
-              {detail.genres.map(g => <span key={g} style={{ padding: '4px 12px', backgroundColor: 'var(--bg-hover)', border: '1px solid #333', borderRadius: '20px', color: 'var(--text-muted)', fontSize: '13px' }}>{g}</span>)}
+              {detail.genres.map(g => <span key={g} style={{ padding: '4px 12px', backgroundColor: 'var(--bg-hover)', border: '1px solid var(--border-soft)', borderRadius: '20px', color: 'var(--text-muted)', fontSize: '13px' }}>{g}</span>)}
             </div>
           )}
 
@@ -928,10 +934,10 @@ function MovieDetailPage() {
                         <img
                           src={`https://image.tmdb.org/t/p/w185${photoPath}`}
                           alt={name}
-                          style={{ width: '56px', height: '56px', borderRadius: '50%', objectFit: 'cover', border: '1px solid #333', marginBottom: '6px' }}
+                          style={{ width: '56px', height: '56px', borderRadius: '50%', objectFit: 'cover', border: '1px solid var(--border-soft)', marginBottom: '6px' }}
                         />
                       ) : (
-                        <div style={{ width: '56px', height: '56px', borderRadius: '50%', backgroundColor: 'var(--bg-hover)', border: '1px solid #333', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '20px', marginBottom: '6px' }}>
+                        <div style={{ width: '56px', height: '56px', borderRadius: '50%', backgroundColor: 'var(--bg-hover)', border: '1px solid var(--border-soft)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '20px', marginBottom: '6px' }}>
                           🎭
                         </div>
                       )}
@@ -965,7 +971,7 @@ function MovieDetailPage() {
 
         {/* Sezione recensione — logica completa */}
         {token && !isAdmin && (
-          <div id={myReview ? `review-${myReview.id}` : undefined} style={{ backgroundColor: 'var(--bg-card)', border: myReview && highlightReviewId === myReview.id ? '2px solid #3b82f6' : '1px solid #222', borderRadius: '12px', padding: '28px', marginBottom: '40px', boxShadow: myReview && highlightReviewId === myReview.id ? '0 0 0 4px rgba(59,130,246,0.15)' : 'none' }}>
+          <div id={myReview ? `review-${myReview.id}` : undefined} style={{ backgroundColor: 'var(--bg-card)', border: myReview && highlightReviewId === myReview.id ? '2px solid #3b82f6' : '1px solid var(--border)', borderRadius: '12px', padding: '28px', marginBottom: '40px', boxShadow: myReview && highlightReviewId === myReview.id ? '0 0 0 4px rgba(59,130,246,0.15)' : 'none' }}>
 
             {myReview && !editMode ? (
               /* Ho già recensito */
@@ -973,10 +979,10 @@ function MovieDetailPage() {
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
                   <h2 style={{ color: 'var(--text)', fontSize: '18px', fontWeight: '700' }}>✏️ La tua recensione</h2>
                   <div style={{ display: 'flex', gap: '8px' }}>
-                    <button onClick={() => setEditMode(true)} style={{ padding: '6px 16px', backgroundColor: 'transparent', border: '1px solid #333', borderRadius: '6px', color: 'var(--text-muted)', fontSize: '13px', cursor: 'pointer' }}>Modifica</button>
+                    <button onClick={() => setEditMode(true)} style={{ padding: '6px 16px', backgroundColor: 'transparent', border: '1px solid var(--border-soft)', borderRadius: '6px', color: 'var(--text-muted)', fontSize: '13px', cursor: 'pointer' }}>Modifica</button>
                     {/* Fix (auto-nascondimento autore): toggle reversibile, distinto
                         dall'eliminazione — nasconde/rimostra senza penalità */}
-                    <button onClick={handleToggleHidden} disabled={togglingHidden} style={{ padding: '6px 16px', backgroundColor: 'transparent', border: '1px solid #333', borderRadius: '6px', color: 'var(--text-muted)', fontSize: '13px', cursor: 'pointer' }}>
+                    <button onClick={handleToggleHidden} disabled={togglingHidden} style={{ padding: '6px 16px', backgroundColor: 'transparent', border: '1px solid var(--border-soft)', borderRadius: '6px', color: 'var(--text-muted)', fontSize: '13px', cursor: 'pointer' }}>
                       {togglingHidden ? '...' : (myReview.hiddenByAuthor ? '👁️ Mostra di nuovo' : '🙈 Nascondi')}
                     </button>
                     <button onClick={() => setConfirmDeleteReview(true)} disabled={deletingReview} style={{ padding: '6px 16px', backgroundColor: 'transparent', border: '1px solid #4a2222', borderRadius: '6px', color: '#ff6b6b', fontSize: '13px', cursor: 'pointer' }}>
@@ -990,7 +996,7 @@ function MovieDetailPage() {
                   </p>
                 )}
                 <div style={{ marginBottom: '10px' }}><StaticRating rating={myReview.rating} /></div>
-                {myReview.text && <p style={{ color: '#d1d5db', fontSize: '14px', lineHeight: 1.6 }}>{myReview.text}</p>}
+                {myReview.text && <p style={{ color: 'var(--text-muted)', fontSize: '14px', lineHeight: 1.6 }}>{myReview.text}</p>}
                 {reviewSuccess && <p style={{ color: '#4ade80', fontSize: '13px', marginTop: '10px' }}>{reviewSuccess}</p>}
 
                 {/* Fix (AI che replica a una recensione negativa): SOLO su richiesta
@@ -1056,32 +1062,32 @@ function MovieDetailPage() {
                           Butta giù qualche appunto sparso — l'AI lo trasforma in una recensione, mantenendo il tuo tono e le tue opinioni.
                         </p>
                         <textarea value={rawNotes} onChange={e => setRawNotes(e.target.value)} placeholder="es. ritmo lento primi 20 min, finale wow, colonna sonora top..." rows={3} maxLength={1000}
-                          style={{ width: '100%', padding: '10px', backgroundColor: 'var(--bg)', border: '1px solid #333', borderRadius: '6px', color: 'var(--text)', fontSize: '13px', resize: 'vertical', boxSizing: 'border-box', marginBottom: '8px' }} />
+                          style={{ width: '100%', padding: '10px', backgroundColor: 'var(--bg)', border: '1px solid var(--border-soft)', borderRadius: '6px', color: 'var(--text)', fontSize: '13px', resize: 'vertical', boxSizing: 'border-box', marginBottom: '8px' }} />
                         {structureError && <p style={{ color: '#ff6b6b', fontSize: '12px', marginBottom: '8px' }}>{structureError}</p>}
                         <div style={{ display: 'flex', gap: '8px' }}>
                           <button type="button" disabled={structuring || !rawNotes.trim()} onClick={handleStructureNotes}
-                            style={{ padding: '8px 16px', backgroundColor: structuring ? '#666' : 'var(--accent)', border: 'none', borderRadius: '6px', color: 'var(--text)', fontSize: '13px', fontWeight: '600', cursor: structuring ? 'default' : 'pointer' }}>
+                            style={{ padding: '8px 16px', backgroundColor: structuring ? 'var(--border-soft)' : 'var(--accent)', border: 'none', borderRadius: '6px', color: 'var(--text)', fontSize: '13px', fontWeight: '600', cursor: structuring ? 'default' : 'pointer' }}>
                             {structuring ? 'Genero...' : '✨ Genera recensione'}
                           </button>
                           <button type="button" onClick={() => { setShowNotesHelper(false); setRawNotes(''); setStructureError('') }}
-                            style={{ padding: '8px 16px', backgroundColor: 'transparent', border: '1px solid #333', borderRadius: '6px', color: 'var(--text-muted)', fontSize: '13px', cursor: 'pointer' }}>
+                            style={{ padding: '8px 16px', backgroundColor: 'transparent', border: '1px solid var(--border-soft)', borderRadius: '6px', color: 'var(--text-muted)', fontSize: '13px', cursor: 'pointer' }}>
                             Annulla
                           </button>
                         </div>
                       </div>
                     )}
                     <textarea value={text} onChange={e => setText(e.target.value)} placeholder="Cosa ne pensi?" rows={4}
-                      style={{ width: '100%', padding: '12px', backgroundColor: 'var(--bg-hover)', border: '1px solid #333', borderRadius: '8px', color: 'var(--text)', fontSize: '14px', resize: 'vertical', boxSizing: 'border-box' }} />
+                      style={{ width: '100%', padding: '12px', backgroundColor: 'var(--bg-hover)', border: '1px solid var(--border-soft)', borderRadius: '8px', color: 'var(--text)', fontSize: '14px', resize: 'vertical', boxSizing: 'border-box' }} />
                   </div>
                   {reviewError && <p style={{ color: '#ff6b6b', fontSize: '13px', marginBottom: '12px' }}>{reviewError}</p>}
                   {reviewSuccess && <p style={{ color: '#4ade80', fontSize: '13px', marginBottom: '12px' }}>{reviewSuccess}</p>}
                   <div style={{ display: 'flex', gap: '10px' }}>
-                    <button type="submit" disabled={reviewLoading} style={{ padding: '12px 28px', backgroundColor: reviewLoading ? '#666' : 'var(--accent)', border: 'none', borderRadius: '8px', color: 'var(--text)', fontSize: '15px', fontWeight: '600', cursor: 'pointer' }}>
+                    <button type="submit" disabled={reviewLoading} style={{ padding: '12px 28px', backgroundColor: reviewLoading ? 'var(--border-soft)' : 'var(--accent)', border: 'none', borderRadius: '8px', color: 'var(--text)', fontSize: '15px', fontWeight: '600', cursor: 'pointer' }}>
                       {reviewLoading ? 'Salvataggio...' : editMode ? 'Aggiorna' : 'Pubblica recensione'}
                     </button>
                     {editMode && (
                       <button type="button" onClick={() => { setEditMode(false); setRating(myReview.rating); setText(myReview.text || '') }}
-                        style={{ padding: '12px 20px', backgroundColor: 'transparent', border: '1px solid #333', borderRadius: '8px', color: 'var(--text-muted)', fontSize: '14px', cursor: 'pointer' }}>
+                        style={{ padding: '12px 20px', backgroundColor: 'transparent', border: '1px solid var(--border-soft)', borderRadius: '8px', color: 'var(--text-muted)', fontSize: '14px', cursor: 'pointer' }}>
                         Annulla
                       </button>
                     )}
@@ -1113,13 +1119,22 @@ function MovieDetailPage() {
         {/* Fix: il conteggio qui escludeva sempre la propria recensione (mostrando
             "1" invece di "2" con 2 recensioni di cui 1 tua), ma la media voti altrove
             nella pagina la include correttamente — disallineamento tra conteggio e
-            media. Ora il conteggio è sul totale reale (reviews.length), coerente con
-            la media; la lista sotto resta senza la tua per evitare il duplicato visivo
-            (è già mostrata nel blocco "La tua recensione" sopra) */}
-        <h2 style={{ color: 'var(--text)', fontSize: '20px', fontWeight: '700', marginBottom: '20px' }}>
-          💬 Recensioni della community{' '}
-          {reviews.length > 0 && <span style={{ color: 'var(--text-dark)', fontSize: '16px' }}>({reviews.length})</span>}
-        </h2>
+            media. Ora il conteggio è sul totale reale, coerente con la media; la
+            lista sotto resta senza la tua per evitare il duplicato visivo (è già
+            mostrata nel blocco "La tua recensione" sopra).
+            Fix (Dettaglio — stesso bug delle risposte): reviews include la TUA
+            recensione anche se l'hai nascosta (per poterla ripristinare), ma il
+            conteggio pubblico non deve contarla — altrimenti nasconderla non
+            sembra avere alcun effetto sul numero mostrato. */}
+        {(() => {
+          const visibleReviewsCount = reviews.filter(r => !r.hiddenByAuthor).length
+          return (
+            <h2 style={{ color: 'var(--text)', fontSize: '20px', fontWeight: '700', marginBottom: '20px' }}>
+              💬 Recensioni della community{' '}
+              {visibleReviewsCount > 0 && <span style={{ color: 'var(--text-dark)', fontSize: '16px' }}>({visibleReviewsCount})</span>}
+            </h2>
+          )
+        })()}
 
         {reviews.length === 0 ? (
           <p style={{ color: 'var(--text-dark)' }}>Ancora nessuna recensione. {!isAdmin && 'Sii il primo!'}</p>
@@ -1128,7 +1143,7 @@ function MovieDetailPage() {
         ) : (
           <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
             {otherReviews.map(r => (
-              <div key={r.id} id={`review-${r.id}`} style={{ backgroundColor: 'var(--bg-card)', border: highlightReviewId === r.id ? '2px solid #3b82f6' : '1px solid #222', borderRadius: '10px', padding: '20px', boxShadow: highlightReviewId === r.id ? '0 0 0 4px rgba(59,130,246,0.15)' : 'none' }}>
+              <div key={r.id} id={`review-${r.id}`} style={{ backgroundColor: 'var(--bg-card)', border: highlightReviewId === r.id ? '2px solid #3b82f6' : '1px solid var(--border)', borderRadius: '10px', padding: '20px', boxShadow: highlightReviewId === r.id ? '0 0 0 4px rgba(59,130,246,0.15)' : 'none' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
                   <Link to={`/profile/${r.username}`}>
                     <span style={{ color: 'var(--text)', fontWeight: '600' }}>👤 {r.username}</span>
@@ -1159,7 +1174,7 @@ function MovieDetailPage() {
                     )}
                   </div>
                 </div>
-                {r.text && <p style={{ color: '#d1d5db', fontSize: '14px', lineHeight: 1.6 }}>{r.text}</p>}
+                {r.text && <p style={{ color: 'var(--text-muted)', fontSize: '14px', lineHeight: 1.6 }}>{r.text}</p>}
                 <p style={{ color: 'var(--text-dark)', fontSize: '12px', marginTop: '8px' }}>
                   {new Date(r.createdAt).toLocaleDateString('it-IT')}
                 </p>

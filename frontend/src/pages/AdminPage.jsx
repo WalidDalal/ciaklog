@@ -14,7 +14,7 @@ function SuspendModal({ username, onConfirm, onCancel }) {
   return (
       <>
         <div onClick={onCancel} style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(0,0,0,0.7)', zIndex: 500 }} />
-        <div style={{ position: 'fixed', top: '50%', left: '50%', transform: 'translate(-50%,-50%)', backgroundColor: 'var(--bg-card)', border: '1px solid #333', borderRadius: '16px', padding: '32px', width: '100%', maxWidth: '440px', zIndex: 600 }}>
+        <div style={{ position: 'fixed', top: '50%', left: '50%', transform: 'translate(-50%,-50%)', backgroundColor: 'var(--bg-card)', border: '1px solid var(--border-soft)', borderRadius: '16px', padding: '32px', width: '100%', maxWidth: '440px', zIndex: 600 }}>
           <h2 style={{ color: 'var(--text)', fontSize: '18px', fontWeight: '700', marginBottom: '8px' }}>Sospendi {username}</h2>
           <p style={{ color: 'var(--text-muted)', fontSize: '13px', marginBottom: '20px' }}>
             Inserisci il motivo della sospensione. Questo verrà registrato nel sistema.
@@ -24,17 +24,17 @@ function SuspendModal({ username, onConfirm, onCancel }) {
               onChange={e => setReason(e.target.value)}
               placeholder="Es: Comportamento ripetutamente offensivo nelle recensioni..."
               rows={3}
-              style={{ width: '100%', padding: '10px 14px', backgroundColor: 'var(--bg-hover)', border: '1px solid #333', borderRadius: '8px', color: 'var(--text)', fontSize: '14px', resize: 'none', boxSizing: 'border-box', marginBottom: '20px' }}
+              style={{ width: '100%', padding: '10px 14px', backgroundColor: 'var(--bg-hover)', border: '1px solid var(--border-soft)', borderRadius: '8px', color: 'var(--text)', fontSize: '14px', resize: 'none', boxSizing: 'border-box', marginBottom: '20px' }}
           />
           <div style={{ display: 'flex', gap: '10px' }}>
             <button
                 onClick={() => { if (reason.trim()) onConfirm(reason.trim()) }}
                 disabled={!reason.trim()}
-                style={{ flex: 1, padding: '11px', backgroundColor: !reason.trim() ? '#555' : 'var(--accent)', border: 'none', borderRadius: '8px', color: 'var(--text)', fontSize: '14px', fontWeight: '600', cursor: !reason.trim() ? 'default' : 'pointer' }}
+                style={{ flex: 1, padding: '11px', backgroundColor: !reason.trim() ? 'var(--border-soft)' : 'var(--accent)', border: 'none', borderRadius: '8px', color: 'var(--text)', fontSize: '14px', fontWeight: '600', cursor: !reason.trim() ? 'default' : 'pointer' }}
             >
               Sospendi
             </button>
-            <button onClick={onCancel} style={{ padding: '11px 20px', backgroundColor: 'transparent', border: '1px solid #333', borderRadius: '8px', color: 'var(--text-muted)', fontSize: '14px', cursor: 'pointer' }}>
+            <button onClick={onCancel} style={{ padding: '11px 20px', backgroundColor: 'transparent', border: '1px solid var(--border-soft)', borderRadius: '8px', color: 'var(--text-muted)', fontSize: '14px', cursor: 'pointer' }}>
               Annulla
             </button>
           </div>
@@ -52,7 +52,7 @@ function UserDrawer({ user: u, onClose, onSuspend, onReinstate, loading = false 
         <div onClick={onClose} style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(0,0,0,0.6)', zIndex: 300 }} />
         <div style={{
           position: 'fixed', right: 0, top: 0, bottom: 0, width: '380px',
-          backgroundColor: 'var(--bg-card)', borderLeft: '1px solid #222',
+          backgroundColor: 'var(--bg-card)', borderLeft: '1px solid var(--border)',
           zIndex: 400, padding: '32px 28px', overflowY: 'auto',
         }}>
           <button onClick={onClose} style={{ position: 'absolute', top: '16px', right: '16px', backgroundColor: 'transparent', border: 'none', color: 'var(--text-dark)', fontSize: '20px', cursor: 'pointer' }}>✕</button>
@@ -130,10 +130,10 @@ function UserDrawer({ user: u, onClose, onSuspend, onReinstate, loading = false 
                             )}
                             {v.reasonText && v.reasonText !== '—' && (
                                 <div style={{ color: 'var(--text-dark)', fontSize: '12px', marginBottom: '4px' }}>
-                                  <span style={{ color: '#555' }}>Motivo segnalazione: </span>{v.reasonText}
+                                  <span style={{ color: 'var(--text-dark)' }}>Motivo segnalazione: </span>{v.reasonText}
                                 </div>
                             )}
-                            <div style={{ color: '#555', fontSize: '11px' }}>{v.date ? new Date(v.date).toLocaleDateString('it-IT') : ''}</div>
+                            <div style={{ color: 'var(--text-dark)', fontSize: '11px' }}>{v.date ? new Date(v.date).toLocaleDateString('it-IT') : ''}</div>
                           </div>
                       ))}
                     </div>
@@ -141,7 +141,7 @@ function UserDrawer({ user: u, onClose, onSuspend, onReinstate, loading = false 
               )}
 
               <Link to={`/profile/${u.username}`} target="_blank">
-                <button style={{ width: '100%', padding: '10px', backgroundColor: 'transparent', border: '1px solid #333', borderRadius: '8px', color: 'var(--text-muted)', fontSize: '14px', marginBottom: '12px', cursor: 'pointer' }}>
+                <button style={{ width: '100%', padding: '10px', backgroundColor: 'transparent', border: '1px solid var(--border-soft)', borderRadius: '8px', color: 'var(--text-muted)', fontSize: '14px', marginBottom: '12px', cursor: 'pointer' }}>
                   👤 Vedi profilo pubblico
                 </button>
               </Link>
@@ -180,6 +180,20 @@ function AdminPage() {
   const [selectedUser, setSelectedUser] = useState(null)
   const [drawerLoading, setDrawerLoading] = useState(false)
   const [userSearch, setUserSearch] = useState('')
+
+  // Fix (dashboard admin — ordinamento colonne): stato per l'ordinamento
+  // cliccabile — default alfabetico crescente come prima, ma ora modificabile
+  const [usersSortBy, setUsersSortBy] = useState('username')
+  const [usersSortDir, setUsersSortDir] = useState('asc')
+  const toggleUsersSort = (field) => {
+    if (usersSortBy === field) {
+      setUsersSortDir(d => d === 'asc' ? 'desc' : 'asc')
+    } else {
+      setUsersSortBy(field)
+      setUsersSortDir('asc')
+    }
+    setUsersPage(0)
+  }
 
   // Modal sospensione manuale dalla tabella
   const [suspendTarget, setSuspendTarget] = useState(null) // { id, username }
@@ -232,7 +246,7 @@ function AdminPage() {
     setUsersLoading(true)
     try {
       const res = await api.get('/admin/users', {
-        params: { page: usersPage, size: 10, search: userSearch || undefined }
+        params: { page: usersPage, size: 10, search: userSearch || undefined, sortBy: usersSortBy, sortDir: usersSortDir }
       })
       setUsers(res.data.content || res.data)
       // Fix: stesso problema di sopra — data.totalPages è undefined con VIA_DTO,
@@ -240,7 +254,7 @@ function AdminPage() {
       setUsersTotalPages(res.data.page?.totalPages || 1)
     } catch { setUsers([]) }
     finally { setUsersLoading(false) }
-  }, [usersPage, userSearch])
+  }, [usersPage, userSearch, usersSortBy, usersSortDir])
 
   const loadReports = async () => {
     setReportsLoading(true)
@@ -344,7 +358,7 @@ function AdminPage() {
                     ? { label: 'Pagina', value: `${usersPage + 1} / ${usersTotalPages}`, icon: '📄', color: 'var(--text-muted)' }
                     : { label: 'Segnalazioni visualizzate', value: reports.length, icon: '📋', color: 'var(--text-muted)' },
                 ].map(s => (
-                    <div key={s.label} style={{ backgroundColor: 'var(--bg-nav)', border: '1px solid #1a1a1a', borderRadius: '10px', padding: '20px' }}>
+                    <div key={s.label} style={{ backgroundColor: 'var(--bg-nav)', border: '1px solid var(--border-soft)', borderRadius: '10px', padding: '20px' }}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '8px' }}>
                         <span style={{ fontSize: '20px' }}>{s.icon}</span>
                         <span style={{ color: 'var(--text-dark)', fontSize: '13px' }}>{s.label}</span>
@@ -378,7 +392,7 @@ function AdminPage() {
                     onChange={e => setUserSearch(e.target.value)}
                     style={{
                       width: '100%', padding: '10px 16px', backgroundColor: 'var(--bg-hover)',
-                      border: '1px solid #333', borderRadius: '8px', color: 'var(--text)',
+                      border: '1px solid var(--border-soft)', borderRadius: '8px', color: 'var(--text)',
                       fontSize: '14px', marginBottom: '16px', boxSizing: 'border-box',
                     }}
                 />
@@ -389,15 +403,32 @@ function AdminPage() {
                     <>
                       <table style={{ width: '100%', borderCollapse: 'collapse' }}>
                         <thead>
-                        <tr style={{ borderBottom: '1px solid #222' }}>
-                          {['Username', 'Stato', 'Violazioni', 'Azioni'].map(h => (
-                              <th key={h} style={{ padding: '12px 16px', textAlign: 'left', color: 'var(--text-dark)', fontSize: '12px', fontWeight: '600', textTransform: 'uppercase', letterSpacing: '1px' }}>{h}</th>
+                        <tr style={{ borderBottom: '1px solid var(--border)' }}>
+                          {/* Fix (dashboard admin — ordinamento colonne): intestazioni cliccabili,
+                              default alfabetico su Username, click cambia campo/reinverte direzione */}
+                          {[
+                            { label: 'Username', field: 'username' },
+                            { label: 'Stato', field: 'status' },
+                            { label: 'Violazioni', field: 'violationCount' },
+                            { label: 'Azioni', field: null },
+                          ].map(({ label, field }) => (
+                              <th
+                                  key={label}
+                                  onClick={field ? () => toggleUsersSort(field) : undefined}
+                                  style={{
+                                    padding: '12px 16px', textAlign: 'left', color: usersSortBy === field ? 'var(--text)' : 'var(--text-dark)',
+                                    fontSize: '12px', fontWeight: '600', textTransform: 'uppercase', letterSpacing: '1px',
+                                    cursor: field ? 'pointer' : 'default', userSelect: 'none',
+                                  }}
+                              >
+                                {label}{field && usersSortBy === field && (usersSortDir === 'asc' ? ' ▲' : ' ▼')}
+                              </th>
                           ))}
                         </tr>
                         </thead>
                         <tbody>
                         {users.map(u => (
-                            <tr key={u.username} style={{ borderBottom: '1px solid #111' }}
+                            <tr key={u.username} style={{ borderBottom: '1px solid var(--border)' }}
                                 onMouseEnter={e => e.currentTarget.style.backgroundColor = 'var(--bg-nav)'}
                                 onMouseLeave={e => e.currentTarget.style.backgroundColor = 'transparent'}
                             >
@@ -469,10 +500,10 @@ function AdminPage() {
                       {usersTotalPages > 1 && (
                           <div style={{ display: 'flex', justifyContent: 'center', gap: '12px', marginTop: '24px', alignItems: 'center' }}>
                             <button onClick={() => setUsersPage(p => Math.max(0, p - 1))} disabled={usersPage === 0}
-                                    style={{ padding: '8px 16px', backgroundColor: 'transparent', border: '1px solid #333', borderRadius: '6px', color: usersPage === 0 ? 'var(--border-soft)' : 'var(--text)', cursor: usersPage === 0 ? 'default' : 'pointer' }}>←</button>
+                                    style={{ padding: '8px 16px', backgroundColor: 'transparent', border: '1px solid var(--border-soft)', borderRadius: '6px', color: usersPage === 0 ? 'var(--border-soft)' : 'var(--text)', cursor: usersPage === 0 ? 'default' : 'pointer' }}>←</button>
                             <span style={{ color: 'var(--text-muted)', fontSize: '14px' }}>Pagina {usersPage + 1} di {usersTotalPages}</span>
                             <button onClick={() => setUsersPage(p => Math.min(usersTotalPages - 1, p + 1))} disabled={usersPage >= usersTotalPages - 1}
-                                    style={{ padding: '8px 16px', backgroundColor: 'transparent', border: '1px solid #333', borderRadius: '6px', color: usersPage >= usersTotalPages - 1 ? 'var(--border-soft)' : 'var(--text)', cursor: usersPage >= usersTotalPages - 1 ? 'default' : 'pointer' }}>→</button>
+                                    style={{ padding: '8px 16px', backgroundColor: 'transparent', border: '1px solid var(--border-soft)', borderRadius: '6px', color: usersPage >= usersTotalPages - 1 ? 'var(--border-soft)' : 'var(--text)', cursor: usersPage >= usersTotalPages - 1 ? 'default' : 'pointer' }}>→</button>
                           </div>
                       )}
                     </>
@@ -524,7 +555,7 @@ function AdminPage() {
                         const needsReasonChoice = pendingReasons.length > 1
                         const chosenReason = chosenReasonByGroup[groupKey] || pendingReasons[0]
                         return (
-                            <div key={groupKey} style={{ backgroundColor: 'var(--bg-nav)', border: '1px solid #1a1a1a', borderRadius: '12px', overflow: 'hidden' }}>
+                            <div key={groupKey} style={{ backgroundColor: 'var(--bg-nav)', border: '1px solid var(--border-soft)', borderRadius: '12px', overflow: 'hidden' }}>
 
                               <div style={{ padding: '16px 20px', display: 'flex', alignItems: 'center', gap: '12px', cursor: 'pointer' }}
                                    onClick={() => setExpandedReport(expanded ? null : groupKey)}
@@ -547,14 +578,49 @@ function AdminPage() {
                               </div>
 
                               {expanded && (
-                                  <div style={{ padding: '0 20px 20px', borderTop: '1px solid #1a1a1a' }}>
+                                  <div style={{ padding: '0 20px 20px', borderTop: '1px solid var(--border-soft)' }}>
 
-                                    {contentText && (
+                                    {/* Fix (dashboard admin — versione segnalata, corretto): per le
+                                        segnalazioni create PRIMA di questo aggiornamento, reportedText
+                                        è null — il fallback "|| contentText" mostrava il testo ATTUALE
+                                        ma etichettato come "al momento della segnalazione", il che è
+                                        falso. Ora l'etichetta dice onestamente cosa si sta vedendo:
+                                        "Versione vecchia" solo se reportedText esiste davvero, "Versione
+                                        attuale" plain altrimenti (nessuno snapshot disponibile). */}
+                                    {first.reportedText ? (
                                         <div style={{ backgroundColor: 'var(--bg-card)', borderLeft: '3px solid #e50914', borderRadius: '0 8px 8px 0', padding: '14px 16px', margin: '16px 0' }}>
                                           <div style={{ color: 'var(--text-dark)', fontSize: '11px', fontWeight: '600', textTransform: 'uppercase', letterSpacing: '1px', marginBottom: '6px' }}>
-                                            {isComment ? 'Risposta segnalata' : 'Recensione segnalata'}
+                                            📌 {isComment ? 'Risposta' : 'Recensione'} — versione vecchia (al momento della segnalazione)
                                           </div>
-                                          <p style={{ color: '#d1d5db', fontSize: '14px', lineHeight: 1.6, margin: 0, fontStyle: 'italic' }}>
+                                          <p style={{ color: 'var(--text-muted)', fontSize: '14px', lineHeight: 1.6, margin: 0, fontStyle: 'italic' }}>
+                                            "{first.reportedText}"
+                                          </p>
+                                        </div>
+                                    ) : contentText && (
+                                        <div style={{ backgroundColor: 'var(--bg-card)', borderLeft: '3px solid #e50914', borderRadius: '0 8px 8px 0', padding: '14px 16px', margin: '16px 0' }}>
+                                          <div style={{ color: 'var(--text-dark)', fontSize: '11px', fontWeight: '600', textTransform: 'uppercase', letterSpacing: '1px', marginBottom: '6px' }}>
+                                            {isComment ? 'Risposta segnalata' : 'Recensione segnalata'}{' '}
+                                            <span style={{ color: 'var(--text-dark)', textTransform: 'none', fontWeight: '400' }}>(nessuno snapshot — segnalazione precedente a questa funzione)</span>
+                                          </div>
+                                          <p style={{ color: 'var(--text-muted)', fontSize: '14px', lineHeight: 1.6, margin: 0, fontStyle: 'italic' }}>
+                                            "{contentText}"
+                                          </p>
+                                          {!isComment && first.reviewRating && (
+                                              <div style={{ marginTop: '8px', color: 'var(--gold)', fontSize: '13px' }}>
+                                                {'★'.repeat(first.reviewRating)}
+                                              </div>
+                                          )}
+                                        </div>
+                                    )}
+
+                                    {/* Versione nuova — solo se esiste davvero uno snapshot da confrontare
+                                        E il testo attuale è presente E differisce da quello vecchio */}
+                                    {first.reportedText && first.targetEdited && !first.targetRemoved && contentText && (
+                                        <div style={{ backgroundColor: 'var(--bg-card)', borderLeft: '3px solid #3b82f6', borderRadius: '0 8px 8px 0', padding: '14px 16px', margin: '16px 0' }}>
+                                          <div style={{ color: '#3b82f6', fontSize: '11px', fontWeight: '600', textTransform: 'uppercase', letterSpacing: '1px', marginBottom: '6px' }}>
+                                            ✏️ {isComment ? 'Risposta' : 'Recensione'} — versione nuova (modificata dopo la segnalazione)
+                                          </div>
+                                          <p style={{ color: 'var(--text-muted)', fontSize: '14px', lineHeight: 1.6, margin: 0, fontStyle: 'italic' }}>
                                             "{contentText}"
                                           </p>
                                           {!isComment && first.reviewRating && (
@@ -626,7 +692,7 @@ function AdminPage() {
                                                 <select
                                                     value={chosenReason}
                                                     onChange={e => setChosenReasonByGroup(prev => ({ ...prev, [groupKey]: e.target.value }))}
-                                                    style={{ padding: '6px 10px', backgroundColor: 'var(--bg-hover)', border: '1px solid #333', borderRadius: '6px', color: 'var(--text)', fontSize: '13px' }}
+                                                    style={{ padding: '6px 10px', backgroundColor: 'var(--bg-hover)', border: '1px solid var(--border-soft)', borderRadius: '6px', color: 'var(--text)', fontSize: '13px' }}
                                                 >
                                                   {pendingReasons.map(cat => <option key={cat} value={cat}>{cat}</option>)}
                                                 </select>
@@ -636,7 +702,7 @@ function AdminPage() {
                                             <button onClick={() => handleReportGroup(group, 'APPROVED', needsReasonChoice ? chosenReason : undefined)} style={{ padding: '9px 20px', backgroundColor: 'var(--accent)', border: 'none', borderRadius: '6px', color: 'var(--text)', fontSize: '13px', fontWeight: '600', cursor: 'pointer' }}>
                                               ✅ Approva {pendingCount > 1 ? `tutte (${pendingCount})` : ''} — rimuovi recensione
                                             </button>
-                                            <button onClick={() => handleReportGroup(group, 'REJECTED')} style={{ padding: '9px 20px', backgroundColor: 'transparent', border: '1px solid #333', borderRadius: '6px', color: 'var(--text-muted)', fontSize: '13px', cursor: 'pointer' }}>
+                                            <button onClick={() => handleReportGroup(group, 'REJECTED')} style={{ padding: '9px 20px', backgroundColor: 'transparent', border: '1px solid var(--border-soft)', borderRadius: '6px', color: 'var(--text-muted)', fontSize: '13px', cursor: 'pointer' }}>
                                               ❌ Rifiuta {pendingCount > 1 ? `tutte (${pendingCount})` : ''}
                                             </button>
                                           </div>

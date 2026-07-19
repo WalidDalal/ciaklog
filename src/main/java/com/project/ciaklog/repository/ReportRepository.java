@@ -28,6 +28,13 @@ public interface ReportRepository extends JpaRepository<Report, UUID> {
     // Conta il numero totale di segnalazioni ricevute da una review (per l'auto-hide)
     long countByReview(Review review);
 
+    // Fix (Logica Moderazione — trovato in revisione): countByReview contava
+    // TUTTE le segnalazioni storiche, incluse quelle già REJECTED in passato —
+    // una recensione con 2 segnalazioni rifiutate mesi fa e 1 nuova PENDING
+    // veniva auto-nascosta come se avesse 2+ segnalazioni attive, quando ne
+    // ha solo 1 davvero da valutare. La soglia deve contare solo le PENDING.
+    long countByReviewAndStatus(Review review, ReportStatus status);
+
     // Fix N+1: carica tutti i report per una lista di review in una sola query
     List<Report> findAllByReviewIn(List<Review> reviews);
 
@@ -37,6 +44,9 @@ public interface ReportRepository extends JpaRepository<Report, UUID> {
     List<Report> findByReviewComment(ReviewComment reviewComment);
 
     long countByReviewComment(ReviewComment reviewComment);
+
+    // Fix (Logica Moderazione — stessa correzione per le risposte)
+    long countByReviewCommentAndStatus(ReviewComment reviewComment, ReportStatus status);
 
     // Fix (Home Admin, deciso): segnalazioni ricevute da mezzanotte di oggi,
     // per la card operativa "X segnalazioni oggi"

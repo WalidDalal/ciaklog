@@ -72,12 +72,15 @@ public class ReportServiceImpl implements ReportService {
                 .review(review)
                 .reasonCategory(dto.getReasonCategory())
                 .reasonText(dto.getReasonText())
+                .reportedText(review.getText())
                 .build();
         Report saved = reportRepository.save(report);
 
         if (review.getStatus() == ReviewStatus.VISIBLE) {
-            long totalReports = reportRepository.countByReview(review);
-            if (totalReports >= 2) {
+            // Fix (Logica Moderazione — trovato in revisione): contava tutte le
+            // segnalazioni storiche, incluse REJECTED da valutazioni passate
+            long pendingReports = reportRepository.countByReviewAndStatus(review, ReportStatus.PENDING);
+            if (pendingReports >= 2) {
                 review.setStatus(ReviewStatus.HIDDEN);
                 reviewRepository.save(review);
                 cascadeHideComments(review, ReviewStatus.HIDDEN);
@@ -103,12 +106,14 @@ public class ReportServiceImpl implements ReportService {
                 .reviewComment(comment)
                 .reasonCategory(dto.getReasonCategory())
                 .reasonText(dto.getReasonText())
+                .reportedText(comment.getText())
                 .build();
         Report saved = reportRepository.save(report);
 
         if (comment.getStatus() == ReviewStatus.VISIBLE) {
-            long totalReports = reportRepository.countByReviewComment(comment);
-            if (totalReports >= 2) {
+            // Fix (Logica Moderazione — stessa correzione delle recensioni)
+            long pendingReports = reportRepository.countByReviewCommentAndStatus(comment, ReportStatus.PENDING);
+            if (pendingReports >= 2) {
                 comment.setStatus(ReviewStatus.HIDDEN);
                 reviewCommentRepository.save(comment);
             }
@@ -269,6 +274,7 @@ public class ReportServiceImpl implements ReportService {
                 .review(review)
                 .reasonCategory(dto.getReasonCategory())
                 .reasonText(dto.getReasonText())
+                .reportedText(review.getText())
                 .status(ReportStatus.APPROVED)
                 .resolvedBy(admin)
                 .resolvedAt(LocalDateTime.now())
@@ -295,6 +301,7 @@ public class ReportServiceImpl implements ReportService {
                 .reviewComment(comment)
                 .reasonCategory(dto.getReasonCategory())
                 .reasonText(dto.getReasonText())
+                .reportedText(comment.getText())
                 .status(ReportStatus.APPROVED)
                 .resolvedBy(admin)
                 .resolvedAt(LocalDateTime.now())
@@ -335,7 +342,9 @@ public class ReportServiceImpl implements ReportService {
                     .reviewAuthorUsername(review.getUser().getUsername())
                     .reviewText(review.getText())
                     .reviewRating(review.getRating())
-                    .targetRemoved(review.getStatus() == ReviewStatus.REMOVED);
+                    .targetRemoved(review.getStatus() == ReviewStatus.REMOVED)
+                    .reportedText(r.getReportedText())
+                    .targetEdited(r.getReportedText() != null && !r.getReportedText().equals(review.getText()));
         } else {
             ReviewComment comment = r.getReviewComment();
             // Fix (dashboard admin, Step 6): il tmdbId/contentType di una risposta
@@ -347,7 +356,9 @@ public class ReportServiceImpl implements ReportService {
                     .parentReviewId(comment.getReview().getId())
                     .commentAuthorUsername(comment.getAuthor().getUsername())
                     .commentText(comment.getText())
-                    .targetRemoved(comment.getStatus() == ReviewStatus.REMOVED);
+                    .targetRemoved(comment.getStatus() == ReviewStatus.REMOVED)
+                    .reportedText(r.getReportedText())
+                    .targetEdited(r.getReportedText() != null && !r.getReportedText().equals(comment.getText()));
         }
 
         return builder.build();

@@ -35,6 +35,7 @@ public class WrappedServiceImpl implements WrappedService {
     private final UserRepository userRepository;
     private final WatchEntryRepository watchEntryRepository;
     private final ReviewRepository reviewRepository;
+    private final com.project.ciaklog.repository.ReviewCommentRepository reviewCommentRepository;
     private final AiService aiService;
 
     @Override
@@ -53,6 +54,7 @@ public class WrappedServiceImpl implements WrappedService {
 
         long totalWatched = watched.size();
         long totalReviews = reviews.size();
+        long interactionsCount = reviewCommentRepository.countByAuthorAndStatusNot(user, ReviewStatus.REMOVED);
 
         // Genere preferito — i generi sono salvati come CSV su WatchEntry
         Map<String, Long> genreCounts = watched.stream()
@@ -104,6 +106,7 @@ public class WrappedServiceImpl implements WrappedService {
         return WrappedResponse.builder()
                 .totalWatched(totalWatched)
                 .totalReviews(totalReviews)
+                .interactionsCount(interactionsCount)
                 .topGenre(topGenre != null ? topGenre.getKey() : null)
                 .topGenreCount(topGenre != null ? topGenre.getValue().intValue() : 0)
                 .mostActiveMonth(topMonth != null ? topMonth.getKey() : null)

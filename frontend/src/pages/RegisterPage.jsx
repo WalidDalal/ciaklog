@@ -69,7 +69,7 @@ function RegisterPage() {
 
       {/* Form */}
       <div style={{ position: 'relative', zIndex: 1, display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: 'calc(100vh - 64px)', padding: '32px 16px' }}>
-        <div style={{ backgroundColor: 'var(--bg-card)', border: '1px solid #222', borderRadius: '16px', padding: '40px', width: '100%', maxWidth: '420px' }}>
+        <div style={{ backgroundColor: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: '16px', padding: '40px', width: '100%', maxWidth: '420px' }}>
           <div style={{ textAlign: 'center', marginBottom: '28px' }}>
             <div style={{ fontSize: '40px', marginBottom: '12px' }}>🎬</div>
             <h1 style={{ fontSize: '24px', fontWeight: '700', color: 'var(--text)', marginBottom: '6px' }}>Crea il tuo account</h1>
@@ -91,7 +91,7 @@ function RegisterPage() {
                 value={username}
                 onChange={e => setUsername(e.target.value)}
                 required
-                style={{ width: '100%', padding: '12px 16px', backgroundColor: 'var(--bg-hover)', border: '1px solid #333', borderRadius: '8px', color: 'var(--text)', fontSize: '15px', boxSizing: 'border-box' }}
+                style={{ width: '100%', padding: '12px 16px', backgroundColor: 'var(--bg-hover)', border: '1px solid var(--border-soft)', borderRadius: '8px', color: 'var(--text)', fontSize: '15px', boxSizing: 'border-box' }}
               />
             </div>
 
@@ -103,7 +103,7 @@ function RegisterPage() {
                 value={email}
                 onChange={e => setEmail(e.target.value)}
                 required
-                style={{ width: '100%', padding: '12px 16px', backgroundColor: 'var(--bg-hover)', border: '1px solid #333', borderRadius: '8px', color: 'var(--text)', fontSize: '15px', boxSizing: 'border-box' }}
+                style={{ width: '100%', padding: '12px 16px', backgroundColor: 'var(--bg-hover)', border: '1px solid var(--border-soft)', borderRadius: '8px', color: 'var(--text)', fontSize: '15px', boxSizing: 'border-box' }}
               />
             </div>
 
@@ -116,7 +116,7 @@ function RegisterPage() {
                   value={password}
                   onChange={e => setPassword(e.target.value)}
                   required
-                  style={{ width: '100%', padding: '12px 40px 12px 16px', backgroundColor: 'var(--bg-hover)', border: '1px solid #333', borderRadius: '8px', color: 'var(--text)', fontSize: '15px', boxSizing: 'border-box' }}
+                  style={{ width: '100%', padding: '12px 40px 12px 16px', backgroundColor: 'var(--bg-hover)', border: '1px solid var(--border-soft)', borderRadius: '8px', color: 'var(--text)', fontSize: '15px', boxSizing: 'border-box' }}
                 />
                 <button type="button" onClick={() => setShowPassword(v => !v)}
                   style={{ position: 'absolute', right: '12px', top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', cursor: 'pointer', fontSize: '16px', color: 'var(--text-dark)', padding: 0 }}>
@@ -171,7 +171,7 @@ function RegisterPage() {
             <button
               type="submit"
               disabled={loading}
-              style={{ width: '100%', padding: '14px', backgroundColor: loading ? '#666' : 'var(--accent)', border: 'none', borderRadius: '8px', color: 'var(--text)', fontSize: '16px', fontWeight: '600' }}
+              style={{ width: '100%', padding: '14px', backgroundColor: loading ? 'var(--border-soft)' : 'var(--accent)', border: 'none', borderRadius: '8px', color: 'var(--text)', fontSize: '16px', fontWeight: '600' }}
             >
               {loading ? 'Registrazione in corso...' : 'Registrati'}
             </button>

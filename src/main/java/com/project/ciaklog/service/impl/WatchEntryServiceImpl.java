@@ -181,6 +181,19 @@ public class WatchEntryServiceImpl implements WatchEntryService {
             throw new ForbiddenException("Non autorizzato");
         }
 
+        // Fix (Libreria — trovato in revisione): la stessa regola che blocca il
+        // cambio di stato da WATCHED con una recensione attiva collegata (sopra,
+        // in updateStatus) non era applicata qui — si poteva rimuovere del tutto
+        // il titolo dalla libreria pur avendolo recensito, lasciando la
+        // recensione orfana (titolo/poster spariscono dalla sua card perché
+        // venivano letti dalla WatchEntry, ora eliminata).
+        boolean hasActiveReview = reviewRepository.existsByUserAndTmdbIdAndContentTypeAndStatusNot(
+                user, entry.getTmdbId(), entry.getContentType(), ReviewStatus.REMOVED);
+        if (hasActiveReview) {
+            throw new BusinessRuleException(
+                    "Hai già recensito questo contenuto — elimina la recensione prima di rimuoverlo dalla libreria");
+        }
+
         watchEntryRepository.delete(entry);
     }
 
