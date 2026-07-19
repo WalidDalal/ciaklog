@@ -49,7 +49,19 @@ function RankBadge({ rank }) {
 }
 
 function TrendingQuoteCard({ item, reviews }) {
-    const visible = reviews.filter(r => r.text && r.text.trim().length > 20).slice(0, 2)
+    // Fix (Homepage — "più discussi", conteggio disallineato dalle card):
+    // weeklyReviewCount conta le recensioni degli ultimi 7 giorni (vedi
+    // ChartServiceImpl), ma qui si mostravano le ultime 2 recensioni in
+    // assoluto — con "1 recensione questa settimana" sopra e sotto 2 card
+    // (una recente + una vecchia). Le card ora rispettano la stessa finestra
+    // di 7 giorni SOLO per il trending vero — il fallback ai titoli popolari
+    // (item.weeklyReviewCount == null) esiste apposta per i casi con poca
+    // attività settimanale, quindi lì mostriamo comunque i commenti disponibili
+    const weekAgo = Date.now() - 7 * 24 * 60 * 60 * 1000
+    const visible = reviews
+        .filter(r => r.text && r.text.trim().length > 0)
+        .filter(r => item.weeklyReviewCount == null || !r.createdAt || new Date(r.createdAt).getTime() >= weekAgo)
+        .slice(0, 2)
     return (
         <Link to={`/movie/${item.tmdbId}?type=${item.contentType}`}>
             <div style={{
@@ -139,7 +151,7 @@ function TrendingCarousel({ trending, trendingReviews }) {
                         style={{
                             width: '40px', height: '40px', borderRadius: '50%',
                             backgroundColor: page === 0 ? 'var(--bg-hover)' : 'var(--border)',
-                            border: '1px solid #333', color: page === 0 ? '#444' : 'var(--text)',
+                            border: '1px solid var(--border-soft)', color: page === 0 ? 'var(--text-dark)' : 'var(--text)',
                             fontSize: '18px', cursor: page === 0 ? 'default' : 'pointer',
                             display: 'flex', alignItems: 'center', justifyContent: 'center',
                         }}
@@ -160,7 +172,7 @@ function TrendingCarousel({ trending, trendingReviews }) {
                         style={{
                             width: '40px', height: '40px', borderRadius: '50%',
                             backgroundColor: page === totalPages - 1 ? 'var(--bg-hover)' : 'var(--border)',
-                            border: '1px solid #333', color: page === totalPages - 1 ? '#444' : 'var(--text)',
+                            border: '1px solid var(--border-soft)', color: page === totalPages - 1 ? 'var(--text-dark)' : 'var(--text)',
                             fontSize: '18px', cursor: page === totalPages - 1 ? 'default' : 'pointer',
                             display: 'flex', alignItems: 'center', justifyContent: 'center',
                         }}
@@ -259,12 +271,19 @@ function HomePage() {
     // Fix (Home Admin): sezioni community collassate di default per l'Admin
     const isAdmin = user?.role === 'ADMIN'
 
-    // Fix podio: myRank corretto (findIndex restituisce -1 se non trovato, +1 lo rende 0)
+    // Fix (Homepage — classifica con pareggi): findIndex+1 ignorava del tutto
+    // il campo "rank" calcolato dal backend (che gestisce i pareggi), usando
+    // la posizione grezza nell'array — con 3 utenti a pari punteggio, il 2°
+    // e il 3° dell'array finivano "3ª" e "4ª posizione" anche se avevano lo
+    // stesso punteggio del 1° tra i tre. Ora usa il rank corretto dal backend.
     const myRankIndex = topUsers.findIndex(u => u.username === user?.username)
-    const myRank = myRankIndex >= 0 ? myRankIndex + 1 : 0
+    const myRank = myRankIndex >= 0 ? (topUsers[myRankIndex].rank ?? myRankIndex + 1) : 0
 
     // Fix podio: ordine visivo corretto — 2° sinistra, 1° centro, 3° destra
-    const podiumOrder = [1, 0, 2] // indici in topUsers
+    // Fix (Homepage — pareggi nel podio): l'ordine visivo [2°,1°,3°] ora si
+    // calcola dinamicamente in base ai gruppi di rank (vedi sezione podio),
+    // non più su indici fissi nell'array — un pareggio poteva lasciare fuori
+    // dal podio un utente con lo stesso punteggio di chi ci stava dentro
     const rankHeights = { 1: 110, 2: 70, 3: 44 } // altezza colonna per rank
     const rankSizes   = { 1: 76,  2: 60, 3: 52 }
 
@@ -302,9 +321,14 @@ function HomePage() {
                 <div style={{ position: 'relative', zIndex: 2, padding: '0 64px', maxWidth: '620px' }}>
                     {logged ? (
                         <>
-                            <div style={{ fontSize: '13px', color: 'var(--accent)', fontWeight: '700', marginBottom: '12px', letterSpacing: '1px', textTransform: 'uppercase' }}>{user?.role === 'ADMIN' ? '👮 Pannello Admin' : 'Bentornato'}</div>
+                            {/* Fix (Homepage — saluto duplicato): "Bentornato" sopra e "Ciao, username"
+                                sotto dicevano la stessa cosa due volte. L'eyebrow dell'Admin resta
+                                ("Pannello Admin" è un'etichetta di sezione, non un saluto — non è ridondante) */}
+                            {user?.role === 'ADMIN' && (
+                                <div style={{ fontSize: '13px', color: 'var(--accent)', fontWeight: '700', marginBottom: '12px', letterSpacing: '1px', textTransform: 'uppercase' }}>👮 Pannello Admin</div>
+                            )}
                             <h1 style={{ fontSize: '52px', fontWeight: '800', lineHeight: 1.05, marginBottom: '16px' }}>
-                                {user?.role === 'ADMIN' ? <>Ciao, <span style={{ color: 'var(--accent)' }}>{user?.username}</span> 🛡️</> : <>Ciao, <span style={{ color: 'var(--accent)' }}>{user?.username}</span> 👋</>}
+                                {user?.role === 'ADMIN' ? <>Ciao, <span style={{ color: 'var(--accent)' }}>{user?.username}</span> 🛡️</> : <>Bentornato, <span style={{ color: 'var(--accent)' }}>{user?.username}</span> 👋</>}
                             </h1>
                             {myRank > 0 && myRank <= 10 && user?.role !== 'ADMIN' && (
                                 <div style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', backgroundColor: 'var(--accent-subtle)', border: '1px solid var(--border-cta)', borderRadius: '8px', padding: '8px 14px', marginBottom: '24px' }}>
@@ -383,7 +407,7 @@ function HomePage() {
                                 <div style={{ display: 'flex', gap: '12px', overflowX: 'auto', paddingBottom: '4px' }}>
                                     {watching.slice(0, 6).map(item => (
                                         <Link to={`/movie/${item.tmdbId}?type=${item.contentType || item.mediaType}`} key={item.id} style={{ flexShrink: 0 }}>
-                                            <div style={{ width: '120px', backgroundColor: 'var(--bg-card)', borderRadius: '8px', overflow: 'hidden', border: '1px solid #222' }}
+                                            <div style={{ width: '120px', backgroundColor: 'var(--bg-card)', borderRadius: '8px', overflow: 'hidden', border: '1px solid var(--border)' }}
                                                  onMouseEnter={e => e.currentTarget.style.borderColor = '#3b82f6'}
                                                  onMouseLeave={e => e.currentTarget.style.borderColor = 'var(--border)'}
                                             >
@@ -423,7 +447,7 @@ function HomePage() {
                                 <div style={{ display: 'flex', gap: '12px', overflowX: 'auto', paddingBottom: '4px' }}>
                                     {toWatch.slice(0, 6).map(item => (
                                         <Link to={`/movie/${item.tmdbId}?type=${item.contentType || item.mediaType}`} key={item.id} style={{ flexShrink: 0 }}>
-                                            <div style={{ width: '120px', backgroundColor: 'var(--bg-card)', borderRadius: '8px', overflow: 'hidden', border: '1px solid #222' }}
+                                            <div style={{ width: '120px', backgroundColor: 'var(--bg-card)', borderRadius: '8px', overflow: 'hidden', border: '1px solid var(--border)' }}
                                                  onMouseEnter={e => e.currentTarget.style.borderColor = 'var(--text-dark)'}
                                                  onMouseLeave={e => e.currentTarget.style.borderColor = 'var(--border)'}
                                             >
@@ -469,6 +493,10 @@ function HomePage() {
             <section style={{ padding: '0 64px 48px' }}>
                 <h2 style={{ fontSize: '22px', fontWeight: '700', marginBottom: '28px' }}>🏆 I più amati dalla community</h2>
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '24px' }}>
+                    {/* Fix (Homepage — podio troppo "soffocante" in questo riquadro): la
+                        prima versione con gradino/colonne stava stretta nella card
+                        Top Film/Serie — richiesto di tenere solo le 3 card semplici,
+                        il podio resta solo per "Critici più attivi" dove c'è più spazio */}
                     {[{ label: '🎬 Top Film', data: topFilms, type: 'MOVIE' }, { label: '📺 Top Serie TV', data: topSeries, type: 'TV' }].map(({ label, data, type }) => (
                         <div key={type} style={{ backgroundColor: 'var(--bg-nav)', border: '1px solid var(--border)', borderRadius: '12px', padding: '20px', boxShadow: 'var(--shadow)' }}>
                             <div style={{ color: 'var(--text-muted)', fontSize: '12px', fontWeight: '700', textTransform: 'uppercase', letterSpacing: '1.5px', marginBottom: '16px' }}>{label}</div>
@@ -517,75 +545,102 @@ function HomePage() {
             <section style={{ padding: '0 64px 64px' }}>
                 <h2 style={{ fontSize: '22px', fontWeight: '700', marginBottom: '28px' }}>👥 Critici più attivi</h2>
 
-                {/* Fix podio: 2° a sinistra (livello medio), 1° al centro (più alto), 3° a destra (più basso) */}
-                {topUsers.length >= 3 && (
+                {/* Fix (Homepage — pareggi nel podio): prima il podio prendeva sempre
+                    esattamente 3 SLOT fissi per indice (topUsers[0],[1],[2]) — con un
+                    pareggio tra 3° e 4° posto (es. punteggi 300-200-120-120), il quarto
+                    utente aveva il rank corretto ("3") ma finiva comunque nella lista
+                    sotto, come se non facesse parte del podio. Ora si raggruppa per
+                    rank: ogni colonna del podio può contenere più utenti a pari merito. */}
+                {(() => {
+                    const byRank = {}
+                    topUsers.forEach(u => {
+                        const r = u.rank ?? 0
+                        if (!byRank[r]) byRank[r] = []
+                        byRank[r].push(u)
+                    })
+                    const groups = Object.keys(byRank).map(Number).sort((a, b) => a - b).slice(0, 3)
+                        .map(r => ({ rank: r, users: byRank[r] }))
+                    if (groups.length === 0) return null
+                    const visualOrder = groups.length === 3 ? [1, 0, 2] : groups.map((_, i) => i)
+
+                    return (
                     <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'center', gap: '8px', marginBottom: '24px' }}>
-                        {podiumOrder.map(idx => {
-                            const u = topUsers[idx]
-                            const rank = u?.rank ?? idx + 1
+                        {visualOrder.map(gi => {
+                            const group = groups[gi]
+                            const { rank, users } = group
                             const height = rankHeights[rank] ?? 44
-                            const avatarSize = rankSizes[rank] ?? 52
-                            const isMe = logged && user?.username === u.username
+                            const avatarSize = (rankSizes[rank] ?? 52) - (users.length > 1 ? Math.min(16, (users.length - 1) * 6) : 0)
+                            const isChampion = rank === 1
 
                             return (
-                                <Link to={`/profile/${u.username}`} key={u.username}>
-                                    <div style={{ textAlign: 'center', width: idx === 0 ? '160px' : '130px' }}>
-                                        {/* Corona solo per il 1° posto */}
-                                        {rank === 1
-                                            ? <div style={{ fontSize: '28px', marginBottom: '6px' }}>👑</div>
-                                            : <div style={{ height: '34px', marginBottom: '6px' }} />
-                                        }
+                                <div key={rank} style={{ textAlign: 'center', width: isChampion ? '160px' : '130px' }}>
+                                    {isChampion
+                                        ? <div style={{ fontSize: '28px', marginBottom: '6px' }}>👑</div>
+                                        : <div style={{ height: '34px', marginBottom: '6px' }} />
+                                    }
 
-                                        {/* Avatar + badge rank */}
-                                        <div style={{ position: 'relative', display: 'inline-block', marginBottom: '8px' }}>
-                                            <UserAvatar username={u.username} size={avatarSize} index={idx} />
-                                            {rank !== 1 && (
-                                                <div style={{
-                                                    position: 'absolute', bottom: -4, right: -4,
-                                                    background: rank === 2 ? 'linear-gradient(135deg,#c0c0c0,#9ca3af)' : 'linear-gradient(135deg,#cd7c2c,#a0522d)',
-                                                    width: '20px', height: '20px', borderRadius: '50%',
-                                                    display: 'flex', alignItems: 'center', justifyContent: 'center',
-                                                    fontSize: '10px', fontWeight: '800', color: 'var(--text)', border: '2px solid #0a0a0a',
-                                                }}>{rank}</div>
-                                            )}
-                                        </div>
-
-                                        <div style={{ color: 'var(--text)', fontWeight: rank === 1 ? '800' : '700', fontSize: rank === 1 ? '15px' : '13px', marginBottom: '2px' }}>
-                                            {u.username}
-                                            {/* Fix: stellina + testo chiaro se è l'utente loggato */}
-                                            {isMe && <span style={{ marginLeft: '4px', fontSize: '14px' }}>⭐</span>}
-                                        </div>
-                                        {isMe && (
-                                            <div style={{ color: 'var(--gold)', fontSize: '10px', marginBottom: '2px', fontWeight: '600' }}>Tu sei qui!</div>
-                                        )}
-                                        {/* Fix: mostra "punti" invece del numero di recensioni */}
-                                        <div style={{ color: 'var(--text-muted)', fontSize: '11px', marginBottom: '10px' }}>
-                                            🏅 {u.score ?? u.reviewCount} punti
-                                        </div>
-
-                                        {/* Colonna podio — Fix: altezze corrette */}
-                                        <div style={{
-                                            height: height,
-                                            background: idx === 0 ? 'linear-gradient(to bottom, #e5091422, #1a1a1a)' : 'var(--bg-hover)',
-                                            border: idx === 0 ? '1px solid #e5091433' : '1px solid #2a2a2a',
-                                            borderBottom: 'none', borderRadius: '6px 6px 0 0',
-                                        }} />
+                                    {/* Più utenti a pari merito: un piccolo cluster di avatar affiancati,
+                                        stesso rank badge condiviso, stessa colonna del podio sotto */}
+                                    <div style={{ display: 'flex', justifyContent: 'center', gap: '4px', flexWrap: 'wrap', marginBottom: '8px' }}>
+                                        {users.map((u, ui) => {
+                                            const isMe = logged && user?.username === u.username
+                                            return (
+                                                <Link to={`/profile/${u.username}`} key={u.username} title={u.username}>
+                                                    <div style={{ position: 'relative', display: 'inline-block' }}>
+                                                        <UserAvatar username={u.username} size={avatarSize} index={ui} />
+                                                        {!isChampion && (
+                                                            <div style={{
+                                                                position: 'absolute', bottom: -4, right: -4,
+                                                                background: rank === 2 ? 'linear-gradient(135deg,#c0c0c0,#9ca3af)' : 'linear-gradient(135deg,#cd7c2c,#a0522d)',
+                                                                width: '18px', height: '18px', borderRadius: '50%',
+                                                                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                                                fontSize: '9px', fontWeight: '800', color: 'var(--text)', border: '2px solid var(--bg)',
+                                                            }}>{rank}</div>
+                                                        )}
+                                                        {isMe && <div style={{ position: 'absolute', top: -6, right: -2, fontSize: '13px' }}>⭐</div>}
+                                                    </div>
+                                                </Link>
+                                            )
+                                        })}
                                     </div>
-                                </Link>
+
+                                    <div style={{ color: 'var(--text)', fontWeight: isChampion ? '800' : '700', fontSize: isChampion ? '14px' : '12px', marginBottom: '2px', lineHeight: 1.4 }}>
+                                        {users.map(u => u.username).join(' · ')}
+                                    </div>
+                                    <div style={{ color: 'var(--text-muted)', fontSize: '11px', marginBottom: '10px' }}>
+                                        🏅 {users[0].score ?? users[0].reviewCount} punti
+                                    </div>
+
+                                    <div style={{
+                                        height: height,
+                                        background: isChampion ? 'linear-gradient(to bottom, #e5091422, var(--bg-hover))' : 'var(--bg-hover)',
+                                        border: isChampion ? '1px solid #e5091433' : '1px solid var(--border-soft)',
+                                        borderBottom: 'none', borderRadius: '6px 6px 0 0',
+                                    }} />
+                                </div>
                             )
                         })}
                     </div>
-                )}
+                    )
+                })()}
 
-                {/* Lista dal 4° in poi */}
-                {topUsers.length > 3 && (
+                {/* Lista dal 4° in poi.
+                    Fix (Homepage — classifica con pareggi): "#{i+4}" era un indice
+                    sequenziale che ignorava i pareggi — con più utenti allo stesso
+                    punteggio del podio, quello in lista mostrava una posizione più
+                    bassa di quella reale invece di condividerla. Ora usa u.rank.
+                    Fix: filtra per rank > 3 invece di tagliare l'array all'indice 3 —
+                    col podio raggruppato per pareggi, un utente in 3ª posizione a
+                    pari merito potrebbe trovarsi all'indice 3 (o oltre) pur essendo
+                    già mostrato nel podio: senza questo filtro comparirebbe due volte. */}
+                {topUsers.some(u => (u.rank ?? 0) > 3) && (
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                        {topUsers.slice(3).map((u, i) => {
+                        {topUsers.filter(u => (u.rank ?? 0) > 3).map((u, i) => {
                             const isMe = logged && user?.username === u.username
                             return (
                                 <Link to={`/profile/${u.username}`} key={u.username}>
                                     <div style={{ display: 'flex', alignItems: 'center', gap: '16px', padding: '12px 16px', backgroundColor: isMe ? '#1a0f0f' : 'var(--bg-nav)', border: `1px solid ${isMe ? 'var(--accent)' : 'var(--bg-hover)'}`, borderRadius: '10px' }}>
-                                        <span style={{ color: 'var(--text-dark)', fontSize: '14px', fontWeight: '700', minWidth: '28px' }}>#{i + 4}</span>
+                                        <span style={{ color: 'var(--text-dark)', fontSize: '14px', fontWeight: '700', minWidth: '28px' }}>#{u.rank}</span>
                                         <UserAvatar username={u.username} size={34} index={i + 3} />
                                         <span style={{ color: 'var(--text)', fontWeight: '600', flex: 1 }}>{u.username}</span>
                                         {isMe && <span style={{ color: 'var(--gold)', fontSize: '12px', fontWeight: '600' }}>Tu ⭐</span>}
@@ -612,13 +667,13 @@ function HomePage() {
                     <p style={{ color: 'var(--text-muted)', fontSize: '16px', marginBottom: '28px' }}>Traccia i tuoi film, scrivi recensioni, chiedi consigli alla tua AI personale.</p>
                     <div style={{ display: 'flex', gap: '16px', justifyContent: 'center' }}>
                         <Link to="/register"><button style={{ padding: '14px 40px', backgroundColor: 'var(--accent)', border: 'none', borderRadius: '8px', color: 'var(--text)', fontSize: '16px', fontWeight: '700' }}>Registrati gratis</button></Link>
-                        <Link to="/login"><button style={{ padding: '14px 32px', backgroundColor: 'transparent', border: '1px solid #444', borderRadius: '8px', color: 'var(--text)', fontSize: '16px' }}>Ho già un account</button></Link>
+                        <Link to="/login"><button style={{ padding: '14px 32px', backgroundColor: 'transparent', border: '1px solid var(--border-soft)', borderRadius: '8px', color: 'var(--text)', fontSize: '16px' }}>Ho già un account</button></Link>
                     </div>
                 </section>
             )}
 
             {/* ── FOOTER ── */}
-            <footer style={{ borderTop: '1px solid #1a1a1a', padding: '28px 64px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '16px' }}>
+            <footer style={{ borderTop: '1px solid var(--border-soft)', padding: '28px 64px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '16px' }}>
                 <div>
                     <div style={{ fontSize: '20px', fontWeight: '700', marginBottom: '4px' }}>Ciak<span style={{ color: 'var(--accent)' }}>Log</span></div>
                     <div style={{ color: 'var(--text-dark)', fontSize: '13px' }}>Traccia • Recensisci • Scopri</div>
@@ -634,9 +689,9 @@ function HomePage() {
                     href="https://github.com/WalidDalal/ciaklog"
                     target="_blank"
                     rel="noopener noreferrer"
-                    style={{ display: 'flex', alignItems: 'center', gap: '8px', color: 'var(--text-dark)', fontSize: '13px', textDecoration: 'none', padding: '8px 16px', border: '1px solid #2a2a2a', borderRadius: '8px', transition: 'border-color 0.15s, color 0.15s' }}
+                    style={{ display: 'flex', alignItems: 'center', gap: '8px', color: 'var(--text-dark)', fontSize: '13px', textDecoration: 'none', padding: '8px 16px', border: '1px solid var(--border-soft)', borderRadius: '8px', transition: 'border-color 0.15s, color 0.15s' }}
                     onMouseEnter={e => { e.currentTarget.style.borderColor = 'var(--accent)'; e.currentTarget.style.color = 'var(--text)' }}
-                    onMouseLeave={e => { e.currentTarget.style.borderColor = '#2a2a2a'; e.currentTarget.style.color = 'var(--text-dark)' }}
+                    onMouseLeave={e => { e.currentTarget.style.borderColor = 'var(--border-soft)'; e.currentTarget.style.color = 'var(--text-dark)' }}
                 >
                     <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
                         <path d="M12 0C5.37 0 0 5.37 0 12c0 5.3 3.438 9.8 8.205 11.385.6.113.82-.258.82-.577 0-.285-.01-1.04-.015-2.04-3.338.724-4.042-1.61-4.042-1.61-.546-1.385-1.335-1.755-1.335-1.755-1.087-.744.084-.729.084-.729 1.205.084 1.838 1.236 1.838 1.236 1.07 1.835 2.809 1.305 3.495.998.108-.776.417-1.305.76-1.605-2.665-.3-5.466-1.332-5.466-5.93 0-1.31.465-2.38 1.235-3.22-.135-.303-.54-1.523.105-3.176 0 0 1.005-.322 3.3 1.23.96-.267 1.98-.399 3-.405 1.02.006 2.04.138 3 .405 2.28-1.552 3.285-1.23 3.285-1.23.645 1.653.24 2.873.12 3.176.765.84 1.23 1.91 1.23 3.22 0 4.61-2.805 5.625-5.475 5.92.42.36.81 1.096.81 2.22 0 1.605-.015 2.896-.015 3.286 0 .315.21.69.825.57C20.565 21.795 24 17.295 24 12c0-6.63-5.37-12-12-12"/>

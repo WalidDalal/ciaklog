@@ -47,7 +47,7 @@ function Navbar() {
         padding: '0 32px',
         height: '64px',
         backgroundColor: 'var(--bg-nav)',
-        borderBottom: '1px solid #222',
+        borderBottom: '1px solid var(--border)',
         position: 'sticky',
         top: 0,
         zIndex: 100,
@@ -73,7 +73,7 @@ function Navbar() {
               width: '100%',
               padding: '10px 16px 10px 40px',
               backgroundColor: 'var(--bg-hover)',
-              border: '1px solid #333',
+              border: '1px solid var(--border-soft)',
               borderRadius: '24px',
               color: 'var(--text)',
               fontSize: '14px',
@@ -105,7 +105,7 @@ function Navbar() {
               {/* Libreria — nascosta per admin */}
               {user?.role !== 'ADMIN' && (
                 <Link to="/library">
-                  <button style={{ padding: '8px 14px', backgroundColor: 'var(--bg-hover)', border: '1px solid #333', borderRadius: '6px', color: 'var(--text)', fontSize: '14px', cursor: 'pointer', whiteSpace: 'nowrap' }}>
+                  <button style={{ padding: '8px 14px', backgroundColor: 'var(--bg-hover)', border: '1px solid var(--border-soft)', borderRadius: '6px', color: 'var(--text)', fontSize: '14px', cursor: 'pointer', whiteSpace: 'nowrap' }}>
                     📚 Libreria
                   </button>
                 </Link>
@@ -138,7 +138,7 @@ function Navbar() {
                 {showDropdown && (
                   <div style={{
                     position: 'absolute', right: 0, top: '44px',
-                    backgroundColor: 'var(--bg-card)', border: '1px solid #333',
+                    backgroundColor: 'var(--bg-card)', border: '1px solid var(--border-soft)',
                     borderRadius: '10px', minWidth: '180px', overflow: 'hidden',
                     boxShadow: 'var(--shadow-lg)',
                     zIndex: 200,
@@ -149,7 +149,7 @@ function Navbar() {
                         solo Impostazioni, da cui può comunque modificare username e bio */}
                     {user?.role !== 'ADMIN' && (
                       <Link to={`/profile/${user?.username}`} onClick={() => setShowDropdown(false)}>
-                        <div style={{ padding: '12px 16px', color: 'var(--text)', fontSize: '14px', borderBottom: '1px solid #222', cursor: 'pointer' }}
+                        <div style={{ padding: '12px 16px', color: 'var(--text)', fontSize: '14px', borderBottom: '1px solid var(--border)', cursor: 'pointer' }}
                           onMouseEnter={e => e.currentTarget.style.backgroundColor = 'var(--bg-hover)'}
                           onMouseLeave={e => e.currentTarget.style.backgroundColor = 'transparent'}
                         >
@@ -158,7 +158,7 @@ function Navbar() {
                       </Link>
                     )}
                     <Link to="/settings" onClick={() => setShowDropdown(false)}>
-                      <div style={{ padding: '12px 16px', color: 'var(--text)', fontSize: '14px', borderBottom: '1px solid #222', cursor: 'pointer' }}
+                      <div style={{ padding: '12px 16px', color: 'var(--text)', fontSize: '14px', borderBottom: '1px solid var(--border)', cursor: 'pointer' }}
                         onMouseEnter={e => e.currentTarget.style.backgroundColor = 'var(--bg-hover)'}
                         onMouseLeave={e => e.currentTarget.style.backgroundColor = 'transparent'}
                       >
@@ -180,7 +180,7 @@ function Navbar() {
           ) : (
             <>
               <Link to="/login">
-                <button style={{ padding: '8px 20px', backgroundColor: 'transparent', border: '1px solid #555', borderRadius: '6px', color: 'var(--text)', fontSize: '14px', fontWeight: '500', cursor: 'pointer' }}>
+                <button style={{ padding: '8px 20px', backgroundColor: 'transparent', border: '1px solid var(--border-soft)', borderRadius: '6px', color: 'var(--text)', fontSize: '14px', fontWeight: '500', cursor: 'pointer' }}>
                   Accedi
                 </button>
               </Link>

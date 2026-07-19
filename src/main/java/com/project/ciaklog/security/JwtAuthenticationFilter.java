@@ -47,7 +47,21 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
         String username = jwtService.extractUsername(token);
 
         if (username != null && SecurityContextHolder.getContext().getAuthentication() == null) {
-            UserDetails userDetails = userDetailsService.loadUserByUsername(username);
+            UserDetails userDetails;
+            try {
+                userDetails = userDetailsService.loadUserByUsername(username);
+            } catch (org.springframework.security.core.userdetails.UsernameNotFoundException e) {
+                // Fix (Logica Moderazione — trovato in revisione): un token JWT
+                // valido ma con un utente non più risolvibile (es. account
+                // cancellato dopo l'emissione del token) lasciava propagare
+                // l'eccezione fuori dal filtro, risultando in un errore generico
+                // (500) invece di un 401 pulito e prevedibile per il frontend
+                log.warn("Token valido ma utente non trovato: {}", username);
+                response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
+                response.setContentType("application/json");
+                response.getWriter().write("{\"error\": \"Sessione non più valida, effettua di nuovo il login\"}");
+                return;
+            }
 
             // Blocca utenti sospesi anche se hanno un token ancora valido.
             // CustomUserDetailsService imposta disabled=true per SUSPENDED e PERMANENTLY_SUSPENDED.

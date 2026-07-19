@@ -10,7 +10,7 @@ import api from '../services/api'
 function StatCard({ label, value, sub, delay }) {
   return (
     <div style={{
-      backgroundColor: 'var(--bg-card)', border: '1px solid #222', borderRadius: '14px',
+      backgroundColor: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: '14px',
       padding: '28px 24px', textAlign: 'center',
       animation: `wrappedFadeUp .5s ease both`, animationDelay: `${delay}ms`,
     }}>
@@ -93,7 +93,11 @@ function WrappedPage() {
 
             {/* Griglia statistiche */}
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: '16px', marginBottom: '16px' }}>
-              <StatCard label="Recensioni scritte" value={data.totalReviews} delay={150} />
+              {/* Fix (Wrap — proposta accolta): "Visti" (sopra, grande) e "Recensioni
+                  scritte" erano sempre uguali una volta corretto il bug di conteggio —
+                  un titolo VISTO richiede una recensione e viceversa. Sostituita con una
+                  statistica diversa: quante risposte hai scritto sotto le recensioni altrui. */}
+              <StatCard label="Hai interagito con altri utenti" value={data.interactionsCount ?? 0} sub={data.interactionsCount === 1 ? 'risposta scritta' : 'risposte scritte'} delay={150} />
               {data.topGenre && (
                 <StatCard label="Genere del cuore" value={data.topGenre} sub={`${data.topGenreCount} titoli`} delay={200} />
               )}

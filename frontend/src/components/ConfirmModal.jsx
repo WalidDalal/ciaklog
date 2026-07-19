@@ -8,7 +8,7 @@ function ConfirmModal({ message, onConfirm, onCancel, confirmLabel = 'Conferma',
       <div style={{
         position: 'fixed', top: '50%', left: '50%',
         transform: 'translate(-50%, -50%)',
-        backgroundColor: 'var(--bg-card)', border: '1px solid #333',
+        backgroundColor: 'var(--bg-card)', border: '1px solid var(--border-soft)',
         borderRadius: '12px', padding: '28px 32px',
         zIndex: 501, minWidth: '320px', maxWidth: '440px',
         textAlign: 'center',
@@ -19,7 +19,7 @@ function ConfirmModal({ message, onConfirm, onCancel, confirmLabel = 'Conferma',
             onClick={onCancel}
             style={{
               padding: '10px 24px', borderRadius: '8px',
-              border: '1px solid #444', backgroundColor: 'transparent',
+              border: '1px solid var(--border-soft)', backgroundColor: 'transparent',
               color: 'var(--text)', fontSize: '14px', cursor: 'pointer',
             }}
           >

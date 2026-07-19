@@ -50,4 +50,10 @@ public class ReportResponse {
     // non esiste più — il frontend usa questo flag per nascondere il link
     // invece di mostrarlo comunque e farlo fallire in modo silenzioso
     private boolean targetRemoved;
+
+    // Testo del bersaglio al momento della segnalazione — reviewText/commentText
+    // sopra restano quelli ATTUALI (l'autore può averli modificati dopo).
+    // targetEdited indica se le due versioni differiscono, per evidenziarlo in UI
+    private String reportedText;
+    private boolean targetEdited;
 }

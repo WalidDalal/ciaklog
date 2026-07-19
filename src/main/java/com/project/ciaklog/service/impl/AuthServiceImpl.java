@@ -8,10 +8,12 @@ import com.project.ciaklog.entity.User;
 import com.project.ciaklog.entity.UserStatus;
 import com.project.ciaklog.exception.DuplicateResourceException;
 import com.project.ciaklog.exception.ForbiddenException;
+import com.project.ciaklog.exception.TooManyRequestsException;
 import com.project.ciaklog.exception.UnauthorizedException;
 import com.project.ciaklog.repository.UserRepository;
 import com.project.ciaklog.service.AuthService;
 import com.project.ciaklog.security.JwtService;
+import com.project.ciaklog.security.LoginRateLimiter;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
@@ -23,6 +25,7 @@ public class AuthServiceImpl implements AuthService {
     private final UserRepository userRepository;
     private final PasswordEncoder passwordEncoder;
     private final JwtService jwtService;
+    private final LoginRateLimiter loginRateLimiter;
 
     @Override
     public AuthResponse register(RegisterRequest dto) {
@@ -52,10 +55,20 @@ public class AuthServiceImpl implements AuthService {
 
     @Override
     public AuthResponse login(LoginRequest dto) {
+        // Fix (Logica Moderazione — trovato in revisione): nessun rate-limit
+        // sul login, password tentabili a raffica senza limiti
+        if (loginRateLimiter.isBlocked(dto.getEmail())) {
+            throw new TooManyRequestsException("Troppi tentativi falliti — riprova tra qualche minuto");
+        }
+
         User user = userRepository.findByEmail(dto.getEmail())
-                .orElseThrow(() -> new UnauthorizedException("Credenziali non valide"));
+                .orElseThrow(() -> {
+                    loginRateLimiter.recordFailure(dto.getEmail());
+                    return new UnauthorizedException("Credenziali non valide");
+                });
 
         if (!passwordEncoder.matches(dto.getPassword(), user.getPasswordHash())) {
+            loginRateLimiter.recordFailure(dto.getEmail());
             throw new UnauthorizedException("Credenziali non valide");
         }
 
@@ -63,6 +76,7 @@ public class AuthServiceImpl implements AuthService {
             throw new ForbiddenException("Account sospeso, contatta l'amministratore");
         }
 
+        loginRateLimiter.recordSuccess(dto.getEmail());
         String token = jwtService.generateToken(user);
         return AuthResponse.builder()
                 .token(token)

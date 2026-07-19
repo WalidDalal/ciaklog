@@ -71,4 +71,10 @@ public class Report {
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "resolved_by_id")
     private User resolvedBy;
+
+    // Snapshot del testo del bersaglio (recensione o risposta) al momento
+    // della segnalazione. L'autore può modificarlo dopo — questo resta
+    // com'era quando è stato segnalato, per confronto con la versione attuale
+    @Column(name = "reported_text", columnDefinition = "TEXT")
+    private String reportedText;
 }

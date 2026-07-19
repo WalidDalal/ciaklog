@@ -33,12 +33,27 @@ public class AdminController {
         return ResponseEntity.ok(adminService.getOperationalStats());
     }
 
+    // Fix (dashboard admin — ordinamento colonne): prima l'ordinamento era
+    // sempre "username ascendente", fisso, senza nessun parametro accettato —
+    // niente per cui il frontend potesse chiedere un ordinamento diverso.
+    // Whitelist esplicita sui campi ordinabili (non passare sortBy diretto a
+    // Sort.by(), altrimenti un nome di campo arbitrario/malevolo lo accetterebbe)
+    private static final java.util.Map<String, String> SORTABLE_FIELDS = java.util.Map.of(
+            "username", "username",
+            "status", "status",
+            "violationCount", "violationCount"
+    );
+
     @GetMapping("/users")
     public ResponseEntity<Page<AdminUserResponse>> listUsers(
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "10") int size,
-            @RequestParam(required = false) String search) {
-        PageRequest pageable = PageRequest.of(page, size, Sort.by("username").ascending());
+            @RequestParam(required = false) String search,
+            @RequestParam(defaultValue = "username") String sortBy,
+            @RequestParam(defaultValue = "asc") String sortDir) {
+        String field = SORTABLE_FIELDS.getOrDefault(sortBy, "username");
+        Sort.Direction direction = "desc".equalsIgnoreCase(sortDir) ? Sort.Direction.DESC : Sort.Direction.ASC;
+        PageRequest pageable = PageRequest.of(page, size, Sort.by(direction, field));
         return ResponseEntity.ok(adminService.listUsers(pageable, search));
     }
 

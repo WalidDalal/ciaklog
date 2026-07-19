@@ -48,11 +48,16 @@ public class ChartServiceImpl implements ChartService {
                 userRepository.findTop5ByRoleNotOrderByScoreDesc(Role.ADMIN);
 
         List<ChartUserResponse> result = new java.util.ArrayList<>();
+        // Fix (Homepage — classifica con pareggi): prima si usava "rank = i+1"
+        // solo quando il punteggio cambiava — un ranking "a salto" (1,2,2,4:
+        // 3 persone in 2ª posizione, la successiva salta alla 4ª contando gli
+        // scavalcati). Il comportamento richiesto è invece un ranking "denso"
+        // (1,2,2,3): chi ha un punteggio diverso prende semplicemente la
+        // posizione successiva a quella del gruppo precedente, senza salti.
         int rank = 1;
         for (int i = 0; i < users.size(); i++) {
-            // Stessa posizione se stesso score del precedente
             if (i > 0 && users.get(i).getScore() != users.get(i - 1).getScore()) {
-                rank = i + 1;
+                rank++;
             }
             com.project.ciaklog.entity.User u = users.get(i);
             result.add(ChartUserResponse.builder()

@@ -48,7 +48,7 @@ function StatusActions({ entry, onStatusChange, onDelete, onSeasonChange, deleti
                     aria-label="Rimuovi dalla libreria"
                     style={{
                         padding: '7px 10px', backgroundColor: 'transparent',
-                        border: '1px solid #2a2a2a', borderRadius: '6px',
+                        border: '1px solid var(--border-soft)', borderRadius: '6px',
                         color: 'var(--text-dark)', fontSize: '12px', cursor: 'pointer',
                     }}
                 >
@@ -74,14 +74,14 @@ function StatusActions({ entry, onStatusChange, onDelete, onSeasonChange, deleti
                         onClick={() => onSeasonChange(entry, Math.max(1, (entry.currentSeason || 1) - 1))}
                         aria-label="Stagione precedente"
                         tabIndex={(entry.contentType || entry.mediaType) === 'TV' ? 0 : -1}
-                        style={{ width: '22px', height: '22px', padding: 0, backgroundColor: 'transparent', border: '1px solid #2a2a2a', borderRadius: '4px', color: 'var(--text-dark)', fontSize: '12px', cursor: 'pointer' }}
+                        style={{ width: '22px', height: '22px', padding: 0, backgroundColor: 'transparent', border: '1px solid var(--border-soft)', borderRadius: '4px', color: 'var(--text-dark)', fontSize: '12px', cursor: 'pointer' }}
                     >−</button>
                     <span style={{ color: 'var(--text)', fontSize: '12px', fontWeight: '600', minWidth: '14px', textAlign: 'center' }}>{entry.currentSeason || 1}</span>
                     <button
                         onClick={() => onSeasonChange(entry, (entry.currentSeason || 1) + 1)}
                         aria-label="Stagione successiva"
                         tabIndex={(entry.contentType || entry.mediaType) === 'TV' ? 0 : -1}
-                        style={{ width: '22px', height: '22px', padding: 0, backgroundColor: 'transparent', border: '1px solid #2a2a2a', borderRadius: '4px', color: 'var(--text-dark)', fontSize: '12px', cursor: 'pointer' }}
+                        style={{ width: '22px', height: '22px', padding: 0, backgroundColor: 'transparent', border: '1px solid var(--border-soft)', borderRadius: '4px', color: 'var(--text-dark)', fontSize: '12px', cursor: 'pointer' }}
                     >+</button>
                 </div>
                 <div style={{ display: 'flex', gap: '6px' }}>
@@ -105,7 +105,7 @@ function StatusActions({ entry, onStatusChange, onDelete, onSeasonChange, deleti
                         aria-label="Rimuovi dalla libreria"
                         style={{
                             padding: '7px 10px', backgroundColor: 'transparent',
-                            border: '1px solid #2a2a2a', borderRadius: '6px',
+                            border: '1px solid var(--border-soft)', borderRadius: '6px',
                             color: 'var(--text-dark)', fontSize: '12px', cursor: 'pointer',
                         }}
                     >
@@ -124,7 +124,7 @@ function StatusActions({ entry, onStatusChange, onDelete, onSeasonChange, deleti
                 disabled={deleting}
                 style={{
                     width: '100%', padding: '7px 0', backgroundColor: 'transparent',
-                    border: '1px solid #2a2a2a', borderRadius: '6px',
+                    border: '1px solid var(--border-soft)', borderRadius: '6px',
                     color: 'var(--text-dark)', fontSize: '12px', cursor: 'pointer',
                 }}
             >
@@ -225,8 +225,11 @@ function LibraryPage() {
             await api.delete(`/library/${id}`)
             setAllEntries(prev => prev.filter(e => e.id !== id))
             toast.show('Rimosso dalla libreria', 'success')
-        } catch {
-            toast.show('Errore durante la rimozione')
+        } catch (err) {
+            // Fix: mostrava sempre "Errore durante la rimozione" generico — ora
+            // con la nuova regola (non si rimuove un titolo già recensito) serve
+            // mostrare il motivo vero, non un messaggio muto
+            toast.show(err.response?.data?.error || 'Errore durante la rimozione')
         } finally {
             setDeletingId(null)
         }
@@ -299,7 +302,7 @@ function LibraryPage() {
                 {!loading && entries.length > 0 && (
                     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(175px, 1fr))', gap: '20px' }}>
                         {entries.map(entry => (
-                            <div key={entry.id} style={{ backgroundColor: 'var(--bg-card)', border: '1px solid #222', borderRadius: '10px', overflow: 'hidden' }}>
+                            <div key={entry.id} style={{ backgroundColor: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: '10px', overflow: 'hidden' }}>
 
                                 <Link to={`/movie/${entry.tmdbId}?type=${entry.contentType || entry.mediaType}`}>
                                     <div style={{ position: 'relative' }}>
