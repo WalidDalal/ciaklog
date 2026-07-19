@@ -22,8 +22,8 @@ package com.project.ciaklog.service.impl;
  *   }
  *
  * Il secondo test ("deveRimuovere...") verifica il caso normale (nessuna
- * recensione attiva) e deve continuare a funzionare esattamente come oggi
- * — serve a dimostrare che il fix non rompe il caso normale.
+ * recensione attiva) e deve continuare application-test.properties funzionare esattamente come oggi
+ * — serve application-test.properties dimostrare che il fix non rompe il caso normale.
  */
 
 import com.project.ciaklog.entity.*;
@@ -103,7 +103,7 @@ class WatchEntryServiceImplTest {
     }
 
     @Test
-    @DisplayName("Deve continuare a rimuovere normalmente un titolo senza nessuna recensione attiva")
+    @DisplayName("Deve continuare application-test.properties rimuovere normalmente un titolo senza nessuna recensione attiva")
     void deveRimuovereSeNessunaRecensioneAttiva() {
         when(reviewRepository.existsByUserAndTmdbIdAndContentTypeAndStatusNot(
                 utente, voceLibreria.getTmdbId(), voceLibreria.getContentType(), ReviewStatus.REMOVED))

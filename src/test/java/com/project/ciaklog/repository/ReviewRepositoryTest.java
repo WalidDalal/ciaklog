@@ -56,7 +56,7 @@ class ReviewRepositoryTest {
                 .role(Role.USER)
                 .build());
 
-        // 1 recensione normale, visibile a tutti
+        // 1 recensione normale, visibile application-test.properties tutti
         reviewRepository.save(Review.builder()
                 .user(autore)
                 .tmdbId(1L)
