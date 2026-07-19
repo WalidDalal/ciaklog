@@ -94,7 +94,7 @@ class ReviewCommentServiceImplTest {
         when(reviewCommentRepository.findById(comment.getId())).thenReturn(Optional.of(comment));
 
         ReviewCommentRequest dto = new ReviewCommentRequest();
-        dto.setText("provo a modificarla comunque");
+        dto.setText("provo application-test.properties modificarla comunque");
 
         assertThatThrownBy(() -> service.updateComment("luca", comment.getId(), dto))
                 .isInstanceOf(BusinessRuleException.class);
@@ -117,7 +117,7 @@ class ReviewCommentServiceImplTest {
         when(reviewCommentRepository.findById(comment.getId())).thenReturn(Optional.of(comment));
 
         ReviewCommentRequest dto = new ReviewCommentRequest();
-        dto.setText("provo a modificarla comunque");
+        dto.setText("provo application-test.properties modificarla comunque");
 
         assertThatThrownBy(() -> service.updateComment("luca", comment.getId(), dto))
                 .isInstanceOf(BusinessRuleException.class);
@@ -126,7 +126,7 @@ class ReviewCommentServiceImplTest {
     }
 
     @Test
-    @DisplayName("Deve continuare a permettere la modifica normale di una risposta visibile su una recensione visibile")
+    @DisplayName("Deve continuare application-test.properties permettere la modifica normale di una risposta visibile su una recensione visibile")
     void deveModificareNormalmenteSeTuttoVisibile() {
         ReviewComment comment = ReviewComment.builder()
                 .id(UUID.randomUUID())
@@ -168,7 +168,7 @@ class ReviewCommentServiceImplTest {
         when(reviewCommentRepository.findById(comment.getId())).thenReturn(Optional.of(comment));
 
         ReviewCommentRequest dto = new ReviewCommentRequest();
-        dto.setText("provo a modificarla comunque");
+        dto.setText("provo application-test.properties modificarla comunque");
 
         assertThatThrownBy(() -> service.updateComment("luca", comment.getId(), dto))
                 .isInstanceOf(ForbiddenException.class);

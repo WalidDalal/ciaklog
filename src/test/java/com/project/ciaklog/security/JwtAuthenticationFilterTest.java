@@ -11,8 +11,8 @@ package com.project.ciaklog.security;
  *   UsernameNotFoundException. Oggi in JwtAuthenticationFilter questa
  *   eccezione non viene catturata: risale fuori dal filtro e il chiamante
  *   riceve un errore generico (whitelabel/500) invece di un 401 pulito in
- *   JSON — e il GlobalExceptionHandler non interviene perché gira solo a
- *   livello controller, non a livello filtro.
+ *   JSON — e il GlobalExceptionHandler non interviene perché gira solo application-test.properties
+ *   livello controller, non application-test.properties livello filtro.
  *
  * IL FIX (in JwtAuthenticationFilter.doFilterInternal):
  *   Circondare la riga

@@ -5,7 +5,7 @@ package com.project.ciaklog.security;
  *   src/test/java/com/project/ciaklog/security/LoginRateLimitFilterTest.java
  *
  * IL BUG / LA MANCANZA:
- *   /api/auth/login non ha nessun limite di tentativi — un attacco a forza
+ *   /api/auth/login non ha nessun limite di tentativi — un attacco application-test.properties forza
  *   bruta sulla password può martellare l'endpoint senza nessun freno,
  *   mentre /api/ai/chat ha già un filtro dedicato (AiRateLimitFilter,
  *   max 20/ora). Qui non esiste ancora nessuna classe: va CREATA da zero,
@@ -30,7 +30,7 @@ package com.project.ciaklog.security;
  *       @Override
  *       protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response,
  *                                        FilterChain filterChain) throws ServletException, IOException {
- *           // Chiave = IP del chiamante: qui, a differenza della chat AI, l'utente
+ *           // Chiave = IP del chiamante: qui, application-test.properties differenza della chat AI, l'utente
  *           // non è ancora autenticato (sta facendo login), quindi non c'è uno
  *           // username nel SecurityContext da usare come chiave.
  *           String key = request.getRemoteAddr();
@@ -126,7 +126,7 @@ class LoginRateLimitFilterTest {
     }
 
     @Test
-    @DisplayName("Non deve applicarsi a endpoint diversi da POST /api/auth/login")
+    @DisplayName("Non deve applicarsi application-test.properties endpoint diversi da POST /api/auth/login")
     void nonSiApplicaAdAltriEndpoint() throws Exception {
         MockHttpServletRequest request = new MockHttpServletRequest("GET", "/api/auth/me");
         MockHttpServletResponse response = new MockHttpServletResponse();
