@@ -1,5 +1,6 @@
 package com.project.ciaklog.exception;
 
+import jakarta.validation.ConstraintViolationException;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -16,6 +17,20 @@ import java.util.Map;
 @Slf4j
 @RestControllerAdvice
 public class GlobalExceptionHandler {
+
+    // 400 — validazione su parametri di query/path (es. @Size su @RequestParam),
+    // diversa da MethodArgumentNotValidException che copre solo i DTO nel body.
+    // Mancava questo handler: una ricerca con meno di 2 caratteri finiva nel
+    // catch-all generico, loggata come errore non gestito (con stack trace
+    // intero) invece che come normale input non valido dell'utente
+    @ExceptionHandler(ConstraintViolationException.class)
+    public ResponseEntity<Map<String, Object>> handleConstraintViolation(ConstraintViolationException ex) {
+        String message = ex.getConstraintViolations().stream()
+                .findFirst()
+                .map(v -> v.getMessage())
+                .orElse("Parametro non valido");
+        return buildResponse(HttpStatus.BAD_REQUEST, message);
+    }
 
     // 404 — risorsa non trovata
     @ExceptionHandler(ResourceNotFoundException.class)
