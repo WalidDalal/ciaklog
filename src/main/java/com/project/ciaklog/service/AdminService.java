@@ -14,6 +14,6 @@ public interface AdminService {
     void suspendUser(UUID userId, String adminUsername, String reason);
     void reinstateUser(UUID userId);
 
-    // Fix (Home Admin, deciso): card operativa leggera
+    // Card operativa leggera
     AdminOperationalStatsResponse getOperationalStats();
 }

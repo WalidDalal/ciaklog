@@ -44,7 +44,7 @@ export function ChatCore({ compact = false, initialPrompt = null }) {
     setLoading(true)
 
     try {
-      // Fix: gli admin devono usare l'endpoint gestionale /ai/chat/admin —
+      // Gli admin devono usare l'endpoint gestionale /ai/chat/admin —
       // prima veniva sempre chiamato /ai/chat, protetto con hasRole('USER'),
       // che un admin non possiede: la richiesta falliva sempre.
       const endpoint = isAdmin ? '/ai/chat/admin' : '/ai/chat'
@@ -54,7 +54,7 @@ export function ChatCore({ compact = false, initialPrompt = null }) {
         sessionHistory: messages.slice(-10),
       })
       setSessionId(res.data.sessionId)
-      // Fix: il frontend usava role: 'AI', ma l'enum MessageRole del backend
+      // Il frontend usava role: 'AI', ma l'enum MessageRole del backend
       // accetta solo USER/ASSISTANT — al primo giro andava bene (il messaggio
       // non torna mai indietro), ma dal secondo messaggio in poi 'AI' finiva
       // nella sessionHistory rimandata al backend, che falliva la deserializzazione

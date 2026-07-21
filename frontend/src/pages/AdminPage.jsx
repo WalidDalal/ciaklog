@@ -163,7 +163,7 @@ function AdminPage() {
   const { user, token } = useAuthStore()
   const toast = useToastStore()
 
-  // Fix (dashboard admin, Step 6): tab e filtro nell'URL invece che solo in
+  // Tab e filtro nell'URL invece che solo in
   // stato locale — così "torna alla dashboard" (browser back) dal contesto
   // di una recensione/risposta ripristina davvero dove si era, non solo
   // visivamente ma anche come voce di history. Lo scroll segue gratis: il
@@ -181,7 +181,7 @@ function AdminPage() {
   const [drawerLoading, setDrawerLoading] = useState(false)
   const [userSearch, setUserSearch] = useState('')
 
-  // Fix (dashboard admin — ordinamento colonne): stato per l'ordinamento
+  // Stato per l'ordinamento
   // cliccabile — default alfabetico crescente come prima, ma ora modificabile
   const [usersSortBy, setUsersSortBy] = useState('username')
   const [usersSortDir, setUsersSortDir] = useState('asc')
@@ -198,7 +198,7 @@ function AdminPage() {
   // Modal sospensione manuale dalla tabella
   const [suspendTarget, setSuspendTarget] = useState(null) // { id, username }
 
-  // Fix (dashboard admin): motivo scelto dall'admin per gruppo, quando i
+  // Motivo scelto dall'admin per gruppo, quando i
   // pending hanno categorie diverse — { [groupKey]: 'SPAM' }
   const [chosenReasonByGroup, setChosenReasonByGroup] = useState({})
 
@@ -230,7 +230,7 @@ function AdminPage() {
         api.get('/admin/users', { params: { page: 0, size: 1 } }),
         api.get('/reports', { params: { status: 'PENDING' } }),
       ])
-      // Fix: l'app serializza le risposte paginate con PageSerializationMode.VIA_DTO
+      // L'app serializza le risposte paginate con PageSerializationMode.VIA_DTO
       // (vedi CiaklogApplication.java) — totalElements/totalPages NON sono più in
       // cima all'oggetto ma annidati sotto `.page.` (es. { content: [...], page: {
       // totalElements, totalPages, number } }). Leggerli in cima dava sempre
@@ -249,7 +249,7 @@ function AdminPage() {
         params: { page: usersPage, size: 10, search: userSearch || undefined, sortBy: usersSortBy, sortDir: usersSortDir }
       })
       setUsers(res.data.content || res.data)
-      // Fix: stesso problema di sopra — data.totalPages è undefined con VIA_DTO,
+      // Stesso problema di sopra — data.totalPages è undefined con VIA_DTO,
       // quindi cadeva sempre sul fallback "1" (pagina 1/1 fissa)
       setUsersTotalPages(res.data.page?.totalPages || 1)
     } catch { setUsers([]) }
@@ -290,7 +290,7 @@ function AdminPage() {
     catch (err) { toast.show(err.response?.data?.error || 'Errore') }
   }
 
-  // Fix: raggruppa le segnalazioni per bersaglio (recensione O risposta), invece
+  // Raggruppa le segnalazioni per bersaglio (recensione O risposta), invece
   // di mostrarle come righe separate — così l'admin vede "X — N segnalazioni".
   // Nota: la vera distinzione visiva recensioni/risposte nella dashboard è un
   // pezzo a parte — questa è solo la patch minima per non rompersi con i due target.
@@ -305,7 +305,7 @@ function AdminPage() {
   }, [reports])
 
   // Approva/rifiuta in blocco tutte le segnalazioni pendenti di una recensione.
-  // Fix (dashboard admin): quando i pending del gruppo hanno motivi diversi
+  // Quando i pending del gruppo hanno motivi diversi
   // (es. SPAM e INAPPROPRIATE_CONTENT), finalReasonCategory è quello scelto
   // dall'admin tra quelli effettivamente usati — normalizza tutti i report
   // del gruppo sullo stesso motivo invece di lasciarne "vincere" uno a caso.
@@ -548,7 +548,7 @@ function AdminPage() {
                         const contentText = isComment ? first.commentText : first.reviewText
                         const expanded = expandedReport === groupKey
                         const pendingCount = group.filter(r => r.status === 'PENDING').length
-                        // Fix (dashboard admin): motivi diversi tra i pending dello stesso
+                        // Motivi diversi tra i pending dello stesso
                         // bersaglio — l'admin deve scegliere quale è quello valido, solo
                         // tra quelli effettivamente usati dagli utenti nelle segnalazioni
                         const pendingReasons = [...new Set(group.filter(r => r.status === 'PENDING').map(r => r.reasonCategory))]
@@ -580,45 +580,50 @@ function AdminPage() {
                               {expanded && (
                                   <div style={{ padding: '0 20px 20px', borderTop: '1px solid var(--border-soft)' }}>
 
-                                    {/* Fix (dashboard admin — versione segnalata, corretto): per le
-                                        segnalazioni create PRIMA di questo aggiornamento, reportedText
-                                        è null — il fallback "|| contentText" mostrava il testo ATTUALE
-                                        ma etichettato come "al momento della segnalazione", il che è
-                                        falso. Ora l'etichetta dice onestamente cosa si sta vedendo:
-                                        "Versione vecchia" solo se reportedText esiste davvero, "Versione
-                                        attuale" plain altrimenti (nessuno snapshot disponibile). */}
-                                    {first.reportedText ? (
-                                        <div style={{ backgroundColor: 'var(--bg-card)', borderLeft: '3px solid #e50914', borderRadius: '0 8px 8px 0', padding: '14px 16px', margin: '16px 0' }}>
-                                          <div style={{ color: 'var(--text-dark)', fontSize: '11px', fontWeight: '600', textTransform: 'uppercase', letterSpacing: '1px', marginBottom: '6px' }}>
-                                            📌 {isComment ? 'Risposta' : 'Recensione'} — versione vecchia (al momento della segnalazione)
+                                    {/* Fix (dashboard admin — banner "nascosta"): indica se il bersaglio
+                                        ha già raggiunto la soglia di auto-nascondimento (altre 2+
+                                        segnalazioni PENDING), utile per capire a colpo d'occhio lo stato
+                                        prima ancora di leggere il testo */}
+                                    {first.targetHidden && (
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', backgroundColor: 'rgba(245,158,11,0.1)', border: '1px solid #f59e0b44', borderRadius: '6px', padding: '8px 12px', margin: '16px 0 0', color: '#f59e0b', fontSize: '12px', fontWeight: '600' }}>
+                                          🔶 {isComment ? 'Questa risposta è' : 'Questa recensione è'} già nascosta automaticamente (soglia di segnalazioni raggiunta) — invisibile agli altri utenti in attesa della tua decisione.
+                                        </div>
+                                    )}
+
+                                    {/* Fix (dashboard admin — versione segnalata): l'etichetta "versione
+                                        al momento della segnalazione" ha senso SOLO se il testo è stato
+                                        davvero modificato dopo — altrimenti è solo rumore che fa sembrare
+                                        "vecchio" un testo che in realtà è ancora quello attuale. Quando
+                                        c'è una modifica reale, mostriamo le due versioni affiancate
+                                        (vecchia a sinistra, nuova a destra) invece che una sopra l'altra. */}
+                                    {first.reportedText && first.targetEdited && !first.targetRemoved && contentText ? (
+                                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', margin: '16px 0' }}>
+                                          <div style={{ backgroundColor: 'var(--bg-card)', borderLeft: '3px solid #e50914', borderRadius: '0 8px 8px 0', padding: '14px 16px' }}>
+                                            <div style={{ color: 'var(--text-dark)', fontSize: '11px', fontWeight: '600', textTransform: 'uppercase', letterSpacing: '1px', marginBottom: '6px' }}>
+                                              📌 Versione vecchia
+                                            </div>
+                                            <p style={{ color: 'var(--text-muted)', fontSize: '14px', lineHeight: 1.6, margin: 0, fontStyle: 'italic' }}>
+                                              "{first.reportedText}"
+                                            </p>
                                           </div>
-                                          <p style={{ color: 'var(--text-muted)', fontSize: '14px', lineHeight: 1.6, margin: 0, fontStyle: 'italic' }}>
-                                            "{first.reportedText}"
-                                          </p>
+                                          <div style={{ backgroundColor: 'var(--bg-card)', borderLeft: '3px solid #3b82f6', borderRadius: '0 8px 8px 0', padding: '14px 16px' }}>
+                                            <div style={{ color: '#3b82f6', fontSize: '11px', fontWeight: '600', textTransform: 'uppercase', letterSpacing: '1px', marginBottom: '6px' }}>
+                                              ✏️ Versione nuova
+                                            </div>
+                                            <p style={{ color: 'var(--text-muted)', fontSize: '14px', lineHeight: 1.6, margin: 0, fontStyle: 'italic' }}>
+                                              "{contentText}"
+                                            </p>
+                                            {!isComment && first.reviewRating && (
+                                                <div style={{ marginTop: '8px', color: 'var(--gold)', fontSize: '13px' }}>
+                                                  {'★'.repeat(first.reviewRating)}
+                                                </div>
+                                            )}
+                                          </div>
                                         </div>
                                     ) : contentText && (
                                         <div style={{ backgroundColor: 'var(--bg-card)', borderLeft: '3px solid #e50914', borderRadius: '0 8px 8px 0', padding: '14px 16px', margin: '16px 0' }}>
                                           <div style={{ color: 'var(--text-dark)', fontSize: '11px', fontWeight: '600', textTransform: 'uppercase', letterSpacing: '1px', marginBottom: '6px' }}>
-                                            {isComment ? 'Risposta segnalata' : 'Recensione segnalata'}{' '}
-                                            <span style={{ color: 'var(--text-dark)', textTransform: 'none', fontWeight: '400' }}>(nessuno snapshot — segnalazione precedente a questa funzione)</span>
-                                          </div>
-                                          <p style={{ color: 'var(--text-muted)', fontSize: '14px', lineHeight: 1.6, margin: 0, fontStyle: 'italic' }}>
-                                            "{contentText}"
-                                          </p>
-                                          {!isComment && first.reviewRating && (
-                                              <div style={{ marginTop: '8px', color: 'var(--gold)', fontSize: '13px' }}>
-                                                {'★'.repeat(first.reviewRating)}
-                                              </div>
-                                          )}
-                                        </div>
-                                    )}
-
-                                    {/* Versione nuova — solo se esiste davvero uno snapshot da confrontare
-                                        E il testo attuale è presente E differisce da quello vecchio */}
-                                    {first.reportedText && first.targetEdited && !first.targetRemoved && contentText && (
-                                        <div style={{ backgroundColor: 'var(--bg-card)', borderLeft: '3px solid #3b82f6', borderRadius: '0 8px 8px 0', padding: '14px 16px', margin: '16px 0' }}>
-                                          <div style={{ color: '#3b82f6', fontSize: '11px', fontWeight: '600', textTransform: 'uppercase', letterSpacing: '1px', marginBottom: '6px' }}>
-                                            ✏️ {isComment ? 'Risposta' : 'Recensione'} — versione nuova (modificata dopo la segnalazione)
+                                            {isComment ? 'Risposta segnalata' : 'Recensione segnalata'}
                                           </div>
                                           <p style={{ color: 'var(--text-muted)', fontSize: '14px', lineHeight: 1.6, margin: 0, fontStyle: 'italic' }}>
                                             "{contentText}"

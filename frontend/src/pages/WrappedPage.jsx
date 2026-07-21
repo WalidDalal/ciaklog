@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom'
 import Navbar from '../components/Navbar'
 import api from '../services/api'
 
-// Fix (Priorità 1 — CiakLog Wrapped): recap personale stile "Spotify Wrapped".
+// Recap personale stile "Spotify Wrapped".
 // Statistiche calcolate lato backend da dati già esistenti, più un piccolo
 // commento narrativo generato dall'AI (opzionale — la pagina funziona anche
 // se l'AI non risponde, il backend torna aiNarrative vuota in quel caso).

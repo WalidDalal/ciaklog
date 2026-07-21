@@ -110,7 +110,7 @@ public class ReviewServiceImpl implements ReviewService {
         userRepository.save(user);
     }
 
-    // Fix (auto-nascondimento autore, deciso): toggle reversibile e separato
+    // Toggle reversibile e separato
     // da status/moderazione — nessun impatto su punteggio o violationCount,
     // e non genera nessun Report (quindi non finisce mai nella coda admin)
     @Override

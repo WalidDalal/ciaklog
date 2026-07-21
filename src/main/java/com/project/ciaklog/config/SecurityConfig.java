@@ -70,7 +70,7 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.PUT, "/api/reports/**").hasRole("ADMIN")
                         .anyRequest().authenticated()
                 )
-                // Fix (nessun rate-limit sul login): loginRateLimitFilter va prima
+                // LoginRateLimitFilter va prima
                 // del filtro JWT — /api/auth/login è pubblico (permitAll) quindi non
                 // ha comunque bisogno del controllo JWT, ma così il rate-limit scatta
                 // il prima possibile nella catena

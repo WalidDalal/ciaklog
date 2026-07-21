@@ -24,7 +24,7 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.stream.Collectors;
 
-// Fix (Priorità 1 — CiakLog Wrapped): tutte le statistiche vengono dai dati
+// Tutte le statistiche vengono dai dati
 // già esistenti (WatchEntry + Review), nessuna nuova tabella per i numeri —
 // solo il commento narrativo finale passa dall'AI, ed è opzionale (se l'AI
 // non risponde, il Wrapped funziona comunque senza quella riga).
@@ -46,7 +46,7 @@ public class WrappedServiceImpl implements WrappedService {
 
         List<WatchEntry> watched = watchEntryRepository.findAllByUserAndStatus(user, WatchStatus.WATCHED);
 
-        // Fix: le REMOVED non devono contare nelle statistiche personali —
+        // Le REMOVED non devono contare nelle statistiche personali —
         // sono state rimosse per violazione, non fanno parte del "tuo anno"
         List<Review> reviews = reviewRepository.findAllByUser(user).stream()
                 .filter(r -> r.getStatus() != ReviewStatus.REMOVED)
@@ -78,7 +78,7 @@ public class WrappedServiceImpl implements WrappedService {
 
         // Titoli per recuperare un nome leggibile dato tmdbId+contentType
         // (Review non salva il titolo, WatchEntry sì — evita una chiamata TMDB in più)
-        // Fix (Wrapped — titolo preferito che spariva): la mappa titoli usava solo
+        // La mappa titoli usava solo
         // le entry con status WATCHED. Se dopo aver recensito un titolo il suo stato
         // cambiava (rimesso "da vedere", rimosso dalla libreria), la entry usciva da
         // "watched" e la recensione — che esiste ancora — non trovava più un titolo,

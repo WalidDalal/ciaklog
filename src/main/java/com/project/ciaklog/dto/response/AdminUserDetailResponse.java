@@ -22,7 +22,7 @@ public class AdminUserDetailResponse {
     private int reportCount; // segnalazioni ricevute sulle sue recensioni
     private LocalDateTime createdAt;
     private List<ViolationItem> violations;
-    // Fix (dashboard admin): serve al drawer laterale per nascondere le azioni
+    // Serve al drawer laterale per nascondere le azioni
     // di moderazione quando l'utente selezionato è un altro Admin
     private Role role;
 

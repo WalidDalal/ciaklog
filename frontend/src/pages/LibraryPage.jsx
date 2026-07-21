@@ -144,15 +144,15 @@ function LibraryPage() {
 
     const [allEntries, setAllEntries] = useState([])
     const [loading, setLoading] = useState(true)
-    // Fix: il voto dato non era mai mostrato in libreria — mappa tmdbId_contentType -> rating
+    // Il voto dato non era mai mostrato in libreria — mappa tmdbId_contentType -> rating
     const [ratingMap, setRatingMap] = useState({})
-    // Fix: legge il filtro dall'URL se viene da HomePage con ?filter=
+    // Legge il filtro dall'URL se viene da HomePage con ?filter=
     const [filter, setFilter] = useState(searchParams.get('filter') || 'WATCHING')
     const [deletingId, setDeletingId] = useState(null)
     const [confirmDelete, setConfirmDelete] = useState(null) // id da eliminare
     const toast = useToastStore()
 
-    // Fix (suggerimento contestuale AI negli stati vuoti, approvato): frase
+    // Frase
     // breve al posto del solito messaggio piatto — fallback silenzioso se
     // l'AI non risponde (il messaggio statico esistente resta comunque)
     const [emptyTip, setEmptyTip] = useState('')
@@ -203,7 +203,7 @@ function LibraryPage() {
         }
     }
 
-    // Fix: aggiorna solo la stagione corrente, senza toccare lo stato
+    // Aggiorna solo la stagione corrente, senza toccare lo stato
     const handleSeasonChange = async (entry, newSeason) => {
         try {
             const res = await api.patch(`/library/${entry.id}/season`, null, { params: { currentSeason: newSeason } })
@@ -226,7 +226,7 @@ function LibraryPage() {
             setAllEntries(prev => prev.filter(e => e.id !== id))
             toast.show('Rimosso dalla libreria', 'success')
         } catch (err) {
-            // Fix: mostrava sempre "Errore durante la rimozione" generico — ora
+            // Mostrava sempre "Errore durante la rimozione" generico — ora
             // con la nuova regola (non si rimuove un titolo già recensito) serve
             // mostrare il motivo vero, non un messaggio muto
             toast.show(err.response?.data?.error || 'Errore durante la rimozione')

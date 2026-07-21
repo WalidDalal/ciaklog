@@ -24,10 +24,10 @@ public class ReviewController {
 
     private final ReviewService reviewService;
 
-    // Fix (auto-nascondimento autore): serve sapere CHI guarda per far vedere
+    // Serve sapere CHI guarda per far vedere
     // all'autore la propria recensione anche se l'ha nascosta — userDetails è
     // nullable qui (endpoint pubblico, un visitatore anonimo può guardarla)
-    // Fix (dashboard admin — commenti/recensioni nascosti): un Admin deve
+    // Un Admin deve
     // vedere anche quelle nascoste dall'autore o con status HIDDEN
     @GetMapping("/media/{contentType}/{tmdbId}")
     public ResponseEntity<Page<ReviewResponse>> getReviewsForMedia(
@@ -41,7 +41,7 @@ public class ReviewController {
         return ResponseEntity.ok(reviewService.getReviewsForMedia(tmdbId, contentType, viewerUsername, isAdmin, pageable));
     }
 
-    // Fix (Profilo pubblico — recensioni rimosse/nascoste visibili a chiunque):
+    //
     // userDetails è nullable, un profilo pubblico è visibile anche da anonimo —
     // ma quando c'è, serve per far vedere all'autore le proprie nascoste e
     // all'Admin quelle in HIDDEN, esattamente come già succede per la pagina film
@@ -81,7 +81,7 @@ public class ReviewController {
         return ResponseEntity.noContent().build();
     }
 
-    // Fix (auto-nascondimento autore, deciso): reversibile, separato dalla
+    // Reversibile, separato dalla
     // moderazione — l'autore nasconde/rimostra la propria recensione senza
     // penalità e senza generare nessuna segnalazione
     @PatchMapping("/{id}/visibility")

@@ -51,7 +51,7 @@ public class Review {
     @Builder.Default
     private ReviewStatus status = ReviewStatus.VISIBLE;
 
-    // Fix (auto-nascondimento autore, deciso): campo separato da `status` di
+    // Campo separato da `status` di
     // proposito — nascondere una propria recensione non è una violazione,
     // non tocca il punteggio/violationCount, e non deve MAI finire nella coda
     // di moderazione admin (che legge solo i Report, non questo campo).

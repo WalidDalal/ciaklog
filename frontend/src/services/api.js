@@ -38,7 +38,7 @@ api.interceptors.response.use(
   err => {
     if (axios.isCancel(err)) return Promise.reject(err)
 
-    // Fix: il backend manda il messaggio specifico in `details` (per campo),
+    // Il backend manda il messaggio specifico in `details` (per campo),
     // ma tutte le pagine leggono solo `err.response?.data?.error`, che è sempre
     // il generico "Dati non validi". Centralizzato qui una volta sola: se
     // `details` esiste, riscrive `error` col messaggio specifico prima di

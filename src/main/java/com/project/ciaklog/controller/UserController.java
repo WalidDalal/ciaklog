@@ -44,7 +44,7 @@ public class UserController {
     }
 
     // Eliminazione account — anonimizza i dati dell'utente
-    // Fix: richiede la password come conferma finale, non solo il modal
+    // Richiede la password come conferma finale, non solo il modal
     @DeleteMapping("/me")
     public ResponseEntity<Void> deleteAccount(
             @AuthenticationPrincipal UserDetails userDetails,

@@ -15,7 +15,7 @@ public class ReviewCommentResponse {
     private String authorUsername;
     private String text;
     private ReviewStatus status;
-    // Fix (auto-nascondimento autore): come per Review, campo separato
+    // Come per Review, campo separato
     private boolean hiddenByAuthor;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;

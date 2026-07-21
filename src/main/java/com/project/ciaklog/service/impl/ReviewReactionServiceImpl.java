@@ -34,7 +34,7 @@ public class ReviewReactionServiceImpl implements ReviewReactionService {
         Review review = reviewRepository.findById(reviewId)
                 .orElseThrow(() -> new ResourceNotFoundException("Recensione non trovata"));
 
-        // Fix: non farmabile — non ci si può reagire da soli (stesso principio
+        // Non farmabile — non ci si può reagire da soli (stesso principio
         // del divieto di auto-segnalazione)
         if (review.getUser().getId().equals(user.getId())) {
             throw new BusinessRuleException("Non puoi reagire alla tua recensione");
@@ -127,7 +127,7 @@ public class ReviewReactionServiceImpl implements ReviewReactionService {
 
     // ── helpers ──
 
-    // Fix: +1 punto per ogni reazione RICEVUTA (deciso) — mai sotto zero
+    // +1 punto per ogni reazione RICEVUTA (deciso) — mai sotto zero
     private void adjustAuthorScore(User author, int delta) {
         author.setScore(Math.max(0, author.getScore() + delta));
         userRepository.save(author);

@@ -55,7 +55,7 @@ public class AuthServiceImpl implements AuthService {
 
     @Override
     public AuthResponse login(LoginRequest dto) {
-        // Fix (Logica Moderazione — trovato in revisione): nessun rate-limit
+        // Nessun rate-limit
         // sul login, password tentabili a raffica senza limiti
         if (loginRateLimiter.isBlocked(dto.getEmail())) {
             throw new TooManyRequestsException("Troppi tentativi falliti — riprova tra qualche minuto");

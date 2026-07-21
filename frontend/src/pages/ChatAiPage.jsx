@@ -14,7 +14,7 @@ function ChatAiPage() {
   if (!token) return <Navigate to="/login" replace />
 
   return (
-    // Fix (Assistente AI — schermo intero): il contenitore usava minHeight:100vh
+    // Il contenitore usava minHeight:100vh
     // senza altezza fissata e senza flexShrink/minHeight:0 sulla parte sotto —
     // ChatCore chiede height:100% al suo genitore per far scrollare solo i
     // messaggi e tenere l'input sempre ancorato in fondo (come nel popup a

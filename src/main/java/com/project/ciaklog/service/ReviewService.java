@@ -16,7 +16,7 @@ public interface ReviewService {
     Page<ReviewResponse> getReviewsForMedia(Long tmdbId, ContentType contentType, String viewerUsername, boolean isAdmin, Pageable pageable);
     Page<ReviewResponse> getUserReviews(String username, String viewerUsername, boolean isAdmin, Pageable pageable);
 
-    // Fix (auto-nascondimento autore, deciso): toggle reversibile, separato
+    // Toggle reversibile, separato
     // da status/moderazione, nessun impatto sul punteggio
     ReviewResponse setHiddenByAuthor(String username, UUID reviewId, boolean hidden);
 }

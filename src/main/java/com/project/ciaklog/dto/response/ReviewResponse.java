@@ -18,7 +18,7 @@ public class ReviewResponse {
     private Integer rating;
     private String text;
     private ReviewStatus status;
-    // Fix (auto-nascondimento autore): visibile solo per sapere se è nascosta —
+    // Visibile solo per sapere se è nascosta —
     // l'endpoint pubblico (getReviewsForMedia) già esclude questi elementi a
     // monte, quindi in pratica arriva valorizzato solo dalle chiamate own-profile
     private boolean hiddenByAuthor;

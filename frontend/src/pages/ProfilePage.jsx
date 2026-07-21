@@ -40,7 +40,7 @@ function ProfilePage() {
           setEditBio(profileRes.data.bio || '')
           const data = reviewsRes.data
           setReviews(data.content || data || [])
-          // Fix: stesso problema di AdminPage — con PageSerializationMode.VIA_DTO
+          // Stesso problema di AdminPage — con PageSerializationMode.VIA_DTO
           // i metadati di paginazione sono annidati sotto `.page.`, non in cima.
           // Prima "data.page" leggeva l'oggetto metadata invece del numero pagina
           // corrente (0, appena richiesta), e "data.totalPages" era sempre undefined
@@ -186,25 +186,8 @@ function ProfilePage() {
                       <h1 style={{ fontSize: '28px', fontWeight: '800', color: 'var(--text)' }}>
                         {profile.username || username}
                       </h1>
-                      {/* Fix (Profilo — posizione bottone Modifica): prima era isolato in
-                          alto a destra insieme al Wrapped, senza nessun collegamento visivo
-                          con ciò che effettivamente modifica (username + bio). Spostato qui,
-                          subito accanto al nome — click apre lo stesso form di prima. */}
-                      {isOwn && (
-                          <button
-                              onClick={() => setEditing(true)}
-                              title="Modifica profilo"
-                              style={{
-                                backgroundColor: 'transparent', border: '1px solid var(--border)',
-                                borderRadius: '6px', padding: '4px 10px',
-                                color: 'var(--text-dark)', fontSize: '12px', cursor: 'pointer', whiteSpace: 'nowrap',
-                              }}
-                          >
-                            ✏️ Modifica
-                          </button>
-                      )}
-                      {/* Fix (styling): badge generi spostati accanto al nome invece che
-                          sotto, nella riga stats — più rapido da vedere a colpo d'occhio */}
+                      {/* Fix (styling): badge generi accanto al nome — più rapido da vedere
+                          a colpo d'occhio rispetto a metterli sotto, nella riga stats */}
                       {profile.topGenres?.length > 0 && (
                           <div style={{ display: 'flex', gap: '6px', alignItems: 'center', flexWrap: 'wrap' }}>
                             {profile.topGenres.slice(0, 3).map(g => (
@@ -217,6 +200,25 @@ function ProfilePage() {
                           </div>
                       )}
                     </div>
+
+                    {/* Fix (Profilo — posizione bottone Modifica, secondo giro): prima stava
+                        alla sinistra dei generi, sulla stessa riga dello username — spostato
+                        qui sotto, su una riga propria, così non si confonde con lo username/
+                        generi come elementi "informativi" mentre Modifica è un'azione */}
+                    {isOwn && (
+                        <button
+                            onClick={() => setEditing(true)}
+                            title="Modifica profilo"
+                            style={{
+                              display: 'inline-flex', marginBottom: '10px',
+                              backgroundColor: 'transparent', border: '1px solid var(--border)',
+                              borderRadius: '6px', padding: '4px 10px',
+                              color: 'var(--text-dark)', fontSize: '12px', cursor: 'pointer', whiteSpace: 'nowrap',
+                            }}
+                        >
+                          ✏️ Modifica
+                        </button>
+                    )}
 
                     {profile.bio ? (
                         <p style={{ color: 'var(--text-muted)', fontSize: '14px', lineHeight: 1.6, marginBottom: '14px', maxWidth: '500px' }}>
@@ -274,7 +276,9 @@ function ProfilePage() {
           {watching.length > 0 && (
               <div style={{ marginBottom: '40px' }}>
                 <h2 style={{ color: 'var(--text-muted)', fontSize: '12px', fontWeight: '700', textTransform: 'uppercase', letterSpacing: '1px', marginBottom: '12px' }}>
-                  👀 In visione
+                  {/* Fix (Profilo — "togliere le emoji", secondo giro): tolta anche
+                      l'emoji del titolo sezione, non solo quella per ogni riga */}
+                  In visione
                 </h2>
                 <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
                   {watching.map((w, i) => (

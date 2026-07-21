@@ -93,7 +93,7 @@ public class WatchEntryServiceImpl implements WatchEntryService {
             validateWatchingLimit(user);
         }
 
-        // Fix (bug coerenza stato/recensione): prima si poteva tornare a
+        // Prima si poteva tornare a
         // TO_WATCH/WATCHING dopo aver recensito, lasciando una recensione
         // "orfana" collegata a un contenuto non più segnato come VISTO.
         // Blocca il cambio invece di lasciare lo stato incoerente — se
@@ -111,7 +111,7 @@ public class WatchEntryServiceImpl implements WatchEntryService {
             entry.setWatchedDate(LocalDate.now());
         }
 
-        // Fix: prima non era possibile aggiornare la stagione corrente di un
+        // Prima non era possibile aggiornare la stagione corrente di un
         // titolo già "In Visione" — bisognava rimuoverlo e riaggiungerlo da capo.
         if (currentSeason != null) {
             validateSeason(entry, currentSeason);
@@ -143,7 +143,7 @@ public class WatchEntryServiceImpl implements WatchEntryService {
         return toDTO(watchEntryRepository.save(entry));
     }
 
-    // Fix: la stagione corrente non aveva NESSUN limite — si poteva impostare
+    // La stagione corrente non aveva NESSUN limite — si poteva impostare
     // 0, un numero negativo, o 999 anche se la serie ne ha solo 3. Verifica
     // sia il minimo (>= 1) sia un tetto di sicurezza fisso (1-50, nel caso TMDB
     // non risponda), oltre al massimo reale da TMDB quando disponibile
@@ -181,7 +181,7 @@ public class WatchEntryServiceImpl implements WatchEntryService {
             throw new ForbiddenException("Non autorizzato");
         }
 
-        // Fix (Libreria — trovato in revisione): la stessa regola che blocca il
+        // La stessa regola che blocca il
         // cambio di stato da WATCHED con una recensione attiva collegata (sopra,
         // in updateStatus) non era applicata qui — si poteva rimuovere del tutto
         // il titolo dalla libreria pur avendolo recensito, lasciando la
