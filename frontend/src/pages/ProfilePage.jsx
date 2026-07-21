@@ -40,7 +40,11 @@ function ProfilePage() {
           setEditBio(profileRes.data.bio || '')
           const data = reviewsRes.data
           setReviews(data.content || data || [])
-          setHasMoreReviews(data.totalPages ? data.page < data.totalPages - 1 : false)
+          // Fix: stesso problema di AdminPage — con PageSerializationMode.VIA_DTO
+          // i metadati di paginazione sono annidati sotto `.page.`, non in cima.
+          // Prima "data.page" leggeva l'oggetto metadata invece del numero pagina
+          // corrente (0, appena richiesta), e "data.totalPages" era sempre undefined
+          setHasMoreReviews(data.page?.totalPages ? 0 < data.page.totalPages - 1 : false)
         })
         .catch(() => {})
         .finally(() => setLoading(false))
@@ -54,7 +58,7 @@ function ProfilePage() {
       const data = res.data
       setReviews(prev => [...prev, ...(data.content || data || [])])
       setReviewsPage(nextPage)
-      setHasMoreReviews(data.totalPages ? nextPage < data.totalPages - 1 : false)
+      setHasMoreReviews(data.page?.totalPages ? nextPage < data.page.totalPages - 1 : false)
     } catch {} finally { setLoadingMore(false) }
   }
 
@@ -178,10 +182,14 @@ function ProfilePage() {
               ) : (
                   /* ── Visualizzazione normale ── */
                   <>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '6px' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '6px', flexWrap: 'wrap' }}>
                       <h1 style={{ fontSize: '28px', fontWeight: '800', color: 'var(--text)' }}>
                         {profile.username || username}
                       </h1>
+                      {/* Fix (Profilo — posizione bottone Modifica): prima era isolato in
+                          alto a destra insieme al Wrapped, senza nessun collegamento visivo
+                          con ciò che effettivamente modifica (username + bio). Spostato qui,
+                          subito accanto al nome — click apre lo stesso form di prima. */}
                       {isOwn && (
                           <button
                               onClick={() => setEditing(true)}
@@ -189,11 +197,24 @@ function ProfilePage() {
                               style={{
                                 backgroundColor: 'transparent', border: '1px solid var(--border)',
                                 borderRadius: '6px', padding: '4px 10px',
-                                color: 'var(--text-dark)', fontSize: '12px', cursor: 'pointer',
+                                color: 'var(--text-dark)', fontSize: '12px', cursor: 'pointer', whiteSpace: 'nowrap',
                               }}
                           >
                             ✏️ Modifica
                           </button>
+                      )}
+                      {/* Fix (styling): badge generi spostati accanto al nome invece che
+                          sotto, nella riga stats — più rapido da vedere a colpo d'occhio */}
+                      {profile.topGenres?.length > 0 && (
+                          <div style={{ display: 'flex', gap: '6px', alignItems: 'center', flexWrap: 'wrap' }}>
+                            {profile.topGenres.slice(0, 3).map(g => (
+                                <span key={g} style={{
+                                  padding: '3px 10px', backgroundColor: 'var(--bg-hover)',
+                                  border: '1px solid var(--border)', borderRadius: '20px',
+                                  color: 'var(--text-muted)', fontSize: '12px',
+                                }}>{g}</span>
+                            ))}
+                          </div>
                       )}
                     </div>
 
@@ -213,24 +234,37 @@ function ProfilePage() {
                     {/* Stats */}
                     <div style={{ display: 'flex', gap: '28px', alignItems: 'center' }}>
                       <div>
-                        <span style={{ color: 'var(--text)', fontWeight: '700', fontSize: '18px' }}>{reviews.length}</span>
+                        {/* Fix (Profilo — trovato in revisione): reviews.length contava solo
+                            le recensioni caricate finora in pagina (10, poi 19 dopo "mostra
+                            altri"...) e includeva quelle REMOVED. profile.totalReviews è già
+                            calcolato correttamente dal backend (totale reale, REMOVED escluse),
+                            la stessa fonte già usata correttamente in Impostazioni. */}
+                        <span style={{ color: 'var(--text)', fontWeight: '700', fontSize: '18px' }}>{profile.totalReviews ?? reviews.length}</span>
                         <span style={{ color: 'var(--text-dark)', fontSize: '13px', marginLeft: '6px' }}>recensioni</span>
                       </div>
-                      {profile.topGenres?.length > 0 && (
-                          <div style={{ display: 'flex', gap: '6px', alignItems: 'center', flexWrap: 'wrap' }}>
-                            {profile.topGenres.slice(0, 3).map(g => (
-                                <span key={g} style={{
-                                  padding: '3px 10px', backgroundColor: 'var(--bg-hover)',
-                                  border: '1px solid var(--border)', borderRadius: '20px',
-                                  color: 'var(--text-muted)', fontSize: '12px',
-                                }}>{g}</span>
-                            ))}
-                          </div>
-                      )}
                     </div>
                   </>
               )}
             </div>
+
+            {/* Fix (Profilo): il bottone Wrapped era un cerchietto anonimo — solo
+                un'emoji, capibile solo passandoci sopra col mouse (title). Aggiunta
+                un'etichetta visibile sotto, niente più tooltip-only. "Modifica" è
+                stato spostato accanto allo username qui sotto: è lì che agisce
+                davvero (username + bio), non ha senso vicino al Wrapped. */}
+            {isOwn && !editing && (
+                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '4px', flexShrink: 0 }}>
+                  <Link to="/wrapped" style={{
+                    width: '52px', height: '52px', borderRadius: '50%',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    backgroundColor: 'var(--accent-subtle)', border: '1px solid var(--border-cta)',
+                    color: 'var(--gold)', fontSize: '22px', textDecoration: 'none',
+                  }}>
+                    🎬
+                  </Link>
+                  <span style={{ color: 'var(--text-dark)', fontSize: '11px', fontWeight: '600' }}>Wrapped</span>
+                </div>
+            )}
           </div>
 
           {/* ── Area scrollabile: in visione + recensioni ── */}
@@ -249,7 +283,8 @@ function ProfilePage() {
                         borderRadius: '8px', padding: '10px 16px',
                         display: 'flex', alignItems: 'center', gap: '10px',
                       }}>
-                        <span style={{ fontSize: '18px' }}>▶️</span>
+                        {/* Fix (Profilo — "togliamo ste emoji con i film/serie visti"):
+                            rimossa l'icona ▶️ ripetuta su ogni titolo, era solo rumore visivo */}
                         <div>
                           <div style={{ color: 'var(--text)', fontWeight: '600', fontSize: '14px' }}>{w.title || w}</div>
                           {w.season && <div style={{ color: 'var(--text-dark)', fontSize: '12px' }}>Stagione {w.season}</div>}

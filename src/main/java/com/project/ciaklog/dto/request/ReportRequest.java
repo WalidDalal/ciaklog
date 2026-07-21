@@ -10,8 +10,12 @@ import lombok.Setter;
 @Setter
 public class ReportRequest {
 
-    @NotNull(message = "reviewId obbligatorio")
+    // Fix (moderazione risposte): esattamente uno tra reviewId e reviewCommentId
+    // deve essere valorizzato — validato in ReportServiceImpl, non qui con
+    // @NotNull, perché la regola è "uno dei due", non "questo specifico campo"
     private java.util.UUID reviewId;
+
+    private java.util.UUID reviewCommentId;
 
     @NotNull(message = "reasonCategory obbligatoria")
     private ReportReasonCategory reasonCategory;

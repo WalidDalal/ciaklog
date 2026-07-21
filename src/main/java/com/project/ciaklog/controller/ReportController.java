@@ -26,7 +26,8 @@ public class ReportController {
 
     private final ReportService reportService;
 
-    // User/Admin — segnala una recensione
+    // User/Admin — segnala una recensione o una risposta (esattamente uno tra
+    // reviewId/reviewCommentId nel body, validato nel service)
     @PostMapping
     public ResponseEntity<ReportResponse> createReport(
             @AuthenticationPrincipal UserDetails userDetails,
@@ -53,6 +54,18 @@ public class ReportController {
             @AuthenticationPrincipal UserDetails userDetails,
             @PathVariable UUID id,
             @Valid @RequestBody ReportActionRequest dto) {
-        return ResponseEntity.ok(reportService.resolveReport(id, dto.getAction(), userDetails.getUsername()));
+        return ResponseEntity.ok(reportService.resolveReport(id, dto.getAction(), userDetails.getUsername(), dto.getFinalReasonCategory()));
+    }
+
+    // Solo Admin — "Nascondi direttamente" senza aspettare una segnalazione.
+    // Stesso body di createReport (reviewId oppure reviewCommentId + motivo
+    // SEMPRE obbligatorio, validato nel service)
+    @PostMapping("/admin-hide")
+    @PreAuthorize("hasRole('ADMIN')")
+    public ResponseEntity<ReportResponse> adminHide(
+            @AuthenticationPrincipal UserDetails userDetails,
+            @Valid @RequestBody ReportRequest dto) {
+        return ResponseEntity.status(HttpStatus.CREATED)
+                .body(reportService.adminHide(userDetails.getUsername(), dto));
     }
 }

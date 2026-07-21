@@ -37,6 +37,19 @@ api.interceptors.response.use(
   res => res,
   err => {
     if (axios.isCancel(err)) return Promise.reject(err)
+
+    // Fix: il backend manda il messaggio specifico in `details` (per campo),
+    // ma tutte le pagine leggono solo `err.response?.data?.error`, che è sempre
+    // il generico "Dati non validi". Centralizzato qui una volta sola: se
+    // `details` esiste, riscrive `error` col messaggio specifico prima di
+    // rilanciare, così ogni pagina lo riceve corretto senza essere toccata.
+    if (err.response?.data?.details) {
+      const messages = Object.values(err.response.data.details)
+      if (messages.length > 0) {
+        err.response.data.error = messages.join(' ')
+      }
+    }
+
     // 401 dal backend (token manomesso o invalidato server-side)
     if (err.response?.status === 401 && !err.config.url.includes('/auth/')) {
       localStorage.removeItem('token')

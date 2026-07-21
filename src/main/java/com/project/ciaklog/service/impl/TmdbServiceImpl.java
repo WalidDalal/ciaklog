@@ -3,6 +3,7 @@ package com.project.ciaklog.service.impl;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.project.ciaklog.dto.response.TmdbDetailResponse;
+import com.project.ciaklog.dto.response.TmdbSearchResponse;
 import com.project.ciaklog.dto.response.TmdbSearchResultResponse;
 import com.project.ciaklog.entity.ContentType;
 import com.project.ciaklog.exception.ResourceNotFoundException;
@@ -42,14 +43,16 @@ public class TmdbServiceImpl implements TmdbService {
     private final ObjectMapper mapper = new ObjectMapper();
 
     @Override
-    public List<TmdbSearchResultResponse> search(String query, String type) {
+    public TmdbSearchResponse search(String query, String type, int page) {
         try {
             String endpoint = "movie".equals(type) ? "/search/movie"
                     : "tv".equals(type) ? "/search/tv"
                       : "/search/multi";
 
             // Bearer header (metodo moderno) — ?api_key= è deprecato da TMDB
-            String url = BASE_URL + endpoint + "?query=" + java.net.URLEncoder.encode(query, "UTF-8");
+            // Fix: prima non veniva mai passato &page= — sempre e solo pagina 1
+            String url = BASE_URL + endpoint + "?query=" + java.net.URLEncoder.encode(query, "UTF-8")
+                    + "&page=" + Math.max(1, page);
 
             HttpRequest request = HttpRequest.newBuilder()
                     .uri(URI.create(url))
@@ -84,7 +87,13 @@ public class TmdbServiceImpl implements TmdbService {
                         .tmdbRating(r.path("vote_average").isMissingNode() ? null : r.path("vote_average").asDouble())
                         .build());
             }
-            return out;
+
+            return TmdbSearchResponse.builder()
+                    .results(out)
+                    .page(root.path("page").asInt(page))
+                    .totalPages(root.path("total_pages").asInt(1))
+                    .totalResults(root.path("total_results").asInt(out.size()))
+                    .build();
 
         } catch (RuntimeException e) {
             throw e;
@@ -133,10 +142,16 @@ public class TmdbServiceImpl implements TmdbService {
                             .build())
                     .toList();
 
-            double ciakLogAvg = computeCiakLogAverage(tmdbId, contentType);
+            Double ciakLogAvg = computeCiakLogAverage(tmdbId, contentType);
             int ciakLogVotes = reviewRepository
                     .findVisibleByTmdbIdAndContentType(tmdbId, contentType)
                     .size();
+
+            // Fix: stesso problema — asDouble() di Jackson ritorna 0.0 se il campo
+            // manca invece di null, falsando il voto combinato allo stesso modo
+            JsonNode voteAverageNode = root.path("vote_average");
+            Double tmdbVoteAverage = voteAverageNode.isMissingNode() || voteAverageNode.isNull()
+                    ? null : voteAverageNode.asDouble();
 
             return TmdbDetailResponse.builder()
                     .tmdbId(tmdbId)
@@ -147,9 +162,11 @@ public class TmdbServiceImpl implements TmdbService {
                     .overview(root.path("overview").asText(null))
                     .genres(genres)
                     .cast(cast)
-                    .tmdbRating(root.path("vote_average").asDouble())
+                    .tmdbRating(tmdbVoteAverage)
                     .ciakLogAverageRating(ciakLogAvg)
                     .ciakLogVoteCount(ciakLogVotes)
+                    .numberOfSeasons(contentType == ContentType.TV && root.hasNonNull("number_of_seasons")
+                            ? root.path("number_of_seasons").asInt() : null)
                     .build();
 
         } catch (RuntimeException e) {
@@ -162,9 +179,14 @@ public class TmdbServiceImpl implements TmdbService {
 
     // ── helpers ──
 
-    private double computeCiakLogAverage(Long tmdbId, ContentType contentType) {
+    // Fix (Dettaglio — voto combinato): prima ritornava `double` primitivo con
+    // 0.0 quando non c'erano recensioni — quello zero finiva nel DTO come un
+    // voto vero (0 != null), e il calcolo del voto combinato lo mediava con
+    // TMDB come se fosse un dato reale, dimezzando il risultato invece di
+    // mostrare solo TMDB. Ora torna null quando non ci sono recensioni.
+    private Double computeCiakLogAverage(Long tmdbId, ContentType contentType) {
         var reviews = reviewRepository.findVisibleByTmdbIdAndContentType(tmdbId, contentType);
-        if (reviews.isEmpty()) return 0.0;
+        if (reviews.isEmpty()) return null;
         double sum = reviews.stream().mapToInt(r -> r.getRating()).sum();
         return Math.round((sum / reviews.size()) * 10.0) / 10.0;
     }

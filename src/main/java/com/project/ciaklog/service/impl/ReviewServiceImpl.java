@@ -110,22 +110,40 @@ public class ReviewServiceImpl implements ReviewService {
         userRepository.save(user);
     }
 
+    // Fix (auto-nascondimento autore, deciso): toggle reversibile e separato
+    // da status/moderazione — nessun impatto su punteggio o violationCount,
+    // e non genera nessun Report (quindi non finisce mai nella coda admin)
     @Override
-    public Page<ReviewResponse> getReviewsForMedia(Long tmdbId, ContentType contentType, Pageable pageable) {
+    @Transactional
+    public ReviewResponse setHiddenByAuthor(String username, UUID reviewId, boolean hidden) {
+        User user = getUser(username);
+        Review review = reviewRepository.findById(reviewId)
+                .orElseThrow(() -> new ResourceNotFoundException("Recensione non trovata"));
+
+        if (!review.getUser().getId().equals(user.getId())) {
+            throw new ForbiddenException("Non autorizzato");
+        }
+
+        review.setHiddenByAuthor(hidden);
+        return toDTO(reviewRepository.save(review), user);
+    }
+
+    @Override
+    public Page<ReviewResponse> getReviewsForMedia(Long tmdbId, ContentType contentType, String viewerUsername, boolean isAdmin, Pageable pageable) {
         return reviewRepository
-                .findByTmdbIdAndContentTypeAndStatus(tmdbId, contentType, ReviewStatus.VISIBLE, pageable)
+                .findByTmdbIdAndContentTypeAndStatus(tmdbId, contentType, ReviewStatus.VISIBLE, viewerUsername, isAdmin, pageable)
                 .map(r -> toDTO(r, r.getUser()));
     }
 
     @Override
-    public Page<ReviewResponse> getUserReviews(String username, Pageable pageable) {
+    public Page<ReviewResponse> getUserReviews(String username, String viewerUsername, boolean isAdmin, Pageable pageable) {
         User user = getUser(username);
         // Caricare tutte le WatchEntry in una sola query per evitare N+1
         java.util.Map<String, WatchEntry> entryMap = new java.util.HashMap<>();
         watchEntryRepository.findAllByUser(user).forEach(e ->
-            entryMap.put(e.getTmdbId() + "_" + e.getContentType(), e)
+                entryMap.put(e.getTmdbId() + "_" + e.getContentType(), e)
         );
-        return reviewRepository.findByUser(user, pageable)
+        return reviewRepository.findByUser(user, ReviewStatus.VISIBLE, viewerUsername, isAdmin, pageable)
                 .map(r -> toDTOWithMap(r, entryMap));
     }
 
@@ -146,6 +164,7 @@ public class ReviewServiceImpl implements ReviewService {
                 .rating(r.getRating())
                 .text(r.getText())
                 .status(r.getStatus())
+                .hiddenByAuthor(r.isHiddenByAuthor())
                 .createdAt(r.getCreatedAt())
                 .updatedAt(r.getUpdatedAt())
                 .title(entry != null ? entry.getTitle() : null)
@@ -173,6 +192,7 @@ public class ReviewServiceImpl implements ReviewService {
                 .rating(r.getRating())
                 .text(r.getText())
                 .status(r.getStatus())
+                .hiddenByAuthor(r.isHiddenByAuthor())
                 .createdAt(r.getCreatedAt())
                 .updatedAt(r.getUpdatedAt())
                 .title(title)

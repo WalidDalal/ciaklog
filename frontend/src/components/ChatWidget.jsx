@@ -54,14 +54,19 @@ export function ChatCore({ compact = false, initialPrompt = null }) {
         sessionHistory: messages.slice(-10),
       })
       setSessionId(res.data.sessionId)
+      // Fix: il frontend usava role: 'AI', ma l'enum MessageRole del backend
+      // accetta solo USER/ASSISTANT — al primo giro andava bene (il messaggio
+      // non torna mai indietro), ma dal secondo messaggio in poi 'AI' finiva
+      // nella sessionHistory rimandata al backend, che falliva la deserializzazione
+      // JSON (500 "Errore interno") su OGNI messaggio successivo al primo
       addMessage({
-        role: 'AI',
+        role: 'ASSISTANT',
         content: res.data.reply,
         suggestions: res.data.suggestions || [],
       })
     } catch (err) {
       addMessage({
-        role: 'AI',
+        role: 'ASSISTANT',
         content: err.response?.data?.error || 'Assistente temporaneamente non disponibile.',
         suggestions: [],
       })
@@ -78,7 +83,7 @@ export function ChatCore({ compact = false, initialPrompt = null }) {
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
       {/* Header */}
       {!compact && (
-        <div style={{ padding: '16px 20px', borderBottom: '1px solid #222', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexShrink: 0 }}>
+        <div style={{ padding: '16px 20px', borderBottom: '1px solid var(--border)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexShrink: 0 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
             <span style={{ fontSize: '22px' }}>🤖</span>
             <div>
@@ -88,7 +93,7 @@ export function ChatCore({ compact = false, initialPrompt = null }) {
           </div>
           {messages.length > 0 && (
             <button onClick={clear} title="Nuova conversazione"
-              style={{ backgroundColor: 'transparent', border: '1px solid #333', borderRadius: '6px', color: 'var(--text-dark)', fontSize: '12px', padding: '4px 10px', cursor: 'pointer' }}>
+              style={{ backgroundColor: 'transparent', border: '1px solid var(--border-soft)', borderRadius: '6px', color: 'var(--text-dark)', fontSize: '12px', padding: '4px 10px', cursor: 'pointer' }}>
               Nuova chat
             </button>
           )}
@@ -107,7 +112,7 @@ export function ChatCore({ compact = false, initialPrompt = null }) {
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', justifyContent: 'center' }}>
               {SUGGESTIONS.map(s => (
                 <button key={s} onClick={() => setInput(s)} style={{
-                  padding: '6px 12px', backgroundColor: 'var(--bg-card)', border: '1px solid #333',
+                  padding: '6px 12px', backgroundColor: 'var(--bg-card)', border: '1px solid var(--border-soft)',
                   borderRadius: '16px', color: 'var(--text-muted)', fontSize: '12px', cursor: 'pointer',
                 }}>{s}</button>
               ))}
@@ -122,7 +127,7 @@ export function ChatCore({ compact = false, initialPrompt = null }) {
                 padding: compact ? '10px 14px' : '12px 16px',
                 borderRadius: msg.role === 'USER' ? '16px 16px 4px 16px' : '16px 16px 16px 4px',
                 backgroundColor: msg.role === 'USER' ? 'var(--accent)' : 'var(--bg-hover)',
-                border: msg.role === 'AI' ? '1px solid #2a2a2a' : 'none',
+                border: msg.role === 'ASSISTANT' ? '1px solid var(--border-soft)' : 'none',
                 color: 'var(--text)', fontSize: compact ? '13px' : '14px', lineHeight: 1.6,
                 whiteSpace: 'pre-wrap',
               }}>
@@ -135,7 +140,7 @@ export function ChatCore({ compact = false, initialPrompt = null }) {
                     <Link to={`/movie/${s.tmdbId}?type=${s.contentType || s.mediaType}`} key={j}
                       style={{ textDecoration: 'none' }}>
                       <div style={{
-                        backgroundColor: 'var(--bg-card)', border: '1px solid #222',
+                        backgroundColor: 'var(--bg-card)', border: '1px solid var(--border)',
                         borderRadius: '8px', overflow: 'hidden', width: compact ? '90px' : '110px',
                         transition: 'border-color 0.15s',
                       }}
@@ -150,6 +155,10 @@ export function ChatCore({ compact = false, initialPrompt = null }) {
                         <div style={{ padding: '6px 8px' }}>
                           <div style={{ color: 'var(--text)', fontSize: '11px', fontWeight: '600', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{s.title}</div>
                           <div style={{ color: 'var(--text-dark)', fontSize: '11px' }}>{s.releaseYear}</div>
+                          {/* Fix (AI più centrale): spiegazione del perché, se presente */}
+                          {s.reason && (
+                            <div style={{ color: 'var(--text-muted)', fontSize: '10px', marginTop: '3px', lineHeight: 1.3 }}>{s.reason}</div>
+                          )}
                         </div>
                       </div>
                     </Link>
@@ -163,7 +172,7 @@ export function ChatCore({ compact = false, initialPrompt = null }) {
         {loading && (
           <div style={{ display: 'flex', justifyContent: 'flex-start' }}>
             <div style={{
-              padding: '10px 14px', backgroundColor: 'var(--bg-hover)', border: '1px solid #2a2a2a',
+              padding: '10px 14px', backgroundColor: 'var(--bg-hover)', border: '1px solid var(--border-soft)',
               borderRadius: '16px 16px 16px 4px', color: 'var(--text-muted)', fontSize: '13px',
             }}>
               🤖 Sto pensando...
@@ -176,7 +185,7 @@ export function ChatCore({ compact = false, initialPrompt = null }) {
       {/* Input */}
       <div style={{
         padding: compact ? '10px 12px' : '14px 20px',
-        borderTop: '1px solid #222', flexShrink: 0,
+        borderTop: '1px solid var(--border)', flexShrink: 0,
         display: 'flex', gap: '8px', alignItems: 'flex-end',
       }}>
         <textarea
@@ -187,7 +196,7 @@ export function ChatCore({ compact = false, initialPrompt = null }) {
           rows={1}
           style={{
             flex: 1, padding: compact ? '10px 14px' : '12px 16px',
-            backgroundColor: 'var(--bg-card)', border: '1px solid #333',
+            backgroundColor: 'var(--bg-card)', border: '1px solid var(--border-soft)',
             borderRadius: '10px', color: 'var(--text)', fontSize: '13px',
             resize: 'none', lineHeight: 1.5, fontFamily: 'inherit',
           }}
@@ -247,7 +256,7 @@ export function ChatFloating() {
         <div style={{
           position: 'fixed', bottom: '96px', right: '28px',
           width: '380px', height: '520px',
-          backgroundColor: 'var(--bg-card)', border: '1px solid #2a2a2a',
+          backgroundColor: 'var(--bg-card)', border: '1px solid var(--border-soft)',
           borderRadius: '16px', zIndex: 599,
           display: 'flex', flexDirection: 'column',
           boxShadow: 'var(--shadow-lg)',
@@ -263,7 +272,7 @@ export function ChatFloating() {
 
           {/* Header floating */}
           <div style={{
-            padding: '14px 16px', borderBottom: '1px solid #222',
+            padding: '14px 16px', borderBottom: '1px solid var(--border)',
             display: 'flex', alignItems: 'center', justifyContent: 'space-between',
             flexShrink: 0, backgroundColor: 'var(--bg-card)',
           }}>
@@ -280,7 +289,7 @@ export function ChatFloating() {
               <button
                 onClick={() => { close(); navigate('/chat') }}
                 title="Apri a schermo intero"
-                style={{ backgroundColor: 'transparent', border: '1px solid #333', borderRadius: '6px', color: 'var(--text-dark)', fontSize: '11px', padding: '4px 8px', cursor: 'pointer' }}
+                style={{ backgroundColor: 'transparent', border: '1px solid var(--border-soft)', borderRadius: '6px', color: 'var(--text-dark)', fontSize: '11px', padding: '4px 8px', cursor: 'pointer' }}
               >⤢ Espandi</button>
             </div>
           </div>

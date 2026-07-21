@@ -24,19 +24,36 @@ public class ReviewController {
 
     private final ReviewService reviewService;
 
+    // Fix (auto-nascondimento autore): serve sapere CHI guarda per far vedere
+    // all'autore la propria recensione anche se l'ha nascosta — userDetails è
+    // nullable qui (endpoint pubblico, un visitatore anonimo può guardarla)
+    // Fix (dashboard admin — commenti/recensioni nascosti): un Admin deve
+    // vedere anche quelle nascoste dall'autore o con status HIDDEN
     @GetMapping("/media/{contentType}/{tmdbId}")
     public ResponseEntity<Page<ReviewResponse>> getReviewsForMedia(
+            @AuthenticationPrincipal UserDetails userDetails,
             @PathVariable ContentType contentType,
             @PathVariable Long tmdbId,
             Pageable pageable) {
-        return ResponseEntity.ok(reviewService.getReviewsForMedia(tmdbId, contentType, pageable));
+        String viewerUsername = userDetails != null ? userDetails.getUsername() : null;
+        boolean isAdmin = userDetails != null && userDetails.getAuthorities().stream()
+                .anyMatch(a -> a.getAuthority().equals("ROLE_ADMIN"));
+        return ResponseEntity.ok(reviewService.getReviewsForMedia(tmdbId, contentType, viewerUsername, isAdmin, pageable));
     }
 
+    // Fix (Profilo pubblico — recensioni rimosse/nascoste visibili a chiunque):
+    // userDetails è nullable, un profilo pubblico è visibile anche da anonimo —
+    // ma quando c'è, serve per far vedere all'autore le proprie nascoste e
+    // all'Admin quelle in HIDDEN, esattamente come già succede per la pagina film
     @GetMapping("/user/{username}")
     public ResponseEntity<Page<ReviewResponse>> getUserReviews(
+            @AuthenticationPrincipal UserDetails userDetails,
             @PathVariable String username,
             Pageable pageable) {
-        return ResponseEntity.ok(reviewService.getUserReviews(username, pageable));
+        String viewerUsername = userDetails != null ? userDetails.getUsername() : null;
+        boolean isAdmin = userDetails != null && userDetails.getAuthorities().stream()
+                .anyMatch(a -> a.getAuthority().equals("ROLE_ADMIN"));
+        return ResponseEntity.ok(reviewService.getUserReviews(username, viewerUsername, isAdmin, pageable));
     }
 
     @PostMapping
@@ -62,5 +79,16 @@ public class ReviewController {
             @PathVariable UUID id) {
         reviewService.deleteReview(userDetails.getUsername(), id);
         return ResponseEntity.noContent().build();
+    }
+
+    // Fix (auto-nascondimento autore, deciso): reversibile, separato dalla
+    // moderazione — l'autore nasconde/rimostra la propria recensione senza
+    // penalità e senza generare nessuna segnalazione
+    @PatchMapping("/{id}/visibility")
+    public ResponseEntity<ReviewResponse> setHidden(
+            @AuthenticationPrincipal UserDetails userDetails,
+            @PathVariable UUID id,
+            @RequestParam boolean hidden) {
+        return ResponseEntity.ok(reviewService.setHiddenByAuthor(userDetails.getUsername(), id, hidden));
     }
 }

@@ -2,6 +2,7 @@ package com.project.ciaklog.config;
 
 import com.project.ciaklog.security.AiRateLimitFilter;
 import com.project.ciaklog.security.JwtAuthenticationFilter;
+import com.project.ciaklog.security.LoginRateLimitFilter;
 import jakarta.servlet.http.HttpServletResponse;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
@@ -32,6 +33,7 @@ public class SecurityConfig {
 
     private final JwtAuthenticationFilter jwtAuthenticationFilter;
     private final AiRateLimitFilter aiRateLimitFilter;
+    private final LoginRateLimitFilter loginRateLimitFilter;
 
     @Value("${cors.allowed-origins:http://localhost:5173,http://localhost:5500,http://127.0.0.1:5500}")
     private String allowedOriginsRaw;
@@ -60,13 +62,19 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.GET, "/api/charts/**").permitAll()
                         .requestMatchers(HttpMethod.GET, "/api/users/{username}").permitAll()
                         .requestMatchers(HttpMethod.GET, "/api/reviews/media/**").permitAll()
+                        .requestMatchers(HttpMethod.GET, "/api/reviews/*/comments").permitAll()
+                        .requestMatchers(HttpMethod.GET, "/api/reviews/*/reaction").permitAll()
+                        .requestMatchers(HttpMethod.GET, "/api/comments/*/reaction").permitAll()
                         .requestMatchers("/api/admin/**").hasRole("ADMIN")
                         .requestMatchers(HttpMethod.GET, "/api/reports").hasRole("ADMIN")
                         .requestMatchers(HttpMethod.PUT, "/api/reports/**").hasRole("ADMIN")
-                        // Swagger UI / OpenAPI — accesso libero solo alla documentazione, non agli endpoint reali
-                        .requestMatchers("/swagger-ui/**", "/swagger-ui.html", "/v3/api-docs/**").permitAll()
                         .anyRequest().authenticated()
                 )
+                // Fix (nessun rate-limit sul login): loginRateLimitFilter va prima
+                // del filtro JWT — /api/auth/login è pubblico (permitAll) quindi non
+                // ha comunque bisogno del controllo JWT, ma così il rate-limit scatta
+                // il prima possibile nella catena
+                .addFilterBefore(loginRateLimitFilter, UsernamePasswordAuthenticationFilter.class)
                 .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class)
                 .addFilterAfter(aiRateLimitFilter, JwtAuthenticationFilter.class);
 

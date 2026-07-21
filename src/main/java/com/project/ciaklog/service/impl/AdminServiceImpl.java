@@ -1,5 +1,6 @@
 package com.project.ciaklog.service.impl;
 
+import com.project.ciaklog.dto.response.AdminOperationalStatsResponse;
 import com.project.ciaklog.dto.response.AdminUserDetailResponse;
 import com.project.ciaklog.dto.response.AdminUserResponse;
 import com.project.ciaklog.entity.*;
@@ -29,7 +30,14 @@ public class AdminServiceImpl implements AdminService {
     private final ReportRepository reportRepository;
 
     @Override
-    public Page<AdminUserResponse> listUsers(Pageable pageable) {
+    public Page<AdminUserResponse> listUsers(Pageable pageable, String search) {
+        // Fix: la ricerca non era mai collegata — il parametro arrivava dal
+        // controller ma veniva ignorato qui, sempre e solo findAll()
+        if (search != null && !search.isBlank()) {
+            return userRepository
+                    .findByUsernameContainingIgnoreCaseOrEmailContainingIgnoreCase(search, search, pageable)
+                    .map(this::toAdminDTO);
+        }
         return userRepository.findAll(pageable).map(this::toAdminDTO);
     }
 
@@ -89,6 +97,7 @@ public class AdminServiceImpl implements AdminService {
                 .reportCount(reportCount)
                 .createdAt(user.getCreatedAt())
                 .violations(violations)
+                .role(user.getRole())
                 .build();
     }
 
@@ -102,6 +111,11 @@ public class AdminServiceImpl implements AdminService {
 
         if (target.getId().equals(admin.getId())) {
             throw new BusinessRuleException("Non puoi sospendere te stesso");
+        }
+        // Fix (dashboard admin): un Admin non può sospendere un altro Admin —
+        // prima la regola valeva solo per "te stesso"
+        if (target.getRole() == Role.ADMIN) {
+            throw new BusinessRuleException("Non puoi sospendere un altro Admin");
         }
         if (target.getStatus() == UserStatus.PERMANENTLY_SUSPENDED) {
             throw new BusinessRuleException("Utente già sospeso permanentemente");
@@ -134,12 +148,26 @@ public class AdminServiceImpl implements AdminService {
         userRepository.save(target);
     }
 
+    // Fix (Home Admin, deciso): card operativa leggera, non una dashboard
+    // ricopiata — solo segnalazioni di oggi e utenti da controllare
+    @Override
+    public AdminOperationalStatsResponse getOperationalStats() {
+        java.time.LocalDateTime midnight = java.time.LocalDate.now().atStartOfDay();
+
+        return AdminOperationalStatsResponse.builder()
+                .totalUsers(userRepository.count())
+                .reportsToday(reportRepository.countByCreatedAtAfter(midnight))
+                .usersToReview(userRepository.countByStatus(UserStatus.SUSPENDED))
+                .build();
+    }
+
     private AdminUserResponse toAdminDTO(User u) {
         return AdminUserResponse.builder()
                 .id(u.getId())
                 .username(u.getUsername())
                 .status(u.getStatus())
                 .violationCount(u.getViolationCount())
+                .role(u.getRole())
                 .build();
     }
 }

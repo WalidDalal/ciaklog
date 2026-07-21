@@ -6,11 +6,361 @@ import ConfirmModal from '../components/ConfirmModal'
 import api from '../services/api'
 import useAuthStore from '../store/authStore'
 import useToastStore from '../store/toastStore'
+import useChatStore from '../store/chatStore'
 
 const STATUS_LABELS = {
   TO_WATCH: '📌 Da vedere',
   WATCHING: '▶️ In visione',
   WATCHED: '✅ Visto',
+}
+
+// Fix (UI risposte): prima non esisteva nessuna interfaccia per leggere o
+// scrivere risposte — il backend (ReviewComment) era pronto ma invisibile.
+// Thread collassato di default sotto ogni recensione, caricato on-demand.
+function ReplyThread({ reviewId, reviewText, reviewOwnerUsername, token, currentUsername, isAdmin, autoExpand, highlightCommentId }) {
+  const toast = useToastStore()
+  const [expanded, setExpanded] = useState(!!autoExpand)
+  const [loaded, setLoaded] = useState(false)
+  const [loading, setLoading] = useState(false)
+  const [comments, setComments] = useState([])
+  const [showComposer, setShowComposer] = useState(false)
+  const [text, setText] = useState('')
+  const [submitting, setSubmitting] = useState(false)
+  const [editingId, setEditingId] = useState(null)
+  const [editText, setEditText] = useState('')
+  const [reportingCommentId, setReportingCommentId] = useState(null)
+  const [reportedCommentIds, setReportedCommentIds] = useState(new Set())
+  const [hidingCommentId, setHidingCommentId] = useState(null)
+  // Fix (auto-nascondimento autore, deciso): toggle reversibile, separato
+  // dall'eliminazione — non tocca il punteggio, non genera nessuna segnalazione
+  const [togglingHiddenId, setTogglingHiddenId] = useState(null)
+
+  // Fix (AI dentro i commenti/risposte, deciso): stesso pattern di "recensione
+  // a botta calda" — scrivi con parole tue, l'AI la struttura meglio
+  const [showReplyNotesHelper, setShowReplyNotesHelper] = useState(false)
+  const [replyRawNotes, setReplyRawNotes] = useState('')
+  const [structuringReply, setStructuringReply] = useState(false)
+  const [replyStructureError, setReplyStructureError] = useState('')
+
+  // Fix: riusava /ai/structure-review (pensato per recensioni intere, 4-5
+  // frasi) senza nessun contesto su cosa si stava rispondendo — l'AI scriveva
+  // come fosse una recensione, non una risposta breve in un thread. Ora usa
+  // l'endpoint dedicato /ai/structure-comment, con il testo della recensione
+  // a cui si risponde come contesto, per un tono coerente e più breve
+  const handleStructureReply = async () => {
+    if (!replyRawNotes.trim()) return
+    setStructuringReply(true); setReplyStructureError('')
+    try {
+      const res = await api.post('/ai/structure-comment', {
+        rawNotes: replyRawNotes.trim(),
+        replyingToText: reviewText || '',
+      })
+      setText(res.data.text || '')
+      setShowReplyNotesHelper(false)
+      setReplyRawNotes('')
+    } catch (err) {
+      setReplyStructureError(err.response?.data?.error || 'Assistente non disponibile, riprova')
+    } finally {
+      setStructuringReply(false)
+    }
+  }
+
+  const loadComments = () => {
+    setLoading(true)
+    api.get(`/reviews/${reviewId}/comments`, { params: { size: 50, sort: 'createdAt,asc' } })
+      .then(r => setComments(r.data.content || r.data))
+      .catch(() => {})
+      .finally(() => { setLoading(false); setLoaded(true) })
+  }
+
+  const toggleExpanded = () => {
+    setExpanded(v => !v)
+    if (!loaded) loadComments()
+  }
+
+  // Fix (dashboard admin, Step 6): se questo thread contiene la risposta
+  // segnalata (arrivata da "Vedi nel contesto"), si apre e carica da sola
+  useEffect(() => {
+    if (autoExpand && !loaded) loadComments()
+  }, [autoExpand])
+
+  // Scroll automatico + evidenziazione della risposta segnalata, una volta caricata
+  useEffect(() => {
+    if (!highlightCommentId || comments.length === 0) return
+    const el = document.getElementById(`comment-${highlightCommentId}`)
+    if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' })
+  }, [comments, highlightCommentId])
+
+  const handleAddComment = async () => {
+    if (!text.trim()) return
+    setSubmitting(true)
+    try {
+      const res = await api.post(`/reviews/${reviewId}/comments`, { text: text.trim() })
+      setComments(prev => [...prev, res.data])
+      setText('')
+      setShowComposer(false)
+    } catch (err) {
+      toast.show(err.response?.data?.error || 'Errore durante l\'invio della risposta')
+    } finally {
+      setSubmitting(false)
+    }
+  }
+
+  const handleEditComment = async (id) => {
+    if (!editText.trim()) return
+    try {
+      const res = await api.put(`/comments/${id}`, { text: editText.trim() })
+      setComments(prev => prev.map(c => c.id === id ? res.data : c))
+      setEditingId(null)
+    } catch (err) {
+      toast.show(err.response?.data?.error || 'Errore durante la modifica')
+    }
+  }
+
+  const handleDeleteComment = async (id) => {
+    try {
+      await api.delete(`/comments/${id}`)
+      setComments(prev => prev.filter(c => c.id !== id))
+    } catch (err) {
+      toast.show(err.response?.data?.error || 'Errore durante l\'eliminazione')
+    }
+  }
+
+  const handleToggleCommentHidden = async (comment) => {
+    setTogglingHiddenId(comment.id)
+    try {
+      const res = await api.patch(`/comments/${comment.id}/visibility`, null, { params: { hidden: !comment.hiddenByAuthor } })
+      setComments(prev => prev.map(c => c.id === comment.id ? res.data : c))
+    } catch (err) {
+      toast.show(err.response?.data?.error || 'Errore durante l\'operazione')
+    } finally {
+      setTogglingHiddenId(null)
+    }
+  }
+
+  // Fix (Dettaglio, risposte): il backend filtra già le risposte nascoste
+  // dagli AUTORI DIVERSI dal viewer — l'unico caso in cui hiddenByAuthor=true
+  // arriva qui è la propria risposta nascosta (solo tu la vedi). Il badge
+  // "Risposte (N)" contava anche quella, dando l'impressione che nascondere
+  // non avesse effetto: il conteggio ora riflette solo ciò che è pubblico.
+  const visibleCommentsCount = comments.filter(c => !c.hiddenByAuthor).length
+
+  // Fix (Dettaglio, risposte): la risposta di chi ha scritto la recensione
+  // era in mezzo alle altre in ordine cronologico, poco visibile. La
+  // portiamo sempre in cima (comments arriva già ordinato per data asc dal
+  // backend, quindi il sort è stabile e non tocca l'ordine tra le altre)
+  const sortedComments = reviewOwnerUsername
+      ? [...comments].sort((a, b) => (b.authorUsername === reviewOwnerUsername) - (a.authorUsername === reviewOwnerUsername))
+      : comments
+
+  return (
+    <div style={{ marginTop: '14px', paddingTop: '12px', borderTop: '1px solid var(--border-soft)' }}>
+      <button onClick={toggleExpanded} style={{ background: 'none', border: 'none', color: 'var(--text-dark)', fontSize: '12px', cursor: 'pointer', padding: 0 }}>
+        {expanded ? '▲ Nascondi risposte' : `💬 Risposte${loaded ? ` (${visibleCommentsCount})` : ''}`}
+      </button>
+
+      {expanded && (
+        <div style={{ marginTop: '12px', display: 'flex', flexDirection: 'column', gap: '10px' }}>
+          {loading && <p style={{ color: 'var(--text-dark)', fontSize: '12px' }}>Caricamento...</p>}
+
+          {!loading && sortedComments.map(c => (
+            <div key={c.id} id={`comment-${c.id}`} style={{ backgroundColor: 'var(--bg-hover)', borderRadius: '8px', padding: '10px 14px', marginLeft: '16px', border: highlightCommentId === c.id ? '2px solid #3b82f6' : '2px solid transparent', boxShadow: highlightCommentId === c.id ? '0 0 0 4px rgba(59,130,246,0.15)' : 'none' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                  <Link to={`/profile/${c.authorUsername}`}>
+                    <span style={{ color: 'var(--text)', fontWeight: '600', fontSize: '12px' }}>👤 {c.authorUsername}</span>
+                  </Link>
+                  {c.authorUsername === reviewOwnerUsername && (
+                      <span style={{ padding: '1px 6px', borderRadius: '8px', fontSize: '9px', fontWeight: '700', backgroundColor: 'var(--accent-subtle)', color: 'var(--accent)' }}>
+                        AUTORE
+                      </span>
+                  )}
+                </div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <span style={{ color: 'var(--text-dark)', fontSize: '11px' }}>{new Date(c.createdAt).toLocaleDateString('it-IT')}</span>
+                  {c.authorUsername === currentUsername ? (
+                    <>
+                      <button onClick={() => { setEditingId(c.id); setEditText(c.text) }} style={{ fontSize: '11px', color: 'var(--text-dark)', backgroundColor: 'transparent', border: 'none', cursor: 'pointer' }}>Modifica</button>
+                      {/* Fix (auto-nascondimento autore): toggle reversibile, distinto dall'eliminazione */}
+                      <button onClick={() => handleToggleCommentHidden(c)} disabled={togglingHiddenId === c.id} style={{ fontSize: '11px', color: 'var(--text-dark)', backgroundColor: 'transparent', border: 'none', cursor: 'pointer' }}>
+                        {togglingHiddenId === c.id ? '...' : (c.hiddenByAuthor ? '👁️ Mostra' : '🙈 Nascondi')}
+                      </button>
+                      <button onClick={() => handleDeleteComment(c.id)} style={{ fontSize: '11px', color: '#ff6b6b', backgroundColor: 'transparent', border: 'none', cursor: 'pointer' }}>Elimina</button>
+                    </>
+                  ) : token && !isAdmin && (
+                    reportedCommentIds.has(c.id) ? (
+                      <span style={{ fontSize: '11px', color: 'var(--text-dark)' }}>Segnalata ✓</span>
+                    ) : (
+                      <button onClick={() => setReportingCommentId(c.id)} title="Segnala risposta" aria-label="Segnala risposta"
+                        style={{ fontSize: '12px', color: 'var(--text-dark)', backgroundColor: 'transparent', border: 'none', cursor: 'pointer' }}>🚩</button>
+                    )
+                  )}
+                  {isAdmin && (
+                    <button onClick={() => setHidingCommentId(c.id)} title="Nascondi direttamente" aria-label="Nascondi direttamente"
+                      style={{ fontSize: '12px', color: 'var(--text-dark)', backgroundColor: 'transparent', border: 'none', cursor: 'pointer' }}>🔨</button>
+                  )}
+                </div>
+              </div>
+
+              {editingId === c.id ? (
+                <div>
+                  <textarea value={editText} onChange={e => setEditText(e.target.value)} rows={2} maxLength={500}
+                    style={{ width: '100%', padding: '8px 10px', backgroundColor: 'var(--bg-card)', border: '1px solid var(--border-soft)', borderRadius: '6px', color: 'var(--text)', fontSize: '13px', resize: 'none', boxSizing: 'border-box' }} />
+                  <div style={{ display: 'flex', gap: '8px', marginTop: '6px' }}>
+                    <button onClick={() => handleEditComment(c.id)} style={{ padding: '4px 12px', backgroundColor: 'var(--accent)', border: 'none', borderRadius: '5px', color: 'var(--text)', fontSize: '12px', cursor: 'pointer' }}>Salva</button>
+                    <button onClick={() => setEditingId(null)} style={{ padding: '4px 12px', backgroundColor: 'transparent', border: '1px solid var(--border-soft)', borderRadius: '5px', color: 'var(--text-muted)', fontSize: '12px', cursor: 'pointer' }}>Annulla</button>
+                  </div>
+                </div>
+              ) : (
+                <>
+                  {c.hiddenByAuthor && c.authorUsername === currentUsername && (
+                    <p style={{ color: 'var(--text-dark)', fontSize: '11px', fontStyle: 'italic', marginBottom: '4px' }}>🙈 Nascosta — solo tu la vedi</p>
+                  )}
+                  {/* Fix (dashboard admin — commenti nascosti): l'Admin ora riceve anche
+                      le risposte nascoste dagli altri autori (bypass lato query) — qui
+                      lo segnaliamo chiaramente, per non farlo sembrare un contenuto normale */}
+                  {c.hiddenByAuthor && c.authorUsername !== currentUsername && isAdmin && (
+                    <p style={{ color: '#f59e0b', fontSize: '11px', fontStyle: 'italic', marginBottom: '4px' }}>🙈 Nascosta dall'autore — visibile solo a te come Admin</p>
+                  )}
+                  <p style={{ color: '#c8c8c8', fontSize: '13px', lineHeight: 1.5, margin: 0 }}>{c.text}</p>
+                  <ReactionBar
+                    endpoint={`/comments/${c.id}/reaction`}
+                    token={token}
+                    canReact={!!token && !isAdmin && c.authorUsername !== currentUsername}
+                  />
+                </>
+              )}
+            </div>
+          ))}
+
+          {!loading && comments.length === 0 && (
+            <p style={{ color: 'var(--text-dark)', fontSize: '12px', marginLeft: '16px' }}>Nessuna risposta ancora.</p>
+          )}
+
+          {token && !isAdmin && (
+            showComposer ? (
+              <div style={{ marginLeft: '16px' }}>
+                <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: '4px' }}>
+                  {!showReplyNotesHelper && (
+                    <button type="button" onClick={() => setShowReplyNotesHelper(true)}
+                      style={{ background: 'none', border: 'none', color: 'var(--accent)', fontSize: '11px', fontWeight: '600', cursor: 'pointer', padding: 0 }}>
+                      ✨ Aiutami a scriverla
+                    </button>
+                  )}
+                </div>
+                {showReplyNotesHelper && (
+                  <div style={{ backgroundColor: 'var(--bg-hover)', border: '1px solid var(--accent)', borderRadius: '6px', padding: '8px', marginBottom: '8px' }}>
+                    <textarea value={replyRawNotes} onChange={e => setReplyRawNotes(e.target.value)} placeholder="Butta giù qualche appunto, l'AI lo sistema..." rows={2} maxLength={500}
+                      style={{ width: '100%', padding: '6px 8px', backgroundColor: 'var(--bg)', border: '1px solid var(--border-soft)', borderRadius: '5px', color: 'var(--text)', fontSize: '12px', resize: 'none', boxSizing: 'border-box', marginBottom: '6px' }} />
+                    {replyStructureError && <p style={{ color: '#ff6b6b', fontSize: '11px', marginBottom: '6px' }}>{replyStructureError}</p>}
+                    <div style={{ display: 'flex', gap: '6px' }}>
+                      <button type="button" disabled={structuringReply || !replyRawNotes.trim()} onClick={handleStructureReply}
+                        style={{ padding: '4px 10px', backgroundColor: structuringReply ? 'var(--border-soft)' : 'var(--accent)', border: 'none', borderRadius: '5px', color: 'var(--text)', fontSize: '11px', fontWeight: '600', cursor: structuringReply ? 'default' : 'pointer' }}>
+                        {structuringReply ? 'Genero...' : 'Genera'}
+                      </button>
+                      <button type="button" onClick={() => { setShowReplyNotesHelper(false); setReplyRawNotes(''); setReplyStructureError('') }}
+                        style={{ padding: '4px 10px', backgroundColor: 'transparent', border: '1px solid var(--border-soft)', borderRadius: '5px', color: 'var(--text-muted)', fontSize: '11px', cursor: 'pointer' }}>
+                        Annulla
+                      </button>
+                    </div>
+                  </div>
+                )}
+                <textarea value={text} onChange={e => setText(e.target.value)} placeholder="Scrivi una risposta..." rows={2} maxLength={500}
+                  style={{ width: '100%', padding: '8px 10px', backgroundColor: 'var(--bg-hover)', border: '1px solid var(--border-soft)', borderRadius: '6px', color: 'var(--text)', fontSize: '13px', resize: 'none', boxSizing: 'border-box' }} />
+                <div style={{ display: 'flex', gap: '8px', marginTop: '6px' }}>
+                  <button onClick={handleAddComment} disabled={submitting || !text.trim()} style={{ padding: '5px 14px', backgroundColor: 'var(--accent)', border: 'none', borderRadius: '5px', color: 'var(--text)', fontSize: '12px', fontWeight: '600', cursor: 'pointer' }}>
+                    {submitting ? 'Invio...' : 'Rispondi'}
+                  </button>
+                  <button onClick={() => { setShowComposer(false); setText(''); setShowReplyNotesHelper(false); setReplyRawNotes(''); setReplyStructureError('') }} style={{ padding: '5px 14px', backgroundColor: 'transparent', border: '1px solid var(--border-soft)', borderRadius: '5px', color: 'var(--text-muted)', fontSize: '12px', cursor: 'pointer' }}>Annulla</button>
+                </div>
+              </div>
+            ) : (
+              <button onClick={() => setShowComposer(true)} style={{ marginLeft: '16px', alignSelf: 'flex-start', padding: '5px 12px', backgroundColor: 'transparent', border: '1px solid var(--border-soft)', borderRadius: '5px', color: 'var(--text-dark)', fontSize: '12px', cursor: 'pointer' }}>
+                💬 Rispondi
+              </button>
+            )
+          )}
+        </div>
+      )}
+
+      {reportingCommentId && (
+        <ReportModal
+          reviewCommentId={reportingCommentId}
+          onClose={() => setReportingCommentId(null)}
+          onSuccess={() => { setReportedCommentIds(prev => new Set([...prev, reportingCommentId])); setReportingCommentId(null) }}
+        />
+      )}
+
+      {hidingCommentId && (
+        <ReportModal
+          reviewCommentId={hidingCommentId}
+          adminMode
+          onClose={() => setHidingCommentId(null)}
+          onSuccess={() => {
+            setComments(prev => prev.filter(c => c.id !== hidingCommentId))
+            setHidingCommentId(null)
+            toast.show('Risposta nascosta.', 'success')
+          }}
+        />
+      )}
+    </div>
+  )
+}
+
+// Fix (Reazioni con emoji): riepilogo + toggle, riusata sia per recensioni
+// che per risposte. Nessuna moderazione qui — un'emoji non porta contenuto
+// dannoso (deciso), quindi niente 🚩/🔨, solo il conteggio e il tap per reagire
+const REACTION_EMOJI = { LIKE: '👍', LOVE: '❤️', LAUGH: '😂', WOW: '😮' }
+
+function ReactionBar({ endpoint, token, canReact }) {
+  const [summary, setSummary] = useState(null)
+
+  useEffect(() => {
+    api.get(endpoint).then(r => setSummary(r.data)).catch(() => {})
+  }, [endpoint])
+
+  const handleClick = async (type) => {
+    if (!canReact) return
+    try {
+      if (summary?.myReaction === type) {
+        const res = await api.delete(endpoint)
+        setSummary(res.data)
+      } else {
+        const res = await api.put(endpoint, { type })
+        setSummary(res.data)
+      }
+    } catch { /* silenzioso: una reazione fallita non merita un errore bloccante */ }
+  }
+
+  if (!summary) return null
+
+  return (
+    <div style={{ display: 'flex', gap: '6px', marginTop: '10px' }}>
+      {Object.entries(REACTION_EMOJI).map(([type, emoji]) => {
+        const count = summary.counts?.[type] || 0
+        const mine = summary.myReaction === type
+        return (
+          <button
+            key={type}
+            onClick={() => handleClick(type)}
+            disabled={!canReact}
+            title={canReact ? undefined : (token ? 'Non puoi reagire ai tuoi contenuti' : 'Accedi per reagire')}
+            style={{
+              display: 'flex', alignItems: 'center', gap: '4px',
+              padding: '3px 9px', borderRadius: '12px', fontSize: '12px',
+              backgroundColor: mine ? 'rgba(229,9,20,0.15)' : 'transparent',
+              border: mine ? '1px solid var(--accent)' : '1px solid var(--border-soft)',
+              color: mine ? 'var(--accent)' : 'var(--text-dark)',
+              cursor: canReact ? 'pointer' : 'default',
+            }}
+          >
+            <span>{emoji}</span>
+            {count > 0 && <span>{count}</span>}
+          </button>
+        )
+      })}
+    </div>
+  )
 }
 
 function StarPicker({ value, onChange }) {
@@ -35,7 +385,9 @@ const REPORT_CATEGORIES = [
   { value: 'OTHER', label: '📝 Altro', desc: 'Specifica il motivo nel campo testo' },
 ]
 
-function ReportModal({ reviewId, onClose, onSuccess }) {
+// Fix (UI risposte + nascondi diretto): esteso per segnalare/nascondere
+// sia recensioni che risposte, e per la modalità admin ("Nascondi direttamente")
+function ReportModal({ reviewId, reviewCommentId, adminMode, onClose, onSuccess }) {
   const [category, setCategory] = useState('')
   const [reasonText, setReasonText] = useState('')
   const [loading, setLoading] = useState(false)
@@ -46,28 +398,35 @@ function ReportModal({ reviewId, onClose, onSuccess }) {
     if (category === 'OTHER' && !reasonText.trim()) { setError('Descrivi il motivo'); return }
     setLoading(true); setError('')
     try {
-      await api.post('/reports', { reviewId, reasonCategory: category, reasonText: reasonText.trim() || null })
+      const endpoint = adminMode ? '/reports/admin-hide' : '/reports'
+      await api.post(endpoint, { reviewId, reviewCommentId, reasonCategory: category, reasonText: reasonText.trim() || null })
       onSuccess()
     } catch (err) {
-      setError(err.response?.data?.error || 'Errore durante la segnalazione')
+      setError(err.response?.data?.error || 'Errore durante l\'operazione')
     } finally { setLoading(false) }
   }
+
+  const targetLabel = reviewCommentId ? 'risposta' : 'recensione'
 
   return (
     <>
       <div onClick={onClose} style={{ position: 'fixed', inset: 0, backgroundColor: 'var(--bg-modal)', zIndex: 500 }} />
-      <div style={{ position: 'fixed', top: '50%', left: '50%', transform: 'translate(-50%, -50%)', backgroundColor: 'var(--bg-card)', border: '1px solid #333', borderRadius: '16px', padding: '32px', width: '100%', maxWidth: '460px', zIndex: 600 }}>
+      <div style={{ position: 'fixed', top: '50%', left: '50%', transform: 'translate(-50%, -50%)', backgroundColor: 'var(--bg-card)', border: '1px solid var(--border-soft)', borderRadius: '16px', padding: '32px', width: '100%', maxWidth: '460px', zIndex: 600 }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px' }}>
-          <h2 style={{ color: 'var(--text)', fontSize: '20px', fontWeight: '700' }}>🚩 Segnala recensione</h2>
+          <h2 style={{ color: 'var(--text)', fontSize: '20px', fontWeight: '700' }}>
+            {adminMode ? `🔨 Nascondi ${targetLabel}` : `🚩 Segnala ${targetLabel}`}
+          </h2>
           <button onClick={onClose} style={{ backgroundColor: 'transparent', border: 'none', color: 'var(--text-dark)', fontSize: '20px', cursor: 'pointer' }}>✕</button>
         </div>
         <p style={{ color: 'var(--text-muted)', fontSize: '14px', marginBottom: '20px' }}>
-          Seleziona il motivo della segnalazione. La esamineremo e prenderemo i provvedimenti necessari.
+          {adminMode
+            ? `Il contenuto verrà rimosso immediatamente e l'autore riceverà una violazione, come per una segnalazione approvata. Il motivo è obbligatorio.`
+            : 'Seleziona il motivo della segnalazione. La esamineremo e prenderemo i provvedimenti necessari.'}
         </p>
         <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginBottom: '20px' }}>
           {REPORT_CATEGORIES.map(c => (
             <button key={c.value} onClick={() => setCategory(c.value)} style={{ display: 'flex', alignItems: 'flex-start', gap: '12px', padding: '12px 16px', borderRadius: '8px', textAlign: 'left', border: `1px solid ${category === c.value ? 'var(--accent)' : 'var(--border-soft)'}`, backgroundColor: category === c.value ? 'var(--accent-subtle)' : 'var(--bg-card)', cursor: 'pointer', width: '100%' }}>
-              <div style={{ marginTop: '2px', width: '16px', height: '16px', borderRadius: '50%', border: `2px solid ${category === c.value ? 'var(--accent)' : '#444'}`, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+              <div style={{ marginTop: '2px', width: '16px', height: '16px', borderRadius: '50%', border: `2px solid ${category === c.value ? 'var(--accent)' : 'var(--border-soft)'}`, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
                 {category === c.value && <div style={{ width: '8px', height: '8px', borderRadius: '50%', backgroundColor: 'var(--accent)' }} />}
               </div>
               <div>
@@ -82,15 +441,15 @@ function ReportModal({ reviewId, onClose, onSuccess }) {
             {category === 'OTHER' ? 'Descrivi il motivo (obbligatorio)' : 'Dettagli aggiuntivi (opzionale)'}
           </label>
           <textarea value={reasonText} onChange={e => setReasonText(e.target.value)} placeholder="Spiega il problema..." rows={3} maxLength={500}
-            style={{ width: '100%', padding: '10px 14px', backgroundColor: 'var(--bg-hover)', border: '1px solid #333', borderRadius: '8px', color: 'var(--text)', fontSize: '14px', resize: 'none', boxSizing: 'border-box' }} />
-          <div style={{ color: '#555', fontSize: '11px', textAlign: 'right', marginTop: '4px' }}>{reasonText.length}/500</div>
+            style={{ width: '100%', padding: '10px 14px', backgroundColor: 'var(--bg-hover)', border: '1px solid var(--border-soft)', borderRadius: '8px', color: 'var(--text)', fontSize: '14px', resize: 'none', boxSizing: 'border-box' }} />
+          <div style={{ color: 'var(--text-dark)', fontSize: '11px', textAlign: 'right', marginTop: '4px' }}>{reasonText.length}/500</div>
         </div>
         {error && <p style={{ color: '#ff6b6b', fontSize: '13px', marginBottom: '16px' }}>{error}</p>}
         <div style={{ display: 'flex', gap: '10px' }}>
-          <button onClick={handleSubmit} disabled={loading} style={{ flex: 1, padding: '12px', backgroundColor: loading ? '#666' : 'var(--accent)', border: 'none', borderRadius: '8px', color: 'var(--text)', fontSize: '15px', fontWeight: '600', cursor: loading ? 'default' : 'pointer' }}>
-            {loading ? 'Invio...' : 'Invia segnalazione'}
+          <button onClick={handleSubmit} disabled={loading} style={{ flex: 1, padding: '12px', backgroundColor: loading ? 'var(--border-soft)' : 'var(--accent)', border: 'none', borderRadius: '8px', color: 'var(--text)', fontSize: '15px', fontWeight: '600', cursor: loading ? 'default' : 'pointer' }}>
+            {loading ? 'Invio...' : (adminMode ? 'Nascondi contenuto' : 'Invia segnalazione')}
           </button>
-          <button onClick={onClose} style={{ padding: '12px 20px', backgroundColor: 'transparent', border: '1px solid #333', borderRadius: '8px', color: 'var(--text-muted)', fontSize: '14px', cursor: 'pointer' }}>
+          <button onClick={onClose} style={{ padding: '12px 20px', backgroundColor: 'transparent', border: '1px solid var(--border-soft)', borderRadius: '8px', color: 'var(--text-muted)', fontSize: '14px', cursor: 'pointer' }}>
             Annulla
           </button>
         </div>
@@ -105,8 +464,69 @@ function MovieDetailPage() {
   const mediaType = searchParams.get('type') || 'MOVIE'
   const navigate = useNavigate()
   const { token, user } = useAuthStore()
+  const toast = useToastStore()
 
   const isAdmin = user?.role === 'ADMIN'
+  const closeChatWidget = useChatStore(s => s.close)
+
+  // Fix (AI più centrale): "Chiedi su questo film" — stateless, ogni domanda
+  // è indipendente, nessuna cronologia salvata
+  const [showMovieQA, setShowMovieQA] = useState(false)
+  const [movieQuestion, setMovieQuestion] = useState('')
+  const [movieAnswer, setMovieAnswer] = useState(null) // { answer, containsSpoiler }
+  const [spoilerRevealed, setSpoilerRevealed] = useState(false)
+  const [askingMovie, setAskingMovie] = useState(false)
+  const [movieQAError, setMovieQAError] = useState('')
+
+  const openMovieQA = () => {
+    // Fix: minimizza (non chiude/resetta) la chat generale se era aperta —
+    // le due non devono mai stare aperte sovrapposte sullo schermo insieme
+    closeChatWidget()
+    setShowMovieQA(true)
+  }
+
+  const handleAskMovie = async () => {
+    if (!movieQuestion.trim()) return
+    setAskingMovie(true); setMovieQAError(''); setMovieAnswer(null); setSpoilerRevealed(false)
+    try {
+      const res = await api.post('/ai/movie-question', {
+        tmdbId: Number(id),
+        contentType: mediaType,
+        question: movieQuestion.trim(),
+      })
+      setMovieAnswer(res.data)
+    } catch (err) {
+      setMovieQAError(err.response?.data?.error || 'Assistente non disponibile, riprova')
+    } finally {
+      setAskingMovie(false)
+    }
+  }
+
+  // Fix (AI che replica a una recensione negativa): SOLO su richiesta esplicita
+  const [aiOpinion, setAiOpinion] = useState('')
+  const [aiOpinionError, setAiOpinionError] = useState('')
+  const [askingOpinion, setAskingOpinion] = useState(false)
+
+  const handleAskAiOpinion = async () => {
+    setAskingOpinion(true); setAiOpinionError(''); setAiOpinion('')
+    try {
+      const res = await api.post(`/ai/reviews/${myReview.id}/opinion`)
+      setAiOpinion(res.data.opinion || '')
+    } catch (err) {
+      setAiOpinionError(err.response?.data?.error || 'Assistente non disponibile, riprova')
+    } finally {
+      setAskingOpinion(false)
+    }
+  }
+
+  // Fix (dashboard admin, Step 6): target da evidenziare quando si arriva
+  // qui dal link "Vedi nel contesto" della dashboard, e marcatore per
+  // mostrare il bottone di ritorno (che usa la history, non un link fisso,
+  // così il "torna alla dashboard" riporta l'admin esattamente dov'era)
+  const highlightReviewId = searchParams.get('highlightReview')
+  const highlightCommentId = searchParams.get('highlightComment')
+  const parentReviewForHighlight = searchParams.get('parentReview')
+  const cameFromAdmin = searchParams.get('adminRef') === '1'
 
   const [detail, setDetail] = useState(null)
   const [reviews, setReviews] = useState([])
@@ -121,13 +541,35 @@ function MovieDetailPage() {
   const [reviewSuccess, setReviewSuccess] = useState('')
   const [editMode, setEditMode] = useState(false)
 
+  // Fix (AI più centrale): "recensione a botta calda" — appunti sparsi -> AI li struttura
+  const [showNotesHelper, setShowNotesHelper] = useState(false)
+  const [rawNotes, setRawNotes] = useState('')
+  const [structuring, setStructuring] = useState(false)
+  const [structureError, setStructureError] = useState('')
+
   const [libraryLoading, setLibraryLoading] = useState(false)
   const [libraryError, setLibraryError] = useState('')
 
   const [reportingReviewId, setReportingReviewId] = useState(null)
+  // Fix: "Nascondi direttamente" — stato separato per il modal in modalità admin
+  const [hidingReviewId, setHidingReviewId] = useState(null)
   const [reportedIds, setReportedIds] = useState(new Set())
 
   useEffect(() => {
+    // Fix (Assistente AI — suggerimento cliccato): questa pagina resta montata
+    // quando si passa da un film all'altro tramite i link "consigliami qualcosa
+    // di simile" (stesso componente, cambia solo :id nell'URL) — senza reset,
+    // watchEntry/myReview/rating restavano quelli del film di partenza finché
+    // non si ricaricava manualmente la pagina, mostrando uno stato "vecchio"
+    // (es. "Salvato come: Visto" di un film che non era mai stato aggiunto).
+    setDetail(null)
+    setWatchEntry(null)
+    setMyReview(null)
+    setRating(0)
+    setText('')
+    setEditMode(false)
+    setLoading(true)
+
     Promise.all([
       api.get(`/tmdb/${mediaType}/${id}`),
       api.get(`/reviews/media/${mediaType}/${id}`),
@@ -149,6 +591,16 @@ function MovieDetailPage() {
       }).catch(() => {})
     }
   }, [id, mediaType, token, user])
+
+  // Fix (dashboard admin, Step 6): scroll automatico + evidenziazione della
+  // recensione segnalata, quando si arriva qui da "Vedi nel contesto"
+  useEffect(() => {
+    if (!highlightReviewId || reviews.length === 0) return
+    const el = document.getElementById(`review-${highlightReviewId}`)
+    if (el) {
+      el.scrollIntoView({ behavior: 'smooth', block: 'center' })
+    }
+  }, [reviews, highlightReviewId])
 
   const handleAddToLibrary = async (status) => {
     if (!token) { navigate('/login', { state: { from: `/movie/${id}?type=${mediaType}` } }); return }
@@ -183,6 +635,7 @@ function MovieDetailPage() {
     e.preventDefault()
     if (!token) { navigate('/login', { state: { from: `/movie/${id}?type=${mediaType}` } }); return }
     if (!rating) { setReviewError('Seleziona un voto'); return }
+    if (!text.trim()) { setReviewError('Il commento è obbligatorio'); return }
     setReviewLoading(true); setReviewError(''); setReviewSuccess('')
     try {
       if (myReview && editMode) {
@@ -197,6 +650,26 @@ function MovieDetailPage() {
       }
     } catch (err) { setReviewError(err.response?.data?.error || 'Errore durante la pubblicazione') }
     finally { setReviewLoading(false) }
+  }
+
+  // Fix (AI più centrale): "recensione a botta calda" — non salva nulla,
+  // pre-compila solo il campo testo, l'utente rivede/modifica prima di pubblicare
+  const handleStructureNotes = async () => {
+    if (!rawNotes.trim()) return
+    setStructuring(true); setStructureError('')
+    try {
+      const res = await api.post('/ai/structure-review', {
+        rawNotes: rawNotes.trim(),
+        movieTitle: detail?.title || '',
+      })
+      setText(res.data.text || '')
+      setShowNotesHelper(false)
+      setRawNotes('')
+    } catch (err) {
+      setStructureError(err.response?.data?.error || 'Assistente non disponibile, riprova')
+    } finally {
+      setStructuring(false)
+    }
   }
 
   // Fix: l'endpoint DELETE /api/reviews/{id} esisteva già ma nessun bottone
@@ -220,12 +693,38 @@ function MovieDetailPage() {
     }
   }
 
+  // Fix (auto-nascondimento autore, deciso): toggle reversibile, separato
+  // dall'eliminazione — non tocca il punteggio, non genera nessuna segnalazione
+  const [togglingHidden, setTogglingHidden] = useState(false)
+  const handleToggleHidden = async () => {
+    if (!myReview) return
+    setTogglingHidden(true)
+    try {
+      const res = await api.patch(`/reviews/${myReview.id}/visibility`, null, { params: { hidden: !myReview.hiddenByAuthor } })
+      setMyReview(res.data)
+      setReviews(prev => prev.map(r => r.id === myReview.id ? res.data : r))
+    } catch (err) {
+      toast.show(err.response?.data?.error || 'Errore durante l\'operazione')
+    } finally {
+      setTogglingHidden(false)
+    }
+  }
+
   if (loading) return (<div style={{ backgroundColor: 'var(--bg)', minHeight: '100vh' }}><Navbar /><div style={{ textAlign: 'center', color: 'var(--text-muted)', marginTop: '100px' }}>Caricamento...</div></div>)
   if (!detail) return (<div style={{ backgroundColor: 'var(--bg)', minHeight: '100vh' }}><Navbar /><div style={{ textAlign: 'center', color: 'var(--text-muted)', marginTop: '100px' }}>Contenuto non trovato</div></div>)
 
   const otherReviews = reviews.filter(r => r.username !== user?.username)
   const tmdbRating = detail.tmdbRating ?? detail.votoTmdb
   const ciakLogRating = detail.ciakLogAverageRating ?? detail.votoCiakLog
+
+  // Fix (Dettaglio — voto combinato, deciso): CiakLog è su scala 1-5, TMDB su
+  // scala 0-10 — normalizzo CiakLog x2 prima di fare la media, altrimenti il
+  // combinato sarebbe falsato (una media diretta tra 1-5 e 0-10 non ha senso)
+  const normalizedCiak = ciakLogRating != null ? Number(ciakLogRating) * 2 : null
+  const normalizedTmdb = tmdbRating != null ? Number(tmdbRating) : null
+  const combinedRating = normalizedTmdb != null && normalizedCiak != null
+      ? (normalizedTmdb + normalizedCiak) / 2
+      : (normalizedTmdb ?? normalizedCiak)
   const ciakLogVotes = detail.ciakLogVoteCount ?? detail.numeroVotiCiakLog
   const isMovie = (detail.contentType ?? mediaType) === 'MOVIE'
   const canReview = token && !isAdmin && watchEntry?.status === 'WATCHED'
@@ -242,6 +741,19 @@ function MovieDetailPage() {
         />
       )}
 
+      {hidingReviewId && (
+        <ReportModal
+          reviewId={hidingReviewId}
+          adminMode
+          onClose={() => setHidingReviewId(null)}
+          onSuccess={() => {
+            setReviews(prev => prev.filter(r => r.id !== hidingReviewId))
+            setHidingReviewId(null)
+            toast.show('Recensione nascosta.', 'success')
+          }}
+        />
+      )}
+
       {confirmDeleteReview && (
         <ConfirmModal
           message="Eliminare la tua recensione? L'azione non è reversibile."
@@ -251,10 +763,77 @@ function MovieDetailPage() {
         />
       )}
 
+      {/* Fix (AI più centrale): modal "Chiedi su questo film" — separato dal
+          widget flottante della chat generale, stateless (nessuna cronologia) */}
+      {showMovieQA && (
+        <div style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(0,0,0,0.6)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 200 }}
+          onClick={() => setShowMovieQA(false)}>
+          <div style={{ backgroundColor: 'var(--bg-card)', border: '1px solid var(--border-soft)', borderRadius: '12px', padding: '24px', width: '440px', maxWidth: '90vw', maxHeight: '80vh', overflowY: 'auto' }}
+            onClick={e => e.stopPropagation()}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
+              <h3 style={{ color: 'var(--text)', fontSize: '16px', fontWeight: '700', margin: 0 }}>💬 Chiedi su "{detail.title}"</h3>
+              <button onClick={() => setShowMovieQA(false)} style={{ background: 'none', border: 'none', color: 'var(--text-muted)', fontSize: '20px', cursor: 'pointer', lineHeight: 1 }}>✕</button>
+            </div>
+            <p style={{ color: 'var(--text-dark)', fontSize: '12px', marginBottom: '16px' }}>
+              Domande solo su questo titolo — trama, cast, temi. Ogni domanda è indipendente, non c'è memoria della conversazione.
+            </p>
+
+            <div style={{ display: 'flex', gap: '8px', marginBottom: '16px' }}>
+              <input
+                value={movieQuestion}
+                onChange={e => setMovieQuestion(e.target.value)}
+                onKeyDown={e => e.key === 'Enter' && !askingMovie && handleAskMovie()}
+                placeholder="es. chi è il regista? com'è il ritmo?"
+                maxLength={300}
+                style={{ flex: 1, padding: '10px 12px', backgroundColor: 'var(--bg-hover)', border: '1px solid var(--border-soft)', borderRadius: '8px', color: 'var(--text)', fontSize: '13px' }}
+              />
+              <button onClick={handleAskMovie} disabled={askingMovie || !movieQuestion.trim()} style={{
+                padding: '10px 18px', backgroundColor: askingMovie ? 'var(--border-soft)' : 'var(--accent)', border: 'none',
+                borderRadius: '8px', color: 'var(--text)', fontSize: '13px', fontWeight: '600',
+                cursor: askingMovie ? 'default' : 'pointer', whiteSpace: 'nowrap',
+              }}>
+                {askingMovie ? '...' : 'Chiedi'}
+              </button>
+            </div>
+
+            {movieQAError && <p style={{ color: '#ff6b6b', fontSize: '13px' }}>{movieQAError}</p>}
+
+            {movieAnswer && (
+              <div style={{ backgroundColor: 'var(--bg-hover)', borderRadius: '8px', padding: '14px' }}>
+                {movieAnswer.containsSpoiler && !spoilerRevealed ? (
+                  <button onClick={() => setSpoilerRevealed(true)} style={{
+                    width: '100%', padding: '10px', backgroundColor: 'rgba(239,68,68,0.12)', border: '1px solid #ef4444',
+                    borderRadius: '6px', color: '#ef4444', fontSize: '13px', fontWeight: '600', cursor: 'pointer',
+                  }}>
+                    ⚠️ Attenzione, spoiler — mostra comunque la risposta
+                  </button>
+                ) : (
+                  <p style={{ color: 'var(--text)', fontSize: '14px', lineHeight: 1.5, margin: 0 }}>{movieAnswer.answer}</p>
+                )}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Fix (dashboard admin, Step 6): usa la history (back), non un link fisso
+          a /admin — così tab/filtro/gruppo aperto/scroll della dashboard restano
+          esattamente come li aveva lasciati l'admin, non ripartono da capo */}
+      {cameFromAdmin && (
+        <div style={{ maxWidth: '1100px', margin: '16px auto 0', padding: '0 64px' }}>
+          <button
+            onClick={() => navigate(-1)}
+            style={{ padding: '8px 18px', backgroundColor: 'transparent', border: '1px solid var(--border-soft)', borderRadius: '8px', color: 'var(--text-muted)', fontSize: '13px', cursor: 'pointer' }}
+          >
+            ← Torna alla dashboard admin
+          </button>
+        </div>
+      )}
+
       <div style={{ padding: '48px 64px', display: 'flex', gap: '48px', alignItems: 'flex-start', maxWidth: '1100px', margin: '0 auto' }}>
         <div style={{ flexShrink: 0 }}>
           {detail.posterPath
-            ? <img src={`https://image.tmdb.org/t/p/w300${detail.posterPath}`} alt={detail.title} style={{ width: '200px', borderRadius: '12px', border: '1px solid #222' }} />
+            ? <img src={`https://image.tmdb.org/t/p/w300${detail.posterPath}`} alt={detail.title} style={{ width: '200px', borderRadius: '12px', border: '1px solid var(--border)' }} />
             : <div style={{ width: '200px', height: '300px', backgroundColor: 'var(--border)', borderRadius: '12px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '48px' }}>🎬</div>
           }
         </div>
@@ -271,25 +850,51 @@ function MovieDetailPage() {
 
           {detail.overview && <p style={{ color: 'var(--text-muted)', fontSize: '14px', lineHeight: 1.6, marginBottom: '20px' }}>{detail.overview}</p>}
 
+          {!isAdmin && (
+            <button onClick={openMovieQA} style={{
+              display: 'inline-flex', alignItems: 'center', gap: '6px', marginBottom: '20px',
+              padding: '8px 16px', backgroundColor: 'var(--bg-hover)', border: '1px solid var(--accent)',
+              borderRadius: '20px', color: 'var(--accent)', fontSize: '13px', fontWeight: '600', cursor: 'pointer',
+            }}>
+              💬 Chiedi su questo film
+            </button>
+          )}
+
           {detail.genres?.length > 0 && (
             <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', marginBottom: '20px' }}>
-              {detail.genres.map(g => <span key={g} style={{ padding: '4px 12px', backgroundColor: 'var(--bg-hover)', border: '1px solid #333', borderRadius: '20px', color: 'var(--text-muted)', fontSize: '13px' }}>{g}</span>)}
+              {detail.genres.map(g => <span key={g} style={{ padding: '4px 12px', backgroundColor: 'var(--bg-hover)', border: '1px solid var(--border-soft)', borderRadius: '20px', color: 'var(--text-muted)', fontSize: '13px' }}>{g}</span>)}
             </div>
           )}
 
-          <div style={{ display: 'flex', gap: '24px', marginBottom: '28px' }}>
-            {tmdbRating && (
-              <div>
-                <div style={{ color: 'var(--text-dark)', fontSize: '12px', marginBottom: '2px' }}>TMDB</div>
-                <div style={{ color: 'var(--gold)', fontWeight: '700', fontSize: '20px' }}>⭐ {Number(tmdbRating).toFixed(1)}</div>
+          <div style={{ marginBottom: '28px' }}>
+            {/* Fix (Dettaglio — voto combinato, deciso): media grande in evidenza,
+                con le due fonti separate mostrate più piccole sotto */}
+            {combinedRating != null && (
+              <div style={{ marginBottom: '10px' }}>
+                <div style={{ color: 'var(--gold)', fontWeight: '800', fontSize: '38px', lineHeight: 1 }}>
+                  ⭐ {combinedRating.toFixed(1)}<span style={{ fontSize: '18px', color: 'var(--text-dark)', fontWeight: '600' }}>/10</span>
+                </div>
+                <div style={{ color: 'var(--text-dark)', fontSize: '12px', marginTop: '2px' }}>Voto complessivo</div>
               </div>
             )}
-            {ciakLogRating && (
+
+            {/* Fix: prima la riga spariva del tutto quando mancava il voto — un "–"
+                esplicito comunica meglio "non ancora votato" di una sezione che
+                sparisce silenziosamente (o, peggio, di uno "0" che sembra un voto reale) */}
+            <div style={{ display: 'flex', gap: '24px' }}>
               <div>
-                <div style={{ color: 'var(--text-dark)', fontSize: '12px', marginBottom: '2px' }}>CiakLog</div>
-                <div style={{ color: 'var(--accent)', fontWeight: '700', fontSize: '20px' }}>🎬 {Number(ciakLogRating).toFixed(1)}</div>
+                <div style={{ color: 'var(--text-dark)', fontSize: '11px', marginBottom: '2px' }}>TMDB</div>
+                <div style={{ color: tmdbRating ? 'var(--text-muted)' : 'var(--text-dark)', fontWeight: '600', fontSize: '14px' }}>
+                  {tmdbRating ? `⭐ ${Number(tmdbRating).toFixed(1)}` : '–'}
+                </div>
               </div>
-            )}
+              <div>
+                <div style={{ color: 'var(--text-dark)', fontSize: '11px', marginBottom: '2px' }}>CiakLog</div>
+                <div style={{ color: ciakLogRating ? 'var(--text-muted)' : 'var(--text-dark)', fontWeight: '600', fontSize: '14px' }}>
+                  {ciakLogRating ? `🎬 ${Number(ciakLogRating).toFixed(1)}` : '–'}
+                </div>
+              </div>
+            </div>
           </div>
 
           {/* Bottoni libreria — nascosti per ADMIN */}
@@ -316,12 +921,30 @@ function MovieDetailPage() {
           {detail.cast?.length > 0 && (
             <div style={{ marginTop: '28px' }}>
               <h3 style={{ color: 'var(--text-muted)', fontSize: '13px', fontWeight: '600', textTransform: 'uppercase', letterSpacing: '1px', marginBottom: '12px' }}>Cast</h3>
-              <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
-                {detail.cast.slice(0, 8).map((actor, i) => (
-                  <span key={i} style={{ padding: '4px 12px', backgroundColor: 'var(--bg-hover)', border: '1px solid #333', borderRadius: '20px', color: 'var(--text-muted)', fontSize: '13px' }}>
-                    {typeof actor === 'string' ? actor : actor.name}
-                  </span>
-                ))}
+              {/* Fix: il backend fornisce già photoPath (da TMDB profile_path) ma
+                  veniva ignorato — il cast appariva solo come pillole di testo,
+                  mai con le foto. Ripristinate, con fallback per gli attori senza foto */}
+              <div style={{ display: 'flex', gap: '14px', flexWrap: 'wrap' }}>
+                {detail.cast.slice(0, 8).map((actor, i) => {
+                  const name = typeof actor === 'string' ? actor : actor.name
+                  const photoPath = typeof actor === 'string' ? null : actor.photoPath
+                  return (
+                    <div key={i} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', width: '72px', textAlign: 'center' }}>
+                      {photoPath ? (
+                        <img
+                          src={`https://image.tmdb.org/t/p/w185${photoPath}`}
+                          alt={name}
+                          style={{ width: '56px', height: '56px', borderRadius: '50%', objectFit: 'cover', border: '1px solid var(--border-soft)', marginBottom: '6px' }}
+                        />
+                      ) : (
+                        <div style={{ width: '56px', height: '56px', borderRadius: '50%', backgroundColor: 'var(--bg-hover)', border: '1px solid var(--border-soft)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '20px', marginBottom: '6px' }}>
+                          🎭
+                        </div>
+                      )}
+                      <span style={{ color: 'var(--text-muted)', fontSize: '11px', lineHeight: 1.3 }}>{name}</span>
+                    </div>
+                  )
+                })}
               </div>
             </div>
           )}
@@ -348,7 +971,7 @@ function MovieDetailPage() {
 
         {/* Sezione recensione — logica completa */}
         {token && !isAdmin && (
-          <div style={{ backgroundColor: 'var(--bg-card)', border: '1px solid #222', borderRadius: '12px', padding: '28px', marginBottom: '40px' }}>
+          <div id={myReview ? `review-${myReview.id}` : undefined} style={{ backgroundColor: 'var(--bg-card)', border: myReview && highlightReviewId === myReview.id ? '2px solid #3b82f6' : '1px solid var(--border)', borderRadius: '12px', padding: '28px', marginBottom: '40px', boxShadow: myReview && highlightReviewId === myReview.id ? '0 0 0 4px rgba(59,130,246,0.15)' : 'none' }}>
 
             {myReview && !editMode ? (
               /* Ho già recensito */
@@ -356,15 +979,60 @@ function MovieDetailPage() {
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
                   <h2 style={{ color: 'var(--text)', fontSize: '18px', fontWeight: '700' }}>✏️ La tua recensione</h2>
                   <div style={{ display: 'flex', gap: '8px' }}>
-                    <button onClick={() => setEditMode(true)} style={{ padding: '6px 16px', backgroundColor: 'transparent', border: '1px solid #333', borderRadius: '6px', color: 'var(--text-muted)', fontSize: '13px', cursor: 'pointer' }}>Modifica</button>
+                    <button onClick={() => setEditMode(true)} style={{ padding: '6px 16px', backgroundColor: 'transparent', border: '1px solid var(--border-soft)', borderRadius: '6px', color: 'var(--text-muted)', fontSize: '13px', cursor: 'pointer' }}>Modifica</button>
+                    {/* Fix (auto-nascondimento autore): toggle reversibile, distinto
+                        dall'eliminazione — nasconde/rimostra senza penalità */}
+                    <button onClick={handleToggleHidden} disabled={togglingHidden} style={{ padding: '6px 16px', backgroundColor: 'transparent', border: '1px solid var(--border-soft)', borderRadius: '6px', color: 'var(--text-muted)', fontSize: '13px', cursor: 'pointer' }}>
+                      {togglingHidden ? '...' : (myReview.hiddenByAuthor ? '👁️ Mostra di nuovo' : '🙈 Nascondi')}
+                    </button>
                     <button onClick={() => setConfirmDeleteReview(true)} disabled={deletingReview} style={{ padding: '6px 16px', backgroundColor: 'transparent', border: '1px solid #4a2222', borderRadius: '6px', color: '#ff6b6b', fontSize: '13px', cursor: 'pointer' }}>
                       {deletingReview ? 'Eliminazione...' : 'Elimina'}
                     </button>
                   </div>
                 </div>
+                {myReview.hiddenByAuthor && (
+                  <p style={{ color: 'var(--text-dark)', fontSize: '12px', marginBottom: '12px', fontStyle: 'italic' }}>
+                    🙈 Nascosta — solo tu la vedi. Gli altri utenti non la vedono più sotto questo titolo.
+                  </p>
+                )}
                 <div style={{ marginBottom: '10px' }}><StaticRating rating={myReview.rating} /></div>
-                {myReview.text && <p style={{ color: '#d1d5db', fontSize: '14px', lineHeight: 1.6 }}>{myReview.text}</p>}
+                {myReview.text && <p style={{ color: 'var(--text-muted)', fontSize: '14px', lineHeight: 1.6 }}>{myReview.text}</p>}
                 {reviewSuccess && <p style={{ color: '#4ade80', fontSize: '13px', marginTop: '10px' }}>{reviewSuccess}</p>}
+
+                {/* Fix (AI che replica a una recensione negativa): SOLO su richiesta
+                    esplicita, mai automatica — solo per voti bassi */}
+                {myReview.rating <= 2 && (
+                  <div style={{ marginTop: '14px' }}>
+                    {!aiOpinion && (
+                      <button onClick={handleAskAiOpinion} disabled={askingOpinion} style={{
+                        padding: '6px 14px', backgroundColor: 'transparent', border: '1px solid var(--accent)',
+                        borderRadius: '20px', color: 'var(--accent)', fontSize: '12px', fontWeight: '600',
+                        cursor: askingOpinion ? 'default' : 'pointer',
+                      }}>
+                        {askingOpinion ? '...' : '🤖 Chiedi il parere dell\'AI'}
+                      </button>
+                    )}
+                    {aiOpinionError && <p style={{ color: '#ff6b6b', fontSize: '12px', marginTop: '8px' }}>{aiOpinionError}</p>}
+                    {aiOpinion && (
+                      <div style={{ backgroundColor: 'var(--bg-hover)', border: '1px solid var(--accent)', borderRadius: '8px', padding: '12px', marginTop: '8px' }}>
+                        <p style={{ color: 'var(--text-dark)', fontSize: '11px', fontWeight: '600', marginBottom: '4px' }}>🤖 L'AI dice:</p>
+                        <p style={{ color: 'var(--text)', fontSize: '13px', lineHeight: 1.5, margin: 0 }}>{aiOpinion}</p>
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                <ReactionBar endpoint={`/reviews/${myReview.id}/reaction`} token={token} canReact={false} />
+                <ReplyThread
+                  reviewId={myReview.id}
+                  reviewText={myReview.text}
+                  reviewOwnerUsername={myReview.username}
+                  token={token}
+                  currentUsername={user?.username}
+                  isAdmin={isAdmin}
+                  autoExpand={parentReviewForHighlight === myReview.id}
+                  highlightCommentId={highlightCommentId}
+                />
               </>
 
             ) : canReview ? (
@@ -379,19 +1047,47 @@ function MovieDetailPage() {
                     <StarPicker value={rating} onChange={setRating} />
                   </div>
                   <div style={{ marginBottom: '20px' }}>
-                    <label style={{ display: 'block', color: 'var(--text-muted)', fontSize: '13px', marginBottom: '8px' }}>Commento (opzionale)</label>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px' }}>
+                      <label style={{ display: 'block', color: 'var(--text-muted)', fontSize: '13px' }}>Commento (obbligatorio)</label>
+                      {!showNotesHelper && (
+                        <button type="button" onClick={() => setShowNotesHelper(true)}
+                          style={{ background: 'none', border: 'none', color: 'var(--accent)', fontSize: '12px', fontWeight: '600', cursor: 'pointer', padding: 0 }}>
+                          ✨ Aiutami a scriverla
+                        </button>
+                      )}
+                    </div>
+                    {showNotesHelper && (
+                      <div style={{ backgroundColor: 'var(--bg-hover)', border: '1px solid var(--accent)', borderRadius: '8px', padding: '12px', marginBottom: '10px' }}>
+                        <p style={{ color: 'var(--text-dark)', fontSize: '12px', marginBottom: '8px' }}>
+                          Butta giù qualche appunto sparso — l'AI lo trasforma in una recensione, mantenendo il tuo tono e le tue opinioni.
+                        </p>
+                        <textarea value={rawNotes} onChange={e => setRawNotes(e.target.value)} placeholder="es. ritmo lento primi 20 min, finale wow, colonna sonora top..." rows={3} maxLength={1000}
+                          style={{ width: '100%', padding: '10px', backgroundColor: 'var(--bg)', border: '1px solid var(--border-soft)', borderRadius: '6px', color: 'var(--text)', fontSize: '13px', resize: 'vertical', boxSizing: 'border-box', marginBottom: '8px' }} />
+                        {structureError && <p style={{ color: '#ff6b6b', fontSize: '12px', marginBottom: '8px' }}>{structureError}</p>}
+                        <div style={{ display: 'flex', gap: '8px' }}>
+                          <button type="button" disabled={structuring || !rawNotes.trim()} onClick={handleStructureNotes}
+                            style={{ padding: '8px 16px', backgroundColor: structuring ? 'var(--border-soft)' : 'var(--accent)', border: 'none', borderRadius: '6px', color: 'var(--text)', fontSize: '13px', fontWeight: '600', cursor: structuring ? 'default' : 'pointer' }}>
+                            {structuring ? 'Genero...' : '✨ Genera recensione'}
+                          </button>
+                          <button type="button" onClick={() => { setShowNotesHelper(false); setRawNotes(''); setStructureError('') }}
+                            style={{ padding: '8px 16px', backgroundColor: 'transparent', border: '1px solid var(--border-soft)', borderRadius: '6px', color: 'var(--text-muted)', fontSize: '13px', cursor: 'pointer' }}>
+                            Annulla
+                          </button>
+                        </div>
+                      </div>
+                    )}
                     <textarea value={text} onChange={e => setText(e.target.value)} placeholder="Cosa ne pensi?" rows={4}
-                      style={{ width: '100%', padding: '12px', backgroundColor: 'var(--bg-hover)', border: '1px solid #333', borderRadius: '8px', color: 'var(--text)', fontSize: '14px', resize: 'vertical', boxSizing: 'border-box' }} />
+                      style={{ width: '100%', padding: '12px', backgroundColor: 'var(--bg-hover)', border: '1px solid var(--border-soft)', borderRadius: '8px', color: 'var(--text)', fontSize: '14px', resize: 'vertical', boxSizing: 'border-box' }} />
                   </div>
                   {reviewError && <p style={{ color: '#ff6b6b', fontSize: '13px', marginBottom: '12px' }}>{reviewError}</p>}
                   {reviewSuccess && <p style={{ color: '#4ade80', fontSize: '13px', marginBottom: '12px' }}>{reviewSuccess}</p>}
                   <div style={{ display: 'flex', gap: '10px' }}>
-                    <button type="submit" disabled={reviewLoading} style={{ padding: '12px 28px', backgroundColor: reviewLoading ? '#666' : 'var(--accent)', border: 'none', borderRadius: '8px', color: 'var(--text)', fontSize: '15px', fontWeight: '600', cursor: 'pointer' }}>
+                    <button type="submit" disabled={reviewLoading} style={{ padding: '12px 28px', backgroundColor: reviewLoading ? 'var(--border-soft)' : 'var(--accent)', border: 'none', borderRadius: '8px', color: 'var(--text)', fontSize: '15px', fontWeight: '600', cursor: 'pointer' }}>
                       {reviewLoading ? 'Salvataggio...' : editMode ? 'Aggiorna' : 'Pubblica recensione'}
                     </button>
                     {editMode && (
                       <button type="button" onClick={() => { setEditMode(false); setRating(myReview.rating); setText(myReview.text || '') }}
-                        style={{ padding: '12px 20px', backgroundColor: 'transparent', border: '1px solid #333', borderRadius: '8px', color: 'var(--text-muted)', fontSize: '14px', cursor: 'pointer' }}>
+                        style={{ padding: '12px 20px', backgroundColor: 'transparent', border: '1px solid var(--border-soft)', borderRadius: '8px', color: 'var(--text-muted)', fontSize: '14px', cursor: 'pointer' }}>
                         Annulla
                       </button>
                     )}
@@ -420,17 +1116,34 @@ function MovieDetailPage() {
         )}
 
         {/* Recensioni community */}
-        <h2 style={{ color: 'var(--text)', fontSize: '20px', fontWeight: '700', marginBottom: '20px' }}>
-          💬 Recensioni della community{' '}
-          {otherReviews.length > 0 && <span style={{ color: 'var(--text-dark)', fontSize: '16px' }}>({otherReviews.length})</span>}
-        </h2>
+        {/* Fix: il conteggio qui escludeva sempre la propria recensione (mostrando
+            "1" invece di "2" con 2 recensioni di cui 1 tua), ma la media voti altrove
+            nella pagina la include correttamente — disallineamento tra conteggio e
+            media. Ora il conteggio è sul totale reale, coerente con la media; la
+            lista sotto resta senza la tua per evitare il duplicato visivo (è già
+            mostrata nel blocco "La tua recensione" sopra).
+            Fix (Dettaglio — stesso bug delle risposte): reviews include la TUA
+            recensione anche se l'hai nascosta (per poterla ripristinare), ma il
+            conteggio pubblico non deve contarla — altrimenti nasconderla non
+            sembra avere alcun effetto sul numero mostrato. */}
+        {(() => {
+          const visibleReviewsCount = reviews.filter(r => !r.hiddenByAuthor).length
+          return (
+            <h2 style={{ color: 'var(--text)', fontSize: '20px', fontWeight: '700', marginBottom: '20px' }}>
+              💬 Recensioni della community{' '}
+              {visibleReviewsCount > 0 && <span style={{ color: 'var(--text-dark)', fontSize: '16px' }}>({visibleReviewsCount})</span>}
+            </h2>
+          )
+        })()}
 
-        {otherReviews.length === 0 ? (
-          <p style={{ color: 'var(--text-dark)' }}>Ancora nessuna recensione dalla community. {!myReview && !isAdmin && 'Sii il primo!'}</p>
+        {reviews.length === 0 ? (
+          <p style={{ color: 'var(--text-dark)' }}>Ancora nessuna recensione. {!isAdmin && 'Sii il primo!'}</p>
+        ) : otherReviews.length === 0 ? (
+          <p style={{ color: 'var(--text-dark)' }}>Per ora c'è solo la tua recensione — nessun altro ha ancora scritto la sua.</p>
         ) : (
           <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
             {otherReviews.map(r => (
-              <div key={r.id} style={{ backgroundColor: 'var(--bg-card)', border: '1px solid #222', borderRadius: '10px', padding: '20px' }}>
+              <div key={r.id} id={`review-${r.id}`} style={{ backgroundColor: 'var(--bg-card)', border: highlightReviewId === r.id ? '2px solid #3b82f6' : '1px solid var(--border)', borderRadius: '10px', padding: '20px', boxShadow: highlightReviewId === r.id ? '0 0 0 4px rgba(59,130,246,0.15)' : 'none' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
                   <Link to={`/profile/${r.username}`}>
                     <span style={{ color: 'var(--text)', fontWeight: '600' }}>👤 {r.username}</span>
@@ -450,12 +1163,32 @@ function MovieDetailPage() {
                         >🚩</button>
                       )
                     )}
+                    {isAdmin && (
+                      <button onClick={() => setHidingReviewId(r.id)}
+                        style={{ fontSize: '13px', color: 'var(--text-dark)', backgroundColor: 'transparent', border: 'none', cursor: 'pointer', padding: '4px 8px', borderRadius: '4px' }}
+                        onMouseEnter={e => e.currentTarget.style.color = 'var(--accent)'}
+                        onMouseLeave={e => e.currentTarget.style.color = 'var(--text-dark)'}
+                        title="Nascondi direttamente"
+                        aria-label="Nascondi direttamente"
+                      >🔨</button>
+                    )}
                   </div>
                 </div>
-                {r.text && <p style={{ color: '#d1d5db', fontSize: '14px', lineHeight: 1.6 }}>{r.text}</p>}
+                {r.text && <p style={{ color: 'var(--text-muted)', fontSize: '14px', lineHeight: 1.6 }}>{r.text}</p>}
                 <p style={{ color: 'var(--text-dark)', fontSize: '12px', marginTop: '8px' }}>
                   {new Date(r.createdAt).toLocaleDateString('it-IT')}
                 </p>
+                <ReactionBar endpoint={`/reviews/${r.id}/reaction`} token={token} canReact={!!token && !isAdmin} />
+                <ReplyThread
+                  reviewId={r.id}
+                  reviewText={r.text}
+                  reviewOwnerUsername={r.username}
+                  token={token}
+                  currentUsername={user?.username}
+                  isAdmin={isAdmin}
+                  autoExpand={parentReviewForHighlight === r.id}
+                  highlightCommentId={highlightCommentId}
+                />
               </div>
             ))}
           </div>
