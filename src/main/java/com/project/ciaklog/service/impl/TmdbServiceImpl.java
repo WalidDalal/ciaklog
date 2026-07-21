@@ -50,7 +50,7 @@ public class TmdbServiceImpl implements TmdbService {
                       : "/search/multi";
 
             // Bearer header (metodo moderno) — ?api_key= è deprecato da TMDB
-            // Fix: prima non veniva mai passato &page= — sempre e solo pagina 1
+            // Prima non veniva mai passato &page= — sempre e solo pagina 1
             String url = BASE_URL + endpoint + "?query=" + java.net.URLEncoder.encode(query, "UTF-8")
                     + "&page=" + Math.max(1, page);
 
@@ -147,7 +147,7 @@ public class TmdbServiceImpl implements TmdbService {
                     .findVisibleByTmdbIdAndContentType(tmdbId, contentType)
                     .size();
 
-            // Fix: stesso problema — asDouble() di Jackson ritorna 0.0 se il campo
+            // Stesso problema — asDouble() di Jackson ritorna 0.0 se il campo
             // manca invece di null, falsando il voto combinato allo stesso modo
             JsonNode voteAverageNode = root.path("vote_average");
             Double tmdbVoteAverage = voteAverageNode.isMissingNode() || voteAverageNode.isNull()
@@ -179,7 +179,7 @@ public class TmdbServiceImpl implements TmdbService {
 
     // ── helpers ──
 
-    // Fix (Dettaglio — voto combinato): prima ritornava `double` primitivo con
+    // Prima ritornava `double` primitivo con
     // 0.0 quando non c'erano recensioni — quello zero finiva nel DTO come un
     // voto vero (0 != null), e il calcolo del voto combinato lo mediava con
     // TMDB come se fosse un dato reale, dimezzando il risultato invece di

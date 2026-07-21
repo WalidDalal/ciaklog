@@ -7,7 +7,7 @@ import jakarta.validation.constraints.Size;
 import lombok.Getter;
 import lombok.Setter;
 
-// Fix (AI più centrale): "Chiedi su questo film" — sessione SEPARATA dalla
+// "Chiedi su questo film" — sessione SEPARATA dalla
 // chat generale, stateless (nessun sessionId/history), legata a un titolo
 // specifico. Niente memoria: ogni domanda è indipendente.
 @Getter

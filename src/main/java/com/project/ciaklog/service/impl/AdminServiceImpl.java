@@ -31,7 +31,7 @@ public class AdminServiceImpl implements AdminService {
 
     @Override
     public Page<AdminUserResponse> listUsers(Pageable pageable, String search) {
-        // Fix: la ricerca non era mai collegata — il parametro arrivava dal
+        // La ricerca non era mai collegata — il parametro arrivava dal
         // controller ma veniva ignorato qui, sempre e solo findAll()
         if (search != null && !search.isBlank()) {
             return userRepository
@@ -112,7 +112,7 @@ public class AdminServiceImpl implements AdminService {
         if (target.getId().equals(admin.getId())) {
             throw new BusinessRuleException("Non puoi sospendere te stesso");
         }
-        // Fix (dashboard admin): un Admin non può sospendere un altro Admin —
+        // Un Admin non può sospendere un altro Admin —
         // prima la regola valeva solo per "te stesso"
         if (target.getRole() == Role.ADMIN) {
             throw new BusinessRuleException("Non puoi sospendere un altro Admin");
@@ -148,7 +148,7 @@ public class AdminServiceImpl implements AdminService {
         userRepository.save(target);
     }
 
-    // Fix (Home Admin, deciso): card operativa leggera, non una dashboard
+    // Card operativa leggera, non una dashboard
     // ricopiata — solo segnalazioni di oggi e utenti da controllare
     @Override
     public AdminOperationalStatsResponse getOperationalStats() {

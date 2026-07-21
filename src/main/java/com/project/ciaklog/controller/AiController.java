@@ -55,7 +55,7 @@ public class AiController {
         return ResponseEntity.ok(aiService.getDaily(userDetails.getUsername()));
     }
 
-    // Fix (AI più centrale): "recensione a botta calda" — solo utenti normali,
+    // "recensione a botta calda" — solo utenti normali,
     // stessa restrizione delle altre funzioni AI orientate all'utente
     @PostMapping("/structure-review")
     @PreAuthorize("hasRole('USER')")
@@ -65,7 +65,7 @@ public class AiController {
         return ResponseEntity.ok(aiService.structureReview(userDetails.getUsername(), dto));
     }
 
-    // Fix (AI dentro le risposte, deciso): stesso principio applicato alle
+    // Stesso principio applicato alle
     // risposte — solo utenti normali, stessa restrizione delle altre funzioni
     // AI orientate all'utente
     @PostMapping("/structure-comment")
@@ -76,7 +76,7 @@ public class AiController {
         return ResponseEntity.ok(aiService.structureComment(userDetails.getUsername(), dto));
     }
 
-    // Fix (AI più centrale): "Chiedi su questo film" — sessione separata dalla
+    // "Chiedi su questo film" — sessione separata dalla
     // chat generale, stateless, solo utenti normali (non l'Admin, coerente
     // con tutte le altre restrizioni: niente libreria/recensioni/chat per lui)
     @PostMapping("/movie-question")
@@ -87,7 +87,7 @@ public class AiController {
         return ResponseEntity.ok(aiService.answerMovieQuestion(userDetails.getUsername(), dto));
     }
 
-    // Fix (AI che replica a una recensione negativa): SOLO su richiesta
+    // SOLO su richiesta
     // esplicita — l'utente clicca un bottone dedicato sulla PROPRIA recensione
     // con voto basso, non scatta mai da sola. Stessa restrizione USER.
     @PostMapping("/reviews/{reviewId}/opinion")
@@ -98,7 +98,7 @@ public class AiController {
         return ResponseEntity.ok(aiService.getAiOpinionOnReview(userDetails.getUsername(), reviewId));
     }
 
-    // Fix (suggerimento contestuale AI negli stati vuoti, approvato): il
+    // Il
     // parametro `context` è un set FISSO di chiavi, non testo libero — evita
     // che l'endpoint diventi un modo per far scrivere all'AI qualsiasi cosa
     // (prompt injection) passando testo arbitrario nella query string

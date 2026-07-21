@@ -5,7 +5,7 @@ import jakarta.validation.constraints.Size;
 import lombok.Getter;
 import lombok.Setter;
 
-// Fix (AI dentro le risposte): stesso principio di StructureReviewRequest
+// Stesso principio di StructureReviewRequest
 // ma per una risposta — testo più breve, tono da commento non da recensione,
 // con il contesto di COSA si sta rispondendo (non solo il titolo del film)
 @Getter

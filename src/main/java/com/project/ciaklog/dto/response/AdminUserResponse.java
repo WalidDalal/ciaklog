@@ -16,7 +16,7 @@ public class AdminUserResponse {
     private String username;
     private UserStatus status;
     private int violationCount;
-    // Fix (dashboard admin): serve al frontend per nascondere "Sospendi" sulle
+    // Serve al frontend per nascondere "Sospendi" sulle
     // righe di altri Admin — un Admin non può sospendere né sé stesso né altri Admin
     private Role role;
 }

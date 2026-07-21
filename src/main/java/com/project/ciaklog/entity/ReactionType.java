@@ -1,7 +1,6 @@
 package com.project.ciaklog.entity;
 
-// Fix (Reazioni con emoji, deciso): set fisso, non estendibile dall'utente
-public enum ReactionType {
+// Set fisso, non estendibile dall'utentepublic enum ReactionType {
     LIKE,   // 👍
     LOVE,   // ❤️
     LAUGH,  // 😂

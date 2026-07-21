@@ -85,7 +85,7 @@ public class AiServiceImpl implements AiService {
         String prompt;
         if (isFirstMessage) {
             // Primo messaggio: risposta naturale + suggerimenti
-            // Fix: aggiunta istruzione esplicita per i saluti/small talk — senza,
+            // Aggiunta istruzione esplicita per i saluti/small talk — senza,
             // un semplice "ciao" veniva comunque interpretato come richiesta di
             // consigli, allegando sempre 3 titoli anche se non richiesti
             prompt = """
@@ -144,7 +144,7 @@ public class AiServiceImpl implements AiService {
 
             String reply;
             List<String> titles;
-            // Fix (AI più centrale): motivo del suggerimento, per titolo — vuota
+            // Motivo del suggerimento, per titolo — vuota
             // per i messaggi successivi e nei fallback (nessun motivo disponibile)
             Map<String, String> reasons = new java.util.LinkedHashMap<>();
 
@@ -156,7 +156,7 @@ public class AiServiceImpl implements AiService {
                     reply = root.path("reply").asText("Ciao! Ecco alcuni suggerimenti per te:");
                     final java.util.List<String> titlesList = new java.util.ArrayList<>();
                     root.path("titles").forEach(n -> {
-                        // Fix: n può essere sia stringa (formato vecchio/fallback del modello)
+                        // N può essere sia stringa (formato vecchio/fallback del modello)
                         // sia oggetto { title, reason } — gestisco entrambi senza far crashare il parsing
                         String title = n.isObject() ? n.path("title").asText() : n.asText();
                         String reason = n.isObject() ? n.path("reason").asText(null) : null;
@@ -178,7 +178,7 @@ public class AiServiceImpl implements AiService {
 
             List<TmdbSearchResultResponse> suggestions = resolveTitlesOnTmdb(titles, reasons);
 
-            // Fix: questo controllo sovrascriveva SEMPRE il reply quando non c'erano
+            // Questo controllo sovrascriveva SEMPRE il reply quando non c'erano
             // suggerimenti — ma da quando il prompt del primo messaggio istruisce il
             // modello a lasciare "titles" vuoto di proposito per saluti/small talk
             // (con una risposta naturale nel campo "reply"), un semplice "ciao"
@@ -204,7 +204,7 @@ public class AiServiceImpl implements AiService {
         }
     }
 
-    // Fix: senza @Transactional la sessione Hibernate si chiude prima che
+    // Senza @Transactional la sessione Hibernate si chiude prima che
     // buildAdminContext() acceda a relazioni lazy (r.getReporter(), r.getReview().getUser())
     // -> LazyInitializationException: no session, 500 su ogni chiamata dell'admin
     @Override
@@ -279,7 +279,7 @@ public class AiServiceImpl implements AiService {
 
         if (pendingReports.hasContent()) {
             sb.append("Ultime segnalazioni in attesa:\n");
-            // Fix: da quando esistono anche segnalazioni su risposte (ReviewComment),
+            // Da quando esistono anche segnalazioni su risposte (ReviewComment),
             // r.getReview() può essere null — causava un NullPointerException (500)
             // ogni volta che una sola segnalazione pendente puntava a una risposta
             // invece che a una recensione. Già successo una volta, ripristinato dopo
@@ -385,7 +385,7 @@ public class AiServiceImpl implements AiService {
                 .build();
     }
 
-    // Fix (AI più centrale): "recensione a botta calda" — non salva nulla,
+    // "recensione a botta calda" — non salva nulla,
     // restituisce solo il testo strutturato che l'utente rivede prima di pubblicare
     @Override
     public StructureReviewResponse structureReview(String username, StructureReviewRequest request) {
@@ -427,7 +427,7 @@ public class AiServiceImpl implements AiService {
         }
     }
 
-    // Fix (AI dentro le risposte, deciso): stesso principio della "botta calda"
+    // Stesso principio della "botta calda"
     // per le recensioni — l'utente scrive la risposta a modo suo, l'AI ripulisce
     // la forma SENZA inventare contenuto. Più breve di una recensione (una
     // risposta è un commento, non una recensione in miniatura) e usa il
@@ -474,7 +474,7 @@ public class AiServiceImpl implements AiService {
         }
     }
 
-    // Fix (AI più centrale): "Chiedi su questo film" — sessione separata dalla
+    // "Chiedi su questo film" — sessione separata dalla
     // chat generale, stateless (nessuna memoria tra domande), contesto = dati
     // TMDB di quel titolo specifico, non la libreria/gusti dell'utente
     private static final String SPOILER_MARKER = "[SPOILER]";
@@ -538,7 +538,7 @@ public class AiServiceImpl implements AiService {
         }
     }
 
-    // Fix (CiakLog Wrapped): wrapper pubblico riusabile attorno a callGroq —
+    // Wrapper pubblico riusabile attorno a callGroq —
     // non lancia mai, torna stringa vuota se l'AI non risponde (il chiamante
     // decide come gestire l'assenza del testo, senza far fallire tutto)
     @Override
@@ -551,7 +551,7 @@ public class AiServiceImpl implements AiService {
         }
     }
 
-    // Fix (suggerimento contestuale AI negli stati vuoti, approvato): frase
+    // Frase
     // breve invece del solito messaggio piatto — riusa generateNarrative(),
     // che già gestisce il fallback silenzioso se l'AI non risponde
     @Override
@@ -570,7 +570,7 @@ public class AiServiceImpl implements AiService {
         return generateNarrative(prompt);
     }
 
-    // Fix (AI che replica a una recensione negativa): SOLO su richiesta
+    // SOLO su richiesta
     // esplicita — mai automatica. Tono leggero, offre una prospettiva
     // alternativa senza essere condiscendente. Solo sulla PROPRIA recensione
     // (evita che venga usata per "punzecchiare" recensioni altrui) e solo se
@@ -591,7 +591,7 @@ public class AiServiceImpl implements AiService {
             throw new BusinessRuleException("Disponibile solo per recensioni con voto basso");
         }
 
-        // Fix: il titolo non è salvato su Review — lo recupero da un WatchEntry
+        // Il titolo non è salvato su Review — lo recupero da un WatchEntry
         // dello stesso utente per lo stesso tmdbId/contentType, se esiste
         String title = watchEntryRepository
                 .findAllByUserAndStatus(user, com.project.ciaklog.entity.WatchStatus.WATCHED).stream()
@@ -669,7 +669,7 @@ public class AiServiceImpl implements AiService {
         return resolveTitlesOnTmdb(titles, Map.of());
     }
 
-    // Fix (AI più centrale): stessa risoluzione TMDB di sempre, ma arricchisce
+    // Stessa risoluzione TMDB di sempre, ma arricchisce
     // il risultato col motivo del suggerimento quando disponibile (chat/daily AI)
     private List<TmdbSearchResultResponse> resolveTitlesOnTmdb(List<String> titles, Map<String, String> reasons) {
         List<TmdbSearchResultResponse> suggestions = new ArrayList<>();
@@ -766,7 +766,7 @@ public class AiServiceImpl implements AiService {
         }
     }
 
-    // Fix (AI più centrale): come parseTitlesFromResponse, ma gestisce anche il
+    // Come parseTitlesFromResponse, ma gestisce anche il
     // nuovo formato [{ "title": ..., "reason": ... }] usato da getDaily.
     // Riempie le due collezioni passate (niente valore di ritorno multiplo in Java).
     private void parseTitlesAndReasons(String rawResponse, List<String> outTitles, Map<String, String> outReasons) {

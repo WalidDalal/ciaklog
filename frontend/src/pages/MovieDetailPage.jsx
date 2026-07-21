@@ -14,7 +14,7 @@ const STATUS_LABELS = {
   WATCHED: '✅ Visto',
 }
 
-// Fix (UI risposte): prima non esisteva nessuna interfaccia per leggere o
+// Prima non esisteva nessuna interfaccia per leggere o
 // scrivere risposte — il backend (ReviewComment) era pronto ma invisibile.
 // Thread collassato di default sotto ogni recensione, caricato on-demand.
 function ReplyThread({ reviewId, reviewText, reviewOwnerUsername, token, currentUsername, isAdmin, autoExpand, highlightCommentId }) {
@@ -31,18 +31,18 @@ function ReplyThread({ reviewId, reviewText, reviewOwnerUsername, token, current
   const [reportingCommentId, setReportingCommentId] = useState(null)
   const [reportedCommentIds, setReportedCommentIds] = useState(new Set())
   const [hidingCommentId, setHidingCommentId] = useState(null)
-  // Fix (auto-nascondimento autore, deciso): toggle reversibile, separato
+  // Toggle reversibile, separato
   // dall'eliminazione — non tocca il punteggio, non genera nessuna segnalazione
   const [togglingHiddenId, setTogglingHiddenId] = useState(null)
 
-  // Fix (AI dentro i commenti/risposte, deciso): stesso pattern di "recensione
+  // Stesso pattern di "recensione
   // a botta calda" — scrivi con parole tue, l'AI la struttura meglio
   const [showReplyNotesHelper, setShowReplyNotesHelper] = useState(false)
   const [replyRawNotes, setReplyRawNotes] = useState('')
   const [structuringReply, setStructuringReply] = useState(false)
   const [replyStructureError, setReplyStructureError] = useState('')
 
-  // Fix: riusava /ai/structure-review (pensato per recensioni intere, 4-5
+  // Riusava /ai/structure-review (pensato per recensioni intere, 4-5
   // frasi) senza nessun contesto su cosa si stava rispondendo — l'AI scriveva
   // come fosse una recensione, non una risposta breve in un thread. Ora usa
   // l'endpoint dedicato /ai/structure-comment, con il testo della recensione
@@ -78,7 +78,7 @@ function ReplyThread({ reviewId, reviewText, reviewOwnerUsername, token, current
     if (!loaded) loadComments()
   }
 
-  // Fix (dashboard admin, Step 6): se questo thread contiene la risposta
+  // Se questo thread contiene la risposta
   // segnalata (arrivata da "Vedi nel contesto"), si apre e carica da sola
   useEffect(() => {
     if (autoExpand && !loaded) loadComments()
@@ -138,14 +138,14 @@ function ReplyThread({ reviewId, reviewText, reviewOwnerUsername, token, current
     }
   }
 
-  // Fix (Dettaglio, risposte): il backend filtra già le risposte nascoste
+  // Il backend filtra già le risposte nascoste
   // dagli AUTORI DIVERSI dal viewer — l'unico caso in cui hiddenByAuthor=true
   // arriva qui è la propria risposta nascosta (solo tu la vedi). Il badge
   // "Risposte (N)" contava anche quella, dando l'impressione che nascondere
   // non avesse effetto: il conteggio ora riflette solo ciò che è pubblico.
   const visibleCommentsCount = comments.filter(c => !c.hiddenByAuthor).length
 
-  // Fix (Dettaglio, risposte): la risposta di chi ha scritto la recensione
+  // La risposta di chi ha scritto la recensione
   // era in mezzo alle altre in ordine cronologico, poco visibile. La
   // portiamo sempre in cima (comments arriva già ordinato per data asc dal
   // backend, quindi il sort è stabile e non tocca l'ordine tra le altre)
@@ -164,7 +164,14 @@ function ReplyThread({ reviewId, reviewText, reviewOwnerUsername, token, current
           {loading && <p style={{ color: 'var(--text-dark)', fontSize: '12px' }}>Caricamento...</p>}
 
           {!loading && sortedComments.map(c => (
-            <div key={c.id} id={`comment-${c.id}`} style={{ backgroundColor: 'var(--bg-hover)', borderRadius: '8px', padding: '10px 14px', marginLeft: '16px', border: highlightCommentId === c.id ? '2px solid #3b82f6' : '2px solid transparent', boxShadow: highlightCommentId === c.id ? '0 0 0 4px rgba(59,130,246,0.15)' : 'none' }}>
+            <div key={c.id} id={`comment-${c.id}`} style={{ backgroundColor: 'var(--bg-hover)', borderRadius: '8px', padding: '10px 14px', marginLeft: '16px', border: highlightCommentId === c.id ? '2px solid #3b82f6' : (c.status === 'HIDDEN' ? '2px solid #f59e0b' : '2px solid transparent'), boxShadow: highlightCommentId === c.id ? '0 0 0 4px rgba(59,130,246,0.15)' : 'none' }}>
+              {/* Fix (Dettaglio — banner moderazione, stessa logica delle recensioni):
+                  visibile qui solo se sei Admin, il backend la esclude per chiunque altro */}
+              {c.status === 'HIDDEN' && (
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px', backgroundColor: 'rgba(245,158,11,0.1)', border: '1px solid #f59e0b44', borderRadius: '5px', padding: '5px 10px', marginBottom: '8px', color: '#f59e0b', fontSize: '11px', fontWeight: '600' }}>
+                    🔶 Nascosta per segnalazioni — in attesa di decisione
+                  </div>
+              )}
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
                   <Link to={`/profile/${c.authorUsername}`}>
@@ -307,7 +314,7 @@ function ReplyThread({ reviewId, reviewText, reviewOwnerUsername, token, current
   )
 }
 
-// Fix (Reazioni con emoji): riepilogo + toggle, riusata sia per recensioni
+// Riepilogo + toggle, riusata sia per recensioni
 // che per risposte. Nessuna moderazione qui — un'emoji non porta contenuto
 // dannoso (deciso), quindi niente 🚩/🔨, solo il conteggio e il tap per reagire
 const REACTION_EMOJI = { LIKE: '👍', LOVE: '❤️', LAUGH: '😂', WOW: '😮' }
@@ -385,7 +392,7 @@ const REPORT_CATEGORIES = [
   { value: 'OTHER', label: '📝 Altro', desc: 'Specifica il motivo nel campo testo' },
 ]
 
-// Fix (UI risposte + nascondi diretto): esteso per segnalare/nascondere
+// Esteso per segnalare/nascondere
 // sia recensioni che risposte, e per la modalità admin ("Nascondi direttamente")
 function ReportModal({ reviewId, reviewCommentId, adminMode, onClose, onSuccess }) {
   const [category, setCategory] = useState('')
@@ -469,7 +476,7 @@ function MovieDetailPage() {
   const isAdmin = user?.role === 'ADMIN'
   const closeChatWidget = useChatStore(s => s.close)
 
-  // Fix (AI più centrale): "Chiedi su questo film" — stateless, ogni domanda
+  // "Chiedi su questo film" — stateless, ogni domanda
   // è indipendente, nessuna cronologia salvata
   const [showMovieQA, setShowMovieQA] = useState(false)
   const [movieQuestion, setMovieQuestion] = useState('')
@@ -479,7 +486,7 @@ function MovieDetailPage() {
   const [movieQAError, setMovieQAError] = useState('')
 
   const openMovieQA = () => {
-    // Fix: minimizza (non chiude/resetta) la chat generale se era aperta —
+    // Minimizza (non chiude/resetta) la chat generale se era aperta —
     // le due non devono mai stare aperte sovrapposte sullo schermo insieme
     closeChatWidget()
     setShowMovieQA(true)
@@ -502,7 +509,7 @@ function MovieDetailPage() {
     }
   }
 
-  // Fix (AI che replica a una recensione negativa): SOLO su richiesta esplicita
+  // SOLO su richiesta esplicita
   const [aiOpinion, setAiOpinion] = useState('')
   const [aiOpinionError, setAiOpinionError] = useState('')
   const [askingOpinion, setAskingOpinion] = useState(false)
@@ -519,7 +526,7 @@ function MovieDetailPage() {
     }
   }
 
-  // Fix (dashboard admin, Step 6): target da evidenziare quando si arriva
+  // Target da evidenziare quando si arriva
   // qui dal link "Vedi nel contesto" della dashboard, e marcatore per
   // mostrare il bottone di ritorno (che usa la history, non un link fisso,
   // così il "torna alla dashboard" riporta l'admin esattamente dov'era)
@@ -541,7 +548,7 @@ function MovieDetailPage() {
   const [reviewSuccess, setReviewSuccess] = useState('')
   const [editMode, setEditMode] = useState(false)
 
-  // Fix (AI più centrale): "recensione a botta calda" — appunti sparsi -> AI li struttura
+  // "recensione a botta calda" — appunti sparsi -> AI li struttura
   const [showNotesHelper, setShowNotesHelper] = useState(false)
   const [rawNotes, setRawNotes] = useState('')
   const [structuring, setStructuring] = useState(false)
@@ -551,12 +558,12 @@ function MovieDetailPage() {
   const [libraryError, setLibraryError] = useState('')
 
   const [reportingReviewId, setReportingReviewId] = useState(null)
-  // Fix: "Nascondi direttamente" — stato separato per il modal in modalità admin
+  // "Nascondi direttamente" — stato separato per il modal in modalità admin
   const [hidingReviewId, setHidingReviewId] = useState(null)
   const [reportedIds, setReportedIds] = useState(new Set())
 
   useEffect(() => {
-    // Fix (Assistente AI — suggerimento cliccato): questa pagina resta montata
+    // Questa pagina resta montata
     // quando si passa da un film all'altro tramite i link "consigliami qualcosa
     // di simile" (stesso componente, cambia solo :id nell'URL) — senza reset,
     // watchEntry/myReview/rating restavano quelli del film di partenza finché
@@ -592,7 +599,7 @@ function MovieDetailPage() {
     }
   }, [id, mediaType, token, user])
 
-  // Fix (dashboard admin, Step 6): scroll automatico + evidenziazione della
+  // Scroll automatico + evidenziazione della
   // recensione segnalata, quando si arriva qui da "Vedi nel contesto"
   useEffect(() => {
     if (!highlightReviewId || reviews.length === 0) return
@@ -652,7 +659,7 @@ function MovieDetailPage() {
     finally { setReviewLoading(false) }
   }
 
-  // Fix (AI più centrale): "recensione a botta calda" — non salva nulla,
+  // "recensione a botta calda" — non salva nulla,
   // pre-compila solo il campo testo, l'utente rivede/modifica prima di pubblicare
   const handleStructureNotes = async () => {
     if (!rawNotes.trim()) return
@@ -672,7 +679,7 @@ function MovieDetailPage() {
     }
   }
 
-  // Fix: l'endpoint DELETE /api/reviews/{id} esisteva già ma nessun bottone
+  // L'endpoint DELETE /api/reviews/{id} esisteva già ma nessun bottone
   // lo richiamava nel frontend
   const [deletingReview, setDeletingReview] = useState(false)
   const [confirmDeleteReview, setConfirmDeleteReview] = useState(false)
@@ -693,7 +700,7 @@ function MovieDetailPage() {
     }
   }
 
-  // Fix (auto-nascondimento autore, deciso): toggle reversibile, separato
+  // Toggle reversibile, separato
   // dall'eliminazione — non tocca il punteggio, non genera nessuna segnalazione
   const [togglingHidden, setTogglingHidden] = useState(false)
   const handleToggleHidden = async () => {
@@ -717,7 +724,7 @@ function MovieDetailPage() {
   const tmdbRating = detail.tmdbRating ?? detail.votoTmdb
   const ciakLogRating = detail.ciakLogAverageRating ?? detail.votoCiakLog
 
-  // Fix (Dettaglio — voto combinato, deciso): CiakLog è su scala 1-5, TMDB su
+  // CiakLog è su scala 1-5, TMDB su
   // scala 0-10 — normalizzo CiakLog x2 prima di fare la media, altrimenti il
   // combinato sarebbe falsato (una media diretta tra 1-5 e 0-10 non ha senso)
   const normalizedCiak = ciakLogRating != null ? Number(ciakLogRating) * 2 : null
@@ -1143,7 +1150,16 @@ function MovieDetailPage() {
         ) : (
           <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
             {otherReviews.map(r => (
-              <div key={r.id} id={`review-${r.id}`} style={{ backgroundColor: 'var(--bg-card)', border: highlightReviewId === r.id ? '2px solid #3b82f6' : '1px solid var(--border)', borderRadius: '10px', padding: '20px', boxShadow: highlightReviewId === r.id ? '0 0 0 4px rgba(59,130,246,0.15)' : 'none' }}>
+              <div key={r.id} id={`review-${r.id}`} style={{ backgroundColor: 'var(--bg-card)', border: highlightReviewId === r.id ? '2px solid #3b82f6' : (r.status === 'HIDDEN' ? '1px solid #f59e0b' : '1px solid var(--border)'), borderRadius: '10px', padding: '20px', boxShadow: highlightReviewId === r.id ? '0 0 0 4px rgba(59,130,246,0.15)' : 'none' }}>
+                {/* Fix (Dettaglio — banner moderazione): questa recensione arriva qui
+                    solo se sei Admin (il backend la esclude per chiunque altro) — un
+                    bordo ambra e un banner esplicito evitano che sembri una recensione
+                    normale, distinguendola chiaramente da quelle pubbliche */}
+                {r.status === 'HIDDEN' && (
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', backgroundColor: 'rgba(245,158,11,0.1)', border: '1px solid #f59e0b44', borderRadius: '6px', padding: '8px 12px', marginBottom: '12px', color: '#f59e0b', fontSize: '12px', fontWeight: '600' }}>
+                      🔶 Nascosta per segnalazioni — in attesa di decisione. Visibile solo a te come Admin.
+                    </div>
+                )}
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
                   <Link to={`/profile/${r.username}`}>
                     <span style={{ color: 'var(--text)', fontWeight: '600' }}>👤 {r.username}</span>

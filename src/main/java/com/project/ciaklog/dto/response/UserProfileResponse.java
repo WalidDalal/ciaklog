@@ -12,7 +12,7 @@ public class UserProfileResponse {
     private String bio;
     private List<String> topGenres;
 
-    // Fix (Impostazioni — card riepilogo account): dati già disponibili,
+    // Dati già disponibili,
     // riusati anche qui invece di creare un endpoint apposta
     private String memberSince; // es. "Gennaio 2026"
     private int score;

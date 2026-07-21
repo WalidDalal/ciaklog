@@ -1,6 +1,6 @@
 import { Link } from 'react-router-dom'
 
-// Fix: prima questo componente renderizzava una intera <section> con il suo
+// Prima questo componente renderizzava una intera <section> con il suo
 // proprio sfondo poster + gradiente, annidata dentro la hero già esistente in
 // HomePage.jsx (che ha già sfondo poster + gradiente propri). Il risultato
 // erano "2 poster in più a sinistra", visibili solo in home guest, perché lo

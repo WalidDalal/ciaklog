@@ -48,7 +48,7 @@ public class ChartServiceImpl implements ChartService {
                 userRepository.findTop5ByRoleNotOrderByScoreDesc(Role.ADMIN);
 
         List<ChartUserResponse> result = new java.util.ArrayList<>();
-        // Fix (Homepage — classifica con pareggi): prima si usava "rank = i+1"
+        // Prima si usava "rank = i+1"
         // solo quando il punteggio cambiava — un ranking "a salto" (1,2,2,4:
         // 3 persone in 2ª posizione, la successiva salta alla 4ª contando gli
         // scavalcati). Il comportamento richiesto è invece un ranking "denso"

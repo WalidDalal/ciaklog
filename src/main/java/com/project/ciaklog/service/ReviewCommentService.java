@@ -13,7 +13,7 @@ public interface ReviewCommentService {
     void deleteComment(String username, UUID commentId);
     Page<ReviewCommentResponse> getCommentsForReview(UUID reviewId, String viewerUsername, boolean isAdmin, Pageable pageable);
 
-    // Fix (auto-nascondimento autore, deciso): toggle reversibile, separato
+    // Toggle reversibile, separato
     // da status/moderazione, nessun impatto sul punteggio
     ReviewCommentResponse setHiddenByAuthor(String username, UUID commentId, boolean hidden);
 }

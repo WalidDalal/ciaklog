@@ -46,7 +46,7 @@ public class ReviewComment {
     @Builder.Default
     private ReviewStatus status = ReviewStatus.VISIBLE;
 
-    // Fix (auto-nascondimento autore, deciso): campo separato da `status`,
+    // Campo separato da `status`,
     // stesso principio di Review — non è una violazione, non tocca il
     // punteggio, non finisce nella coda admin, reversibile dall'autore
     @Column(name = "hidden_by_author", nullable = false)

@@ -5,13 +5,13 @@ import org.springframework.cache.annotation.Caching;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
-// Fix: @Cacheable su topFilms/topSeries/topUsers/trending in ChartServiceImpl
+// @Cacheable su topFilms/topSeries/topUsers/trending in ChartServiceImpl
 // non aveva nessuna scadenza — con il cache manager di default (in memoria,
 // no TTL) i dati restavano quelli del primo calcolo finché non si riavviava
 // il backend, anche pubblicando nuove recensioni che avrebbero cambiato la
 // classifica.
 //
-// Fix (Homepage — "aggiornamento troppo lento"): NON è un bug nel senso di
+// NON è un bug nel senso di
 // dato sbagliato, è un compromesso di caching — i 4 grafici sono ricalcolati
 // a intervalli fissi, non ad ogni scrittura. Prima erano 2 minuti, troppo
 // percepibile; portato a 15 secondi, che nella pratica sembra "quasi

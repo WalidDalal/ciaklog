@@ -26,14 +26,14 @@ public class AdminController {
 
     private final AdminService adminService;
 
-    // Fix (Home Admin, deciso): card operativa leggera per la Home, non una
+    // Card operativa leggera per la Home, non una
     // dashboard ricopiata — segnalazioni di oggi + utenti da controllare
     @GetMapping("/operational-stats")
     public ResponseEntity<AdminOperationalStatsResponse> getOperationalStats() {
         return ResponseEntity.ok(adminService.getOperationalStats());
     }
 
-    // Fix (dashboard admin — ordinamento colonne): prima l'ordinamento era
+    // Prima l'ordinamento era
     // sempre "username ascendente", fisso, senza nessun parametro accettato —
     // niente per cui il frontend potesse chiedere un ordinamento diverso.
     // Whitelist esplicita sui campi ordinabili (non passare sortBy diretto a
