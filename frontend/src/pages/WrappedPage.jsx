@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom'
 import Navbar from '../components/Navbar'
 import api from '../services/api'
 
-// Fix (Priorità 1 — CiakLog Wrapped): recap personale stile "Spotify Wrapped".
+// Recap personale stile "Spotify Wrapped".
 // Statistiche calcolate lato backend da dati già esistenti, più un piccolo
 // commento narrativo generato dall'AI (opzionale — la pagina funziona anche
 // se l'AI non risponde, il backend torna aiNarrative vuota in quel caso).
@@ -112,10 +112,10 @@ function WrappedPage() {
             {(data.favoriteTitle || data.leastFavoriteTitle) && (
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', marginTop: '16px' }}>
                 {data.favoriteTitle && (
-                  <StatCard label="Il tuo preferito" value={data.favoriteTitle} sub={`${'★'.repeat(data.favoriteRating)}`} delay={350} />
+                  <StatCard label="Il tuo preferito" value={data.favoriteTitle} sub={`${'★'.repeat(Math.max(0, Math.min(5, Math.round(data.favoriteRating || 0))))}`} delay={350} />
                 )}
                 {data.leastFavoriteTitle && (
-                  <StatCard label="Il meno amato" value={data.leastFavoriteTitle} sub={`${'★'.repeat(data.leastFavoriteRating)}`} delay={400} />
+                  <StatCard label="Il meno amato" value={data.leastFavoriteTitle} sub={`${'★'.repeat(Math.max(0, Math.min(5, Math.round(data.leastFavoriteRating || 0))))}`} delay={400} />
                 )}
               </div>
             )}

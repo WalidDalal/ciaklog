@@ -3,7 +3,7 @@ package com.project.ciaklog.dto.response;
 import lombok.Builder;
 import lombok.Getter;
 
-// Fix (Home Admin, deciso): card operativa leggera, non una dashboard
+// Card operativa leggera, non una dashboard
 // ricopiata — solo i numeri che servono per decidere cosa fare oggi
 @Getter
 @Builder

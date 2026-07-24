@@ -5,7 +5,23 @@ import api from '../services/api'
 import useAuthStore from '../store/authStore'
 import useToastStore from '../store/toastStore'
 
-const EMOJI_RATING = ['', '😑', '😐', '🙂', '😊', '🤩']
+// Fix (Profilo — "immagini rosse"): l'avatar grande era sempre var(--accent)
+// (rosso) per chiunque, fisso. Richiesto un colore diverso per utente, ma
+// "casuale, non assegnato da te" — quindi non una lista di colori scelti a
+// mano per singolo utente, ma un hash dello username che sceglie da una
+// piccola palette: stesso utente = sempre lo stesso colore (utile per
+// riconoscerlo a colpo d'occhio), ma quale colore tocchi a chi non è deciso
+// a mano, deriva dai caratteri dello username stesso.
+const AVATAR_COLORS = ['var(--accent)', '#3b82f6', '#22c55e', '#f59e0b', '#8b5cf6', '#ec4899', '#14b8a6', '#eab308']
+function colorForUsername(name) {
+  if (!name) return AVATAR_COLORS[0]
+  let hash = 0
+  for (let i = 0; i < name.length; i++) {
+    hash = (hash * 31 + name.charCodeAt(i)) >>> 0
+  }
+  return AVATAR_COLORS[hash % AVATAR_COLORS.length]
+}
+
 
 function ProfilePage() {
   const { username } = useParams()
@@ -40,7 +56,7 @@ function ProfilePage() {
           setEditBio(profileRes.data.bio || '')
           const data = reviewsRes.data
           setReviews(data.content || data || [])
-          // Fix: stesso problema di AdminPage — con PageSerializationMode.VIA_DTO
+          // Stesso problema di AdminPage — con PageSerializationMode.VIA_DTO
           // i metadati di paginazione sono annidati sotto `.page.`, non in cima.
           // Prima "data.page" leggeva l'oggetto metadata invece del numero pagina
           // corrente (0, appena richiesta), e "data.totalPages" era sempre undefined
@@ -121,7 +137,7 @@ function ProfilePage() {
             {/* Avatar */}
             <div style={{
               width: '88px', height: '88px', borderRadius: '50%', flexShrink: 0,
-              backgroundColor: 'var(--accent)',
+              backgroundColor: colorForUsername(profile.username || username),
               display: 'flex', alignItems: 'center', justifyContent: 'center',
               fontSize: '36px', fontWeight: '800', color: 'white',
             }}>
@@ -186,25 +202,8 @@ function ProfilePage() {
                       <h1 style={{ fontSize: '28px', fontWeight: '800', color: 'var(--text)' }}>
                         {profile.username || username}
                       </h1>
-                      {/* Fix (Profilo — posizione bottone Modifica): prima era isolato in
-                          alto a destra insieme al Wrapped, senza nessun collegamento visivo
-                          con ciò che effettivamente modifica (username + bio). Spostato qui,
-                          subito accanto al nome — click apre lo stesso form di prima. */}
-                      {isOwn && (
-                          <button
-                              onClick={() => setEditing(true)}
-                              title="Modifica profilo"
-                              style={{
-                                backgroundColor: 'transparent', border: '1px solid var(--border)',
-                                borderRadius: '6px', padding: '4px 10px',
-                                color: 'var(--text-dark)', fontSize: '12px', cursor: 'pointer', whiteSpace: 'nowrap',
-                              }}
-                          >
-                            ✏️ Modifica
-                          </button>
-                      )}
-                      {/* Fix (styling): badge generi spostati accanto al nome invece che
-                          sotto, nella riga stats — più rapido da vedere a colpo d'occhio */}
+                      {/* Fix (styling): badge generi accanto al nome — più rapido da vedere
+                          a colpo d'occhio rispetto a metterli sotto, nella riga stats */}
                       {profile.topGenres?.length > 0 && (
                           <div style={{ display: 'flex', gap: '6px', alignItems: 'center', flexWrap: 'wrap' }}>
                             {profile.topGenres.slice(0, 3).map(g => (
@@ -217,6 +216,25 @@ function ProfilePage() {
                           </div>
                       )}
                     </div>
+
+                    {/* Fix (Profilo — posizione bottone Modifica, secondo giro): prima stava
+                        alla sinistra dei generi, sulla stessa riga dello username — spostato
+                        qui sotto, su una riga propria, così non si confonde con lo username/
+                        generi come elementi "informativi" mentre Modifica è un'azione */}
+                    {isOwn && (
+                        <button
+                            onClick={() => setEditing(true)}
+                            title="Modifica profilo"
+                            style={{
+                              display: 'inline-flex', marginBottom: '10px',
+                              backgroundColor: 'transparent', border: '1px solid var(--border)',
+                              borderRadius: '6px', padding: '4px 10px',
+                              color: 'var(--text-dark)', fontSize: '12px', cursor: 'pointer', whiteSpace: 'nowrap',
+                            }}
+                        >
+                          ✏️ Modifica
+                        </button>
+                    )}
 
                     {profile.bio ? (
                         <p style={{ color: 'var(--text-muted)', fontSize: '14px', lineHeight: 1.6, marginBottom: '14px', maxWidth: '500px' }}>
@@ -231,18 +249,13 @@ function ProfilePage() {
                         </p>
                     )}
 
-                    {/* Stats */}
-                    <div style={{ display: 'flex', gap: '28px', alignItems: 'center' }}>
-                      <div>
-                        {/* Fix (Profilo — trovato in revisione): reviews.length contava solo
-                            le recensioni caricate finora in pagina (10, poi 19 dopo "mostra
-                            altri"...) e includeva quelle REMOVED. profile.totalReviews è già
-                            calcolato correttamente dal backend (totale reale, REMOVED escluse),
-                            la stessa fonte già usata correttamente in Impostazioni. */}
-                        <span style={{ color: 'var(--text)', fontWeight: '700', fontSize: '18px' }}>{profile.totalReviews ?? reviews.length}</span>
-                        <span style={{ color: 'var(--text-dark)', fontSize: '13px', marginLeft: '6px' }}>recensioni</span>
-                      </div>
-                    </div>
+                    {/* Fix (Profilo — contatore recensioni duplicato): c'era questo badge
+                        "N recensioni" qui in cima E un altro contatore nell'intestazione
+                        della sezione "🎬 Recensioni" più sotto, ridondanti tra loro e per
+                        di più con due valori diversi (questo usava profile.totalReviews,
+                        quello sotto usava reviews.length — solo le recensioni caricate in
+                        pagina). Tolto questo, la logica corretta (profile.totalReviews) è
+                        stata spostata nell'intestazione sotto, unica fonte di verità. */}
                   </>
               )}
             </div>
@@ -274,7 +287,9 @@ function ProfilePage() {
           {watching.length > 0 && (
               <div style={{ marginBottom: '40px' }}>
                 <h2 style={{ color: 'var(--text-muted)', fontSize: '12px', fontWeight: '700', textTransform: 'uppercase', letterSpacing: '1px', marginBottom: '12px' }}>
-                  👀 In visione
+                  {/* Fix (Profilo — "togliere le emoji", secondo giro): tolta anche
+                      l'emoji del titolo sezione, non solo quella per ogni riga */}
+                  In visione
                 </h2>
                 <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
                   {watching.map((w, i) => (
@@ -300,7 +315,11 @@ function ProfilePage() {
             <h2 style={{ color: 'var(--text)', fontSize: '18px', fontWeight: '700', marginBottom: '20px' }}>
               🎬 Recensioni
               <span style={{ color: 'var(--text-dark)', fontSize: '14px', fontWeight: '400', marginLeft: '8px' }}>
-              {reviews.length}
+              {/* Fix: mostra il totale vero (profile.totalReviews, dal backend, REMOVED
+                  escluse), non reviews.length — quello contava solo le recensioni caricate
+                  finora in pagina (10, poi 20, poi 22 solo dopo aver cliccato "carica altre"
+                  abbastanza volte), dando l'impressione di un numero che cambia/sbagliato */}
+              {profile.totalReviews ?? reviews.length}
             </span>
             </h2>
 
@@ -350,18 +369,15 @@ function ProfilePage() {
                         </span>
                             </div>
 
-                            {/* Stelle */}
+                            {/* Fix (Profilo — emoji nel rating, trovata dopo diversi giri):
+                                non era la sezione "In Visione" ma questa — 5 clapperboard 🎬
+                                come "stelle" più una faccina in base al voto, mentre ovunque
+                                nel resto dell'app (Home, Admin, Wrapped) il voto si mostra con
+                                ★/☆ semplici. Allineato allo stesso stile, tolta la faccina. */}
                             <div style={{ display: 'flex', gap: '2px', marginBottom: r.text ? '6px' : '0', alignItems: 'center' }}>
-                              {[1,2,3,4,5].map(n => (
-                                  <span key={n} style={{
-                                    fontSize: '13px',
-                                    filter: n <= r.rating ? 'none' : 'grayscale(1)',
-                                    opacity: n <= r.rating ? 1 : 0.2,
-                                  }}>🎬</span>
-                              ))}
-                              <span style={{ color: 'var(--text-dark)', fontSize: '12px', marginLeft: '6px' }}>
-                          {EMOJI_RATING[r.rating] || ''}
-                        </span>
+                              <span style={{ color: 'var(--gold)', fontSize: '13px' }}>
+                                {'★'.repeat(Math.max(0, Math.min(5, Math.round(r.rating || 0))))}{'☆'.repeat(5 - Math.max(0, Math.min(5, Math.round(r.rating || 0))))}
+                              </span>
                             </div>
 
                             {/* Testo — max 2 righe, gestisce testi lunghi */}

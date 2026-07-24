@@ -37,7 +37,7 @@ public class ReportServiceImpl implements ReportService {
     public ReportResponse createReport(String username, ReportRequest dto) {
         User reporter = getUser(username);
 
-        // Fix (moderazione risposte): esattamente uno tra reviewId e reviewCommentId
+        // Esattamente uno tra reviewId e reviewCommentId
         boolean hasReview = dto.getReviewId() != null;
         boolean hasComment = dto.getReviewCommentId() != null;
         if (hasReview == hasComment) {
@@ -77,7 +77,7 @@ public class ReportServiceImpl implements ReportService {
         Report saved = reportRepository.save(report);
 
         if (review.getStatus() == ReviewStatus.VISIBLE) {
-            // Fix (Logica Moderazione — trovato in revisione): contava tutte le
+            // Contava tutte le
             // segnalazioni storiche, incluse REJECTED da valutazioni passate
             long pendingReports = reportRepository.countByReviewAndStatus(review, ReportStatus.PENDING);
             if (pendingReports >= 2) {
@@ -146,7 +146,7 @@ public class ReportServiceImpl implements ReportService {
         report.setResolvedBy(admin);
         report.setResolvedAt(LocalDateTime.now());
 
-        // Fix (dashboard admin): quando le segnalazioni sullo stesso bersaglio
+        // Quando le segnalazioni sullo stesso bersaglio
         // hanno motivi diversi, l'admin sceglie quale è quello valido — lo
         // applichiamo qui a QUESTO report così tutti quelli approvati insieme
         // nello stesso gruppo finiscono coerenti sullo stesso motivo (invece
@@ -213,7 +213,7 @@ public class ReportServiceImpl implements ReportService {
         reviewCommentRepository.saveAll(comments);
     }
 
-    // Fix (coerenza punteggio alla rimozione): il -15 base resta identico a
+    // Il -15 base resta identico a
     // prima, ma ora si aggiunge indietro 1 punto per ogni reazione ricevuta
     // dal contenuto rimosso — un contenuto molto apprezzato dalla community
     // pesa meno nella sanzione. Contate al volo (COUNT), MAI un contatore
@@ -226,18 +226,45 @@ public class ReportServiceImpl implements ReportService {
         if (offender.getViolationCount() >= 3) {
             offender.setStatus(UserStatus.PERMANENTLY_SUSPENDED);
             offender.setScore(0);
+            userRepository.save(offender);
+            hideAllContentForSuspendedUser(offender);
         } else if (offender.getViolationCount() == 2) {
             offender.setStatus(UserStatus.SUSPENDED);
             offender.setScore(Math.max(0, offender.getScore() - 20));
+            userRepository.save(offender);
+            hideAllContentForSuspendedUser(offender);
         } else {
             long delta = -15 + reactionBonus;
             offender.setScore((int) Math.max(0, offender.getScore() + delta));
+            userRepository.save(offender);
         }
-
-        userRepository.save(offender);
     }
 
-    // Fix: "Nascondi direttamente" — crea un Report con reporter = admin, già
+    // Trovato in revisione: questa era la SECONDA via per sospendere un
+    // utente (raggiungendo la soglia di violazioni approvando segnalazioni),
+    // separata da AdminServiceImpl.suspendUser (sospensione manuale diretta)
+    // — solo quest'ultima nascondeva in blocco recensioni/risposte
+    // dell'utente sospeso, questa via restava scoperta e le lasciava
+    // visibili. Stessa logica, stesso flag hiddenBySuspension.
+    private void hideAllContentForSuspendedUser(User user) {
+        List<Review> ownReviews = reviewRepository.findAllByUser(user);
+        for (Review r : ownReviews) {
+            if (r.getStatus() == ReviewStatus.VISIBLE && !r.isHiddenBySuspension()) {
+                r.setHiddenBySuspension(true);
+            }
+        }
+        reviewRepository.saveAll(ownReviews);
+
+        List<ReviewComment> ownComments = reviewCommentRepository.findAllByAuthor(user);
+        for (ReviewComment c : ownComments) {
+            if (c.getStatus() == ReviewStatus.VISIBLE && !c.isHiddenBySuspension()) {
+                c.setHiddenBySuspension(true);
+            }
+        }
+        reviewCommentRepository.saveAll(ownComments);
+    }
+
+    // "Nascondi direttamente" — crea un Report con reporter = admin, già
     // risolto APPROVED. Riusa al 100% la logica esistente (penalità, cascata,
     // audit trail nella stessa dashboard) invece di duplicarla altrove.
     @Override
@@ -343,11 +370,12 @@ public class ReportServiceImpl implements ReportService {
                     .reviewText(review.getText())
                     .reviewRating(review.getRating())
                     .targetRemoved(review.getStatus() == ReviewStatus.REMOVED)
+                    .targetHidden(review.getStatus() == ReviewStatus.HIDDEN)
                     .reportedText(r.getReportedText())
                     .targetEdited(r.getReportedText() != null && !r.getReportedText().equals(review.getText()));
         } else {
             ReviewComment comment = r.getReviewComment();
-            // Fix (dashboard admin, Step 6): il tmdbId/contentType di una risposta
+            // Il tmdbId/contentType di una risposta
             // sono quelli del film/serie della sua recensione madre, non suoi propri
             builder.targetType(ReportTargetType.COMMENT)
                     .tmdbId(comment.getReview().getTmdbId())
@@ -357,6 +385,7 @@ public class ReportServiceImpl implements ReportService {
                     .commentAuthorUsername(comment.getAuthor().getUsername())
                     .commentText(comment.getText())
                     .targetRemoved(comment.getStatus() == ReviewStatus.REMOVED)
+                    .targetHidden(comment.getStatus() == ReviewStatus.HIDDEN)
                     .reportedText(r.getReportedText())
                     .targetEdited(r.getReportedText() != null && !r.getReportedText().equals(comment.getText()));
         }

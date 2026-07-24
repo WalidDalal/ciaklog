@@ -69,7 +69,7 @@ public class ReviewCommentServiceImpl implements ReviewCommentService {
             throw new ForbiddenException("Non autorizzato a modificare questa risposta");
         }
 
-        // Fix (Logica Moderazione — trovato in revisione): si poteva modificare
+        // Si poteva modificare
         // il testo di una risposta anche se già REMOVED/HIDDEN, o se la sua
         // recensione madre non era più VISIBLE (rimossa/nascosta) — permetterlo
         // durante una moderazione attiva equivale ad alterare le prove dopo la
@@ -102,7 +102,7 @@ public class ReviewCommentServiceImpl implements ReviewCommentService {
         reviewCommentRepository.save(comment);
     }
 
-    // Fix (auto-nascondimento autore, deciso): toggle reversibile, separato
+    // Toggle reversibile, separato
     // da status/moderazione — non tocca il punteggio e non genera nessun Report
     @Override
     @Transactional
@@ -143,6 +143,7 @@ public class ReviewCommentServiceImpl implements ReviewCommentService {
                 .text(c.getText())
                 .status(c.getStatus())
                 .hiddenByAuthor(c.isHiddenByAuthor())
+                .hiddenBySuspension(c.isHiddenBySuspension())
                 .createdAt(c.getCreatedAt())
                 .updatedAt(c.getUpdatedAt())
                 .build();

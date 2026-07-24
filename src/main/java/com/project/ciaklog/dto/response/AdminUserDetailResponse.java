@@ -22,9 +22,13 @@ public class AdminUserDetailResponse {
     private int reportCount; // segnalazioni ricevute sulle sue recensioni
     private LocalDateTime createdAt;
     private List<ViolationItem> violations;
-    // Fix (dashboard admin): serve al drawer laterale per nascondere le azioni
+    // Serve al drawer laterale per nascondere le azioni
     // di moderazione quando l'utente selezionato è un altro Admin
     private Role role;
+    // Motivo dell'ultima sospensione manuale — null se non sospeso o se
+    // la sospensione risale a un report approvato (quella ha già il suo
+    // dettaglio tra le violations)
+    private String suspensionReason;
 
     @Getter
     @Builder

@@ -16,6 +16,7 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -28,10 +29,12 @@ public class AdminServiceImpl implements AdminService {
     private final UserRepository userRepository;
     private final ReviewRepository reviewRepository;
     private final ReportRepository reportRepository;
+    private final com.project.ciaklog.repository.ReviewCommentRepository reviewCommentRepository;
+    private final com.project.ciaklog.repository.ManualSuspensionLogRepository manualSuspensionLogRepository;
 
     @Override
     public Page<AdminUserResponse> listUsers(Pageable pageable, String search) {
-        // Fix: la ricerca non era mai collegata — il parametro arrivava dal
+        // La ricerca non era mai collegata — il parametro arrivava dal
         // controller ma veniva ignorato qui, sempre e solo findAll()
         if (search != null && !search.isBlank()) {
             return userRepository
@@ -61,7 +64,7 @@ public class AdminServiceImpl implements AdminService {
         Map<UUID, List<com.project.ciaklog.entity.Report>> reportsByReviewId = allReports.stream()
                 .collect(Collectors.groupingBy(rep -> rep.getReview().getId()));
 
-        List<AdminUserDetailResponse.ViolationItem> violations = allReviews.stream()
+        List<AdminUserDetailResponse.ViolationItem> reportViolations = allReviews.stream()
                 .filter(r -> r.getStatus() == ReviewStatus.REMOVED)
                 .map(r -> {
                     List<com.project.ciaklog.entity.Report> reviewReports =
@@ -87,10 +90,29 @@ public class AdminServiceImpl implements AdminService {
                 })
                 .collect(Collectors.toList());
 
+        // Trovato in revisione: una sospensione manuale non crea nessun
+        // Report, quindi restava invisibile nello storico violazioni (solo
+        // il numero saliva, senza dettaglio). Aggiunto qui, unito e
+        // riordinato insieme alle violazioni da segnalazione approvata.
+        List<AdminUserDetailResponse.ViolationItem> suspensionViolations =
+                manualSuspensionLogRepository.findAllByUser(user).stream()
+                        .map(log -> AdminUserDetailResponse.ViolationItem.builder()
+                                .category("SOSPENSIONE MANUALE")
+                                .reasonText(log.getReason() + (log.getAdmin() != null ? " (da " + log.getAdmin().getUsername() + ")" : ""))
+                                .reviewText("—")
+                                .date(log.getCreatedAt())
+                                .build())
+                        .collect(Collectors.toList());
+
+        List<AdminUserDetailResponse.ViolationItem> violations = java.util.stream.Stream
+                .concat(reportViolations.stream(), suspensionViolations.stream())
+                .sorted(Comparator.comparing(AdminUserDetailResponse.ViolationItem::getDate, Comparator.nullsLast(Comparator.reverseOrder())))
+                .collect(Collectors.toList());
+
         return AdminUserDetailResponse.builder()
                 .id(user.getId())
                 .username(user.getUsername())
-                .email(user.getEmail())
+                .email(maskEmail(user.getEmail()))
                 .status(user.getStatus())
                 .violationCount(user.getViolationCount())
                 .reviewCount(reviewCount)
@@ -98,7 +120,21 @@ public class AdminServiceImpl implements AdminService {
                 .createdAt(user.getCreatedAt())
                 .violations(violations)
                 .role(user.getRole())
+                .suspensionReason(user.getSuspensionReason())
                 .build();
+    }
+
+    // Fix (dashboard admin — privacy): la mail completa non dovrebbe essere
+    // visibile nel drawer admin — solo la prima lettera, poi asterischi,
+    // poi il dominio (es. "m****@esempio.com"). Nessuna reale necessità
+    // amministrativa di vedere l'indirizzo per intero da qui.
+    private String maskEmail(String email) {
+        if (email == null || !email.contains("@")) return email;
+        int at = email.indexOf('@');
+        String local = email.substring(0, at);
+        String domain = email.substring(at);
+        if (local.isEmpty()) return email;
+        return local.charAt(0) + "****" + domain;
     }
 
     @Override
@@ -112,7 +148,7 @@ public class AdminServiceImpl implements AdminService {
         if (target.getId().equals(admin.getId())) {
             throw new BusinessRuleException("Non puoi sospendere te stesso");
         }
-        // Fix (dashboard admin): un Admin non può sospendere un altro Admin —
+        // Un Admin non può sospendere un altro Admin —
         // prima la regola valeva solo per "te stesso"
         if (target.getRole() == Role.ADMIN) {
             throw new BusinessRuleException("Non puoi sospendere un altro Admin");
@@ -122,6 +158,18 @@ public class AdminServiceImpl implements AdminService {
         }
 
         target.setViolationCount(target.getViolationCount() + 1);
+        target.setSuspensionReason(reason);
+
+        // Trovato in revisione: alla riabilitazione suspensionReason viene
+        // azzerato — corretto per "stato attuale", ma così si perdeva la
+        // storia (un utente riabilitato risultava con violationCount
+        // incrementato ma NESSUN dettaglio a spiegarlo, perché non è stata
+        // creata nessuna segnalazione). Questo log invece resta per sempre.
+        manualSuspensionLogRepository.save(ManualSuspensionLog.builder()
+                .user(target)
+                .admin(admin)
+                .reason(reason)
+                .build());
 
         if (target.getViolationCount() >= 3) {
             target.setStatus(UserStatus.PERMANENTLY_SUSPENDED);
@@ -132,6 +180,30 @@ public class AdminServiceImpl implements AdminService {
         }
 
         userRepository.save(target);
+
+        // Nascondi in blocco tutte le recensioni/risposte VISIBLE dell'utente
+        // sospeso — sia sospensione temporanea che permanente, per decisione
+        // esplicita: più drastico e coerente con "utente sospeso", senza far
+        // passare ogni singolo contenuto per l'approvazione di un report.
+        // hiddenBySuspension è un flag SEPARATO da hiddenByAuthor apposta:
+        // se l'utente aveva già nascosto qualcosa di suo prima della
+        // sospensione, quel nascondimento personale resta intatto e non
+        // viene "ripristinato per errore" alla riabilitazione.
+        List<Review> ownReviews = reviewRepository.findAllByUser(target);
+        for (Review r : ownReviews) {
+            if (r.getStatus() == ReviewStatus.VISIBLE && !r.isHiddenBySuspension()) {
+                r.setHiddenBySuspension(true);
+            }
+        }
+        reviewRepository.saveAll(ownReviews);
+
+        List<ReviewComment> ownComments = reviewCommentRepository.findAllByAuthor(target);
+        for (ReviewComment c : ownComments) {
+            if (c.getStatus() == ReviewStatus.VISIBLE && !c.isHiddenBySuspension()) {
+                c.setHiddenBySuspension(true);
+            }
+        }
+        reviewCommentRepository.saveAll(ownComments);
     }
 
     @Override
@@ -145,10 +217,31 @@ public class AdminServiceImpl implements AdminService {
         }
 
         target.setStatus(UserStatus.ACTIVE);
+        target.setSuspensionReason(null);
         userRepository.save(target);
+
+        // Ripristina SOLO ciò che era nascosto per la sospensione — se
+        // l'utente aveva già nascosto qualcosa di suo (hiddenByAuthor) prima
+        // di essere sospeso, quello resta nascosto: sono due flag
+        // indipendenti, tocchiamo solo hiddenBySuspension qui
+        List<Review> ownReviews = reviewRepository.findAllByUser(target);
+        for (Review r : ownReviews) {
+            if (r.isHiddenBySuspension()) {
+                r.setHiddenBySuspension(false);
+            }
+        }
+        reviewRepository.saveAll(ownReviews);
+
+        List<ReviewComment> ownComments = reviewCommentRepository.findAllByAuthor(target);
+        for (ReviewComment c : ownComments) {
+            if (c.isHiddenBySuspension()) {
+                c.setHiddenBySuspension(false);
+            }
+        }
+        reviewCommentRepository.saveAll(ownComments);
     }
 
-    // Fix (Home Admin, deciso): card operativa leggera, non una dashboard
+    // Card operativa leggera, non una dashboard
     // ricopiata — solo segnalazioni di oggi e utenti da controllare
     @Override
     public AdminOperationalStatsResponse getOperationalStats() {

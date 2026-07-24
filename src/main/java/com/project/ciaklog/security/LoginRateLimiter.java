@@ -6,7 +6,7 @@ import java.time.Instant;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicInteger;
 
-// Fix (Logica Moderazione — trovato in revisione): il login non aveva nessun
+// Il login non aveva nessun
 // rate-limit, quindi era possibile tentare password a raffica senza limiti
 // (brute-force). Implementazione semplice in memoria (niente Redis/infra
 // esterna richiesta) — accettabile per la scala attuale dell'app; se in

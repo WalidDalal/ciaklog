@@ -24,7 +24,7 @@ const useAuthStore = create((set, get) => ({
     const user = userFromToken(token)
     localStorage.setItem('token', token)
     set({ user, token })
-    // Fix: la chat (Zustand, in memoria) non era mai legata all'utente
+    // La chat (Zustand, in memoria) non era mai legata all'utente
     // loggato — cambiando account nella stessa sessione del browser (es. da
     // Admin a un utente normale) i messaggi della chat precedente restavano
     // visibili finché non si ricaricava manualmente la pagina

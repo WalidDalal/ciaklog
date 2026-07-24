@@ -11,7 +11,7 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
-// Fix (Priorità 1 — CiakLog Wrapped): solo utenti normali, stessa restrizione
+// Solo utenti normali, stessa restrizione
 // delle altre funzioni personali (l'Admin non ha libreria/recensioni, quindi
 // non avrebbe comunque nulla da mostrare — coerente con le altre restrizioni)
 @RestController

@@ -5,7 +5,7 @@ import jakarta.validation.constraints.Size;
 import lombok.Getter;
 import lombok.Setter;
 
-// Fix (AI più centrale): l'utente scrive appunti sparsi su un film/serie appena
+// L'utente scrive appunti sparsi su un film/serie appena
 // visto, l'AI li struttura in una recensione ben scritta MANTENENDO il suo tono
 // e le sue opinioni — non ne inventa di nuove, non la scrive al posto suo.
 @Getter

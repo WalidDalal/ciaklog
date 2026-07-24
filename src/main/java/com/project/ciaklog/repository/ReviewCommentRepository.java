@@ -17,14 +17,14 @@ import java.util.UUID;
 public interface ReviewCommentRepository extends JpaRepository<ReviewComment, UUID> {
 
     // JOIN FETCH author — evita LazyInitializationException in toDTO()
-    // Fix (auto-nascondimento autore): esclusa dalla lista pubblica se
+    // Esclusa dalla lista pubblica se
     // hiddenByAuthor = true — MA l'autore stesso deve continuare a vederla
     // quando è lui a guardare il thread (altrimenti l'indicatore "solo tu la
     // vedi" non potrebbe mai comparire: l'elemento non arriverebbe proprio).
     // viewerUsername è null per i visitatori anonimi — non matcha mai
     // nessun autore, quindi i nascosti restano nascosti per loro.
     //
-    // Fix (dashboard admin — commenti nascosti, corretto): "nascosto" nel
+    // "nascosto" nel
     // contesto moderazione NON è hiddenByAuthor (quello è un toggle personale
     // dell'autore) — è status = HIDDEN, impostato automaticamente dopo 2+
     // segnalazioni in attesa di decisione admin. Il primo giro filtrava
@@ -38,6 +38,7 @@ public interface ReviewCommentRepository extends JpaRepository<ReviewComment, UU
             WHERE c.review = :review
               AND (c.status = :status OR (:isAdmin = true AND c.status = com.project.ciaklog.entity.ReviewStatus.HIDDEN))
               AND (c.hiddenByAuthor = false OR c.author.username = :viewerUsername OR :isAdmin = true)
+              AND (c.hiddenBySuspension = false OR :isAdmin = true)
             """)
     Page<ReviewComment> findByReviewAndStatus(
             @Param("review") Review review,
@@ -46,11 +47,15 @@ public interface ReviewCommentRepository extends JpaRepository<ReviewComment, UU
             @Param("isAdmin") boolean isAdmin,
             Pageable pageable);
 
-    // Fix (cascata moderazione): versione non paginata, usata da ReportServiceImpl
+    // Versione non paginata, usata da ReportServiceImpl
     // per nascondere/rimuovere tutte le risposte quando la recensione madre sparisce
     List<ReviewComment> findAllByReviewAndStatus(Review review, ReviewStatus status);
 
-    // Fix (Wrap — nuova statistica "interazioni"): quante risposte l'utente ha
+    // Usata da AdminServiceImpl per nascondere/ripristinare in blocco le
+    // risposte di un utente quando viene sospeso/riabilitato
+    List<ReviewComment> findAllByAuthor(com.project.ciaklog.entity.User author);
+
+    // Quante risposte l'utente ha
     // scritto sotto le recensioni di altri — sostituisce la ridondanza tra
     // "Visti" e "Recensioni scritte" (sempre uguali una volta corretto il bug
     // di conteggio), REMOVED escluse per coerenza con le altre statistiche

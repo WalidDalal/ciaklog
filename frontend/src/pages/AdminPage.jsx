@@ -89,6 +89,16 @@ function UserDrawer({ user: u, onClose, onSuspend, onReinstate, loading = false 
               </div>
           ) : (
             <>
+              {/* Fix (dashboard admin — trovato in revisione): il motivo della
+                  sospensione manuale veniva raccolto dal form ma mai salvato —
+                  il drawer mostrava solo un violationCount incrementato senza
+                  nessun dettaglio (es. "1" senza sapere il perché, visto che
+                  non c'è nessun report/violazione associata a spiegarlo). */}
+              {u.status === 'SUSPENDED' && u.suspensionReason && (
+                  <div style={{ backgroundColor: 'var(--bg-hover)', borderLeft: '3px solid #f59e0b', borderRadius: '0 8px 8px 0', padding: '12px 14px', marginBottom: '16px', fontSize: '13px', color: 'var(--text-muted)' }}>
+                    <strong style={{ color: '#f59e0b' }}>🔒 Sospensione manuale da admin</strong> — {u.suspensionReason}
+                  </div>
+              )}
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginBottom: '28px' }}>
                 {/* Card violazioni — cliccabile se > 0 */}
                 <div
@@ -163,7 +173,7 @@ function AdminPage() {
   const { user, token } = useAuthStore()
   const toast = useToastStore()
 
-  // Fix (dashboard admin, Step 6): tab e filtro nell'URL invece che solo in
+  // Tab e filtro nell'URL invece che solo in
   // stato locale — così "torna alla dashboard" (browser back) dal contesto
   // di una recensione/risposta ripristina davvero dove si era, non solo
   // visivamente ma anche come voce di history. Lo scroll segue gratis: il
@@ -181,7 +191,7 @@ function AdminPage() {
   const [drawerLoading, setDrawerLoading] = useState(false)
   const [userSearch, setUserSearch] = useState('')
 
-  // Fix (dashboard admin — ordinamento colonne): stato per l'ordinamento
+  // Stato per l'ordinamento
   // cliccabile — default alfabetico crescente come prima, ma ora modificabile
   const [usersSortBy, setUsersSortBy] = useState('username')
   const [usersSortDir, setUsersSortDir] = useState('asc')
@@ -198,7 +208,7 @@ function AdminPage() {
   // Modal sospensione manuale dalla tabella
   const [suspendTarget, setSuspendTarget] = useState(null) // { id, username }
 
-  // Fix (dashboard admin): motivo scelto dall'admin per gruppo, quando i
+  // Motivo scelto dall'admin per gruppo, quando i
   // pending hanno categorie diverse — { [groupKey]: 'SPAM' }
   const [chosenReasonByGroup, setChosenReasonByGroup] = useState({})
 
@@ -228,16 +238,25 @@ function AdminPage() {
     try {
       const [usersRes, reportsRes] = await Promise.all([
         api.get('/admin/users', { params: { page: 0, size: 1 } }),
-        api.get('/reports', { params: { status: 'PENDING' } }),
+        api.get('/reports', { params: { status: 'PENDING', size: 500 } }),
       ])
-      // Fix: l'app serializza le risposte paginate con PageSerializationMode.VIA_DTO
+      // L'app serializza le risposte paginate con PageSerializationMode.VIA_DTO
       // (vedi CiaklogApplication.java) — totalElements/totalPages NON sono più in
       // cima all'oggetto ma annidati sotto `.page.` (es. { content: [...], page: {
       // totalElements, totalPages, number } }). Leggerli in cima dava sempre
       // undefined → 0 segnalazioni/utenti mostrati anche quando ce n'erano
+      const pendingList = Array.isArray(reportsRes.data) ? reportsRes.data : (reportsRes.data.content || [])
+      // Fix (dashboard admin): "N segnalazioni" da solo può fuorviare — 4
+      // segnalazioni potrebbero essere tutte sulla STESSA recensione. Conta
+      // anche quanti elementi distinti (recensioni + risposte) sono coinvolti,
+      // stessa logica di raggruppamento già usata per la lista sotto.
+      const distinctTargets = new Set(
+          pendingList.map(r => r.targetType === 'COMMENT' ? `comment_${r.reviewCommentId}` : `review_${r.reviewId}`)
+      ).size
       setStats({
         totalUsers: usersRes.data.page?.totalElements ?? users.length,
-        pendingReports: Array.isArray(reportsRes.data) ? reportsRes.data.length : reportsRes.data.page?.totalElements ?? 0,
+        pendingReports: Array.isArray(reportsRes.data) ? reportsRes.data.length : reportsRes.data.page?.totalElements ?? pendingList.length,
+        pendingReportTargets: distinctTargets,
       })
     } catch { }
   }
@@ -249,7 +268,7 @@ function AdminPage() {
         params: { page: usersPage, size: 10, search: userSearch || undefined, sortBy: usersSortBy, sortDir: usersSortDir }
       })
       setUsers(res.data.content || res.data)
-      // Fix: stesso problema di sopra — data.totalPages è undefined con VIA_DTO,
+      // Stesso problema di sopra — data.totalPages è undefined con VIA_DTO,
       // quindi cadeva sempre sul fallback "1" (pagina 1/1 fissa)
       setUsersTotalPages(res.data.page?.totalPages || 1)
     } catch { setUsers([]) }
@@ -259,8 +278,14 @@ function AdminPage() {
   const loadReports = async () => {
     setReportsLoading(true)
     try {
+      // Fix (dashboard admin — trovato in revisione): nessun "size" specificato,
+      // quindi il backend applicava il default (20) — con più di 20 segnalazioni
+      // pendenti (es. dopo molti test) l'admin ne vedeva solo le prime, in modo
+      // silenzioso, senza nessun avviso o paginazione a compensare. La sezione
+      // Segnalazioni è pensata per essere lavorata tutta insieme (raggruppata
+      // per bersaglio), quindi qui serve l'elenco intero, non una pagina alla volta.
       // Nessun filtro "Tutti" — se non c'è filtro si usa PENDING di default
-      const params = reportFilter ? { status: reportFilter } : {}
+      const params = reportFilter ? { status: reportFilter, size: 500 } : { size: 500 }
       const res = await api.get('/reports', { params })
       setReports(res.data.content || res.data)
     } catch { setReports([]) }
@@ -290,7 +315,7 @@ function AdminPage() {
     catch (err) { toast.show(err.response?.data?.error || 'Errore') }
   }
 
-  // Fix: raggruppa le segnalazioni per bersaglio (recensione O risposta), invece
+  // Raggruppa le segnalazioni per bersaglio (recensione O risposta), invece
   // di mostrarle come righe separate — così l'admin vede "X — N segnalazioni".
   // Nota: la vera distinzione visiva recensioni/risposte nella dashboard è un
   // pezzo a parte — questa è solo la patch minima per non rompersi con i due target.
@@ -305,7 +330,7 @@ function AdminPage() {
   }, [reports])
 
   // Approva/rifiuta in blocco tutte le segnalazioni pendenti di una recensione.
-  // Fix (dashboard admin): quando i pending del gruppo hanno motivi diversi
+  // Quando i pending del gruppo hanno motivi diversi
   // (es. SPAM e INAPPROPRIATE_CONTENT), finalReasonCategory è quello scelto
   // dall'admin tra quelli effettivamente usati — normalizza tutti i report
   // del gruppo sullo stesso motivo invece di lasciarne "vincere" uno a caso.
@@ -349,7 +374,7 @@ function AdminPage() {
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '16px', marginBottom: '32px' }}>
                 {[
                   { label: 'Utenti totali', value: stats.totalUsers, icon: '👥', color: '#3b82f6' },
-                  { label: 'Segnalazioni in attesa', value: stats.pendingReports, icon: '🚩', color: stats.pendingReports > 0 ? '#f59e0b' : '#22c55e' },
+                  { label: 'Segnalazioni in attesa', value: stats.pendingReports, sub: stats.pendingReportTargets != null ? `su ${stats.pendingReportTargets} ${stats.pendingReportTargets === 1 ? 'elemento' : 'elementi'}` : null, icon: '🚩', color: stats.pendingReports > 0 ? '#f59e0b' : '#22c55e' },
                   /* Fix (dashboard admin): la terza card mostrava sempre "Pagina X/Y"
                      riferito alla paginazione utenti, anche nel tab Segnalazioni —
                      dove non esiste paginazione (lista caricata per intero) e quel
@@ -364,6 +389,10 @@ function AdminPage() {
                         <span style={{ color: 'var(--text-dark)', fontSize: '13px' }}>{s.label}</span>
                       </div>
                       <div style={{ color: s.color, fontWeight: '800', fontSize: '28px' }}>{s.value}</div>
+                      {/* Fix (dashboard admin — trovato in revisione): "N segnalazioni"
+                          da solo può fuorviare — potrebbero essere tutte sulla STESSA
+                          recensione. Sotto il numero, quanti elementi distinti coinvolge. */}
+                      {s.sub && <div style={{ color: 'var(--text-dark)', fontSize: '12px', marginTop: '2px' }}>{s.sub}</div>}
                     </div>
                 ))}
               </div>
@@ -427,8 +456,18 @@ function AdminPage() {
                         </tr>
                         </thead>
                         <tbody>
-                        {users.map(u => (
-                            <tr key={u.username} style={{ borderBottom: '1px solid var(--border)' }}
+                        {/* Fix (dashboard admin — trovato in revisione): gli admin comparivano
+                            sempre per primi per puro caso (coincidenza di username/dati nel
+                            seed), dando l'impressione che l'ordinamento non funzionasse per
+                            loro. Reso esplicito: gli admin restano fissi in cima (sezione
+                            separata da un bordo), gli utenti normali sotto seguono
+                            l'ordinamento scelto. Comportamento dichiarato, non un effetto
+                            collaterale che sembra un bug. */}
+                        {[...users].sort((a, b) => (b.role === 'ADMIN') - (a.role === 'ADMIN')).map((u, i, arr) => (
+                            <tr key={u.username} style={{
+                              borderBottom: '1px solid var(--border)',
+                              borderTop: u.role !== 'ADMIN' && i > 0 && arr[i - 1].role === 'ADMIN' ? '2px solid var(--border-soft)' : undefined,
+                            }}
                                 onMouseEnter={e => e.currentTarget.style.backgroundColor = 'var(--bg-nav)'}
                                 onMouseLeave={e => e.currentTarget.style.backgroundColor = 'transparent'}
                             >
@@ -548,7 +587,7 @@ function AdminPage() {
                         const contentText = isComment ? first.commentText : first.reviewText
                         const expanded = expandedReport === groupKey
                         const pendingCount = group.filter(r => r.status === 'PENDING').length
-                        // Fix (dashboard admin): motivi diversi tra i pending dello stesso
+                        // Motivi diversi tra i pending dello stesso
                         // bersaglio — l'admin deve scegliere quale è quello valido, solo
                         // tra quelli effettivamente usati dagli utenti nelle segnalazioni
                         const pendingReasons = [...new Set(group.filter(r => r.status === 'PENDING').map(r => r.reasonCategory))]
@@ -564,12 +603,31 @@ function AdminPage() {
                         <span style={{ padding: '3px 8px', borderRadius: '4px', fontSize: '11px', fontWeight: '600', backgroundColor: isComment ? '#1a2d2d' : '#2d1a2d', color: isComment ? '#4dd0c8' : '#c084fc', flexShrink: 0 }}>
                           {isComment ? '💬 Risposta' : '📝 Recensione'}
                         </span>
-                        <span style={{ padding: '3px 10px', borderRadius: '4px', fontSize: '12px', fontWeight: '600', backgroundColor: '#2d1a1a', color: 'var(--accent)', border: '1px solid #e5091444', flexShrink: 0 }}>
-                          {group.length} {group.length === 1 ? 'segnalazione' : 'segnalazioni'}
-                        </span>
+                        {/* Fix (dashboard admin — motivo mostrato, non conteggio): su
+                            Pendenti ha senso vedere "N segnalazioni" (ancora da valutare,
+                            magari con motivi diversi tra loro). Su Approvate/Rifiutate la
+                            decisione è già presa su UN motivo solo (quello scelto
+                            dall'admin, o l'unico presente) — mostrare ancora "3
+                            segnalazioni" lì è fuorviante, quindi mostriamo quel motivo. */}
+                        {reportFilter === 'PENDING' ? (
+                            <span style={{ padding: '3px 10px', borderRadius: '4px', fontSize: '12px', fontWeight: '600', backgroundColor: '#2d1a1a', color: 'var(--accent)', border: '1px solid #e5091444', flexShrink: 0 }}>
+                              {group.length} {group.length === 1 ? 'segnalazione' : 'segnalazioni'}
+                            </span>
+                        ) : (
+                            <span
+                                title={first.reasonCategory === 'OTHER' ? (first.reasonText || 'Nessun dettaglio') : undefined}
+                                style={{ padding: '3px 10px', borderRadius: '4px', fontSize: '12px', fontWeight: '600', backgroundColor: '#2d1a1a', color: 'var(--accent)', border: '1px solid #e5091444', flexShrink: 0, cursor: first.reasonCategory === 'OTHER' ? 'help' : 'default' }}
+                            >
+                              motivo: {first.reasonCategory === 'OTHER' ? (first.reasonText ? `Altro — ${first.reasonText}` : 'Altro') : first.reasonCategory}
+                            </span>
+                        )}
                                 <span style={{ color: 'var(--text)', fontSize: '14px', flex: 1 }}>
                           {isComment ? 'Risposta' : 'Recensione'} di <strong>{authorUsername || '—'}</strong>
-                          {group.length > 1 && (
+                          {/* "segnalata da X, Y" ha senso solo quando
+                              c'è ancora una decisione da prendere (filtro Pendenti) — su una
+                              segnalazione già approvata/rifiutata non serve più, la decisione
+                              è già presa indipendentemente da chi l'ha segnalata */}
+                          {group.length > 1 && reportFilter === 'PENDING' && (
                               <span style={{ color: 'var(--text-dark)' }}> — segnalata da {group.map(r => r.reporterUsername).join(', ')}</span>
                           )}
                         </span>
@@ -580,52 +638,57 @@ function AdminPage() {
                               {expanded && (
                                   <div style={{ padding: '0 20px 20px', borderTop: '1px solid var(--border-soft)' }}>
 
-                                    {/* Fix (dashboard admin — versione segnalata, corretto): per le
-                                        segnalazioni create PRIMA di questo aggiornamento, reportedText
-                                        è null — il fallback "|| contentText" mostrava il testo ATTUALE
-                                        ma etichettato come "al momento della segnalazione", il che è
-                                        falso. Ora l'etichetta dice onestamente cosa si sta vedendo:
-                                        "Versione vecchia" solo se reportedText esiste davvero, "Versione
-                                        attuale" plain altrimenti (nessuno snapshot disponibile). */}
-                                    {first.reportedText ? (
-                                        <div style={{ backgroundColor: 'var(--bg-card)', borderLeft: '3px solid #e50914', borderRadius: '0 8px 8px 0', padding: '14px 16px', margin: '16px 0' }}>
-                                          <div style={{ color: 'var(--text-dark)', fontSize: '11px', fontWeight: '600', textTransform: 'uppercase', letterSpacing: '1px', marginBottom: '6px' }}>
-                                            📌 {isComment ? 'Risposta' : 'Recensione'} — versione vecchia (al momento della segnalazione)
+                                    {/* Fix (dashboard admin — banner "nascosta"): indica se il bersaglio
+                                        ha già raggiunto la soglia di auto-nascondimento (altre 2+
+                                        segnalazioni PENDING), utile per capire a colpo d'occhio lo stato
+                                        prima ancora di leggere il testo */}
+                                    {first.targetHidden && (
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', backgroundColor: 'rgba(245,158,11,0.1)', border: '1px solid #f59e0b44', borderRadius: '6px', padding: '8px 12px', margin: '16px 0 0', color: '#f59e0b', fontSize: '12px', fontWeight: '600' }}>
+                                          🔶 {isComment ? 'Questa risposta è' : 'Questa recensione è'} già nascosta automaticamente (soglia di segnalazioni raggiunta) — invisibile agli altri utenti in attesa della tua decisione.
+                                        </div>
+                                    )}
+
+                                    {/* Fix (dashboard admin — versione segnalata): l'etichetta "versione
+                                        al momento della segnalazione" ha senso SOLO se il testo è stato
+                                        davvero modificato dopo — altrimenti è solo rumore che fa sembrare
+                                        "vecchio" un testo che in realtà è ancora quello attuale. Quando
+                                        c'è una modifica reale, mostriamo le due versioni affiancate
+                                        (vecchia a sinistra, nuova a destra) invece che una sopra l'altra. */}
+                                    {first.reportedText && first.targetEdited && !first.targetRemoved && contentText ? (
+                                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', margin: '16px 0' }}>
+                                          <div style={{ backgroundColor: 'var(--bg-card)', borderLeft: '3px solid #e50914', borderRadius: '0 8px 8px 0', padding: '14px 16px' }}>
+                                            <div style={{ color: 'var(--text-dark)', fontSize: '11px', fontWeight: '600', textTransform: 'uppercase', letterSpacing: '1px', marginBottom: '6px' }}>
+                                              📌 Versione vecchia
+                                            </div>
+                                            <p style={{ color: 'var(--text-muted)', fontSize: '14px', lineHeight: 1.6, margin: 0, fontStyle: 'italic' }}>
+                                              "{first.reportedText}"
+                                            </p>
                                           </div>
-                                          <p style={{ color: 'var(--text-muted)', fontSize: '14px', lineHeight: 1.6, margin: 0, fontStyle: 'italic' }}>
-                                            "{first.reportedText}"
-                                          </p>
+                                          <div style={{ backgroundColor: 'var(--bg-card)', borderLeft: '3px solid #3b82f6', borderRadius: '0 8px 8px 0', padding: '14px 16px' }}>
+                                            <div style={{ color: '#3b82f6', fontSize: '11px', fontWeight: '600', textTransform: 'uppercase', letterSpacing: '1px', marginBottom: '6px' }}>
+                                              ✏️ Versione nuova
+                                            </div>
+                                            <p style={{ color: 'var(--text-muted)', fontSize: '14px', lineHeight: 1.6, margin: 0, fontStyle: 'italic' }}>
+                                              "{contentText}"
+                                            </p>
+                                            {!isComment && first.reviewRating && (
+                                                <div style={{ marginTop: '8px', color: 'var(--gold)', fontSize: '13px' }}>
+                                                  {'★'.repeat(Math.max(0, Math.min(5, Math.round(first.reviewRating || 0))))}
+                                                </div>
+                                            )}
+                                          </div>
                                         </div>
                                     ) : contentText && (
                                         <div style={{ backgroundColor: 'var(--bg-card)', borderLeft: '3px solid #e50914', borderRadius: '0 8px 8px 0', padding: '14px 16px', margin: '16px 0' }}>
                                           <div style={{ color: 'var(--text-dark)', fontSize: '11px', fontWeight: '600', textTransform: 'uppercase', letterSpacing: '1px', marginBottom: '6px' }}>
-                                            {isComment ? 'Risposta segnalata' : 'Recensione segnalata'}{' '}
-                                            <span style={{ color: 'var(--text-dark)', textTransform: 'none', fontWeight: '400' }}>(nessuno snapshot — segnalazione precedente a questa funzione)</span>
+                                            {isComment ? 'Risposta segnalata' : 'Recensione segnalata'}
                                           </div>
                                           <p style={{ color: 'var(--text-muted)', fontSize: '14px', lineHeight: 1.6, margin: 0, fontStyle: 'italic' }}>
                                             "{contentText}"
                                           </p>
                                           {!isComment && first.reviewRating && (
                                               <div style={{ marginTop: '8px', color: 'var(--gold)', fontSize: '13px' }}>
-                                                {'★'.repeat(first.reviewRating)}
-                                              </div>
-                                          )}
-                                        </div>
-                                    )}
-
-                                    {/* Versione nuova — solo se esiste davvero uno snapshot da confrontare
-                                        E il testo attuale è presente E differisce da quello vecchio */}
-                                    {first.reportedText && first.targetEdited && !first.targetRemoved && contentText && (
-                                        <div style={{ backgroundColor: 'var(--bg-card)', borderLeft: '3px solid #3b82f6', borderRadius: '0 8px 8px 0', padding: '14px 16px', margin: '16px 0' }}>
-                                          <div style={{ color: '#3b82f6', fontSize: '11px', fontWeight: '600', textTransform: 'uppercase', letterSpacing: '1px', marginBottom: '6px' }}>
-                                            ✏️ {isComment ? 'Risposta' : 'Recensione'} — versione nuova (modificata dopo la segnalazione)
-                                          </div>
-                                          <p style={{ color: 'var(--text-muted)', fontSize: '14px', lineHeight: 1.6, margin: 0, fontStyle: 'italic' }}>
-                                            "{contentText}"
-                                          </p>
-                                          {!isComment && first.reviewRating && (
-                                              <div style={{ marginTop: '8px', color: 'var(--gold)', fontSize: '13px' }}>
-                                                {'★'.repeat(first.reviewRating)}
+                                                {'★'.repeat(Math.max(0, Math.min(5, Math.round(first.reviewRating || 0))))}
                                               </div>
                                           )}
                                         </div>

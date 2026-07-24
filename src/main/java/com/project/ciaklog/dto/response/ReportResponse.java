@@ -15,11 +15,11 @@ import java.util.UUID;
 public class ReportResponse {
     private UUID id;
 
-    // Fix (moderazione risposte): distingue se il bersaglio è una recensione
+    // Distingue se il bersaglio è una recensione
     // o una risposta — la dashboard admin usa questo per non essere ambigua
     private ReportTargetType targetType;
 
-    // Fix (dashboard admin, Step 6): per il link "Vedi nel contesto" — valorizzati
+    // Per il link "Vedi nel contesto" — valorizzati
     // sempre, sia per REVIEW che per COMMENT (per il commento è del film/serie
     // a cui appartiene la sua recensione madre, non della recensione stessa)
     private Long tmdbId;
@@ -45,11 +45,17 @@ public class ReportResponse {
     private LocalDateTime resolvedAt;
     private String resolvedByUsername;
 
-    // Fix (dashboard admin): quando la segnalazione è stata approvata, il
+    // Quando la segnalazione è stata approvata, il
     // contenuto è stato rimosso e "Vedi nel contesto" punta a qualcosa che
     // non esiste più — il frontend usa questo flag per nascondere il link
     // invece di mostrarlo comunque e farlo fallire in modo silenzioso
     private boolean targetRemoved;
+
+    // Distingue il caso
+    // in cui il bersaglio è già HIDDEN (soglia di auto-nascondimento raggiunta,
+    // in attesa di decisione) da quando è ancora VISIBLE — utile per capire a
+    // colpo d'occhio se altre segnalazioni hanno già scattato l'auto-hide
+    private boolean targetHidden;
 
     // Testo del bersaglio al momento della segnalazione — reviewText/commentText
     // sopra restano quelli ATTUALI (l'autore può averli modificati dopo).

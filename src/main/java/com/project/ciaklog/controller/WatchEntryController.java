@@ -50,7 +50,7 @@ public class WatchEntryController {
         return ResponseEntity.ok(watchEntryService.updateStatus(userDetails.getUsername(), id, status, currentSeason));
     }
 
-    // Fix: prima non c'era modo di aggiornare solo la stagione corrente di un
+    // Prima non c'era modo di aggiornare solo la stagione corrente di un
     // titolo già "In Visione" senza rimuoverlo e riaggiungerlo da capo.
     // PATCH /api/library/{id}/season?currentSeason=3
     @PatchMapping("/{id}/season")

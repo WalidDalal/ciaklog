@@ -13,7 +13,7 @@ import java.util.Deque;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentLinkedDeque;
 
-// Fix (nessun rate-limit sul login): a differenza di /api/ai/chat, che ha
+// A differenza di /api/ai/chat, che ha
 // già AiRateLimitFilter dedicato, /api/auth/login non aveva nessun limite
 // di tentativi — utile contro un attacco a forza bruta sulla password.
 // Chiave = IP del chiamante: qui, a differenza della chat AI, l'utente non

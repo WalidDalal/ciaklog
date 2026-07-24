@@ -38,7 +38,7 @@ function RegisterPage() {
       setError('Lo username deve essere tra 3 e 30 caratteri')
       return
     }
-    // Fix: stessa regola del backend (era solo length < 8, dava un falso via
+    // Stessa regola del backend (era solo length < 8, dava un falso via
     // libera per password come "password123" senza maiuscola)
     if (!/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d).{8,}$/.test(password)) {
       setError('La password deve contenere almeno 8 caratteri, una maiuscola, una minuscola e un numero')

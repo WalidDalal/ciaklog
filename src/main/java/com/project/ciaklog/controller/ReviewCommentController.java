@@ -21,9 +21,9 @@ public class ReviewCommentController {
 
     private final ReviewCommentService reviewCommentService;
 
-    // Fix (auto-nascondimento autore): stesso principio delle recensioni —
+    // Stesso principio delle recensioni —
     // l'autore deve continuare a vedere le proprie risposte nascoste.
-    // Fix (dashboard admin — commenti nascosti): un Admin deve poter vedere
+    // Un Admin deve poter vedere
     // anche le risposte nascoste dagli autori, per poter valutare le segnalazioni
     @GetMapping("/api/reviews/{reviewId}/comments")
     public ResponseEntity<Page<ReviewCommentResponse>> getCommentsForReview(
@@ -61,7 +61,7 @@ public class ReviewCommentController {
         return ResponseEntity.noContent().build();
     }
 
-    // Fix (auto-nascondimento autore, deciso): reversibile, separato dalla moderazione
+    // Reversibile, separato dalla moderazione
     @PatchMapping("/api/comments/{id}/visibility")
     public ResponseEntity<ReviewCommentResponse> setHidden(
             @AuthenticationPrincipal UserDetails userDetails,

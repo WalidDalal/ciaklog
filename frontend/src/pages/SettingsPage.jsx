@@ -24,13 +24,13 @@ function SettingsPage() {
   const [username, setUsername] = useState(user?.username || '')
   const [bio, setBio] = useState('')
 
-  // Fix (pattern Modifica/Annulla): tengo i valori originali per poterli
+  // Tengo i valori originali per poterli
   // ripristinare se l'utente annulla senza salvare, invece di avere sempre
   // tutto editabile
   const [originalBio, setOriginalBio] = useState('')
   const [editingProfile, setEditingProfile] = useState(false)
 
-  // Fix (Impostazioni — pagina povera): card riepilogo account, dati già
+  // Card riepilogo account, dati già
   // disponibili dalla stessa chiamata usata per la bio, nessun endpoint nuovo
   const [accountSummary, setAccountSummary] = useState(null)
 
@@ -53,7 +53,7 @@ function SettingsPage() {
   const [newPassword, setNewPassword] = useState('')
   const [confirmPassword, setConfirmPassword] = useState('')
 
-  // Fix (Impostazioni): la sezione password era l'unica sempre aperta,
+  // La sezione password era l'unica sempre aperta,
   // diversa dalle altre card che seguono il pattern Modifica/Annulla —
   // ora è chiusa di default e si apre solo cliccando "Modifica"
   const [editingPassword, setEditingPassword] = useState(false)
@@ -79,7 +79,7 @@ function SettingsPage() {
       if (res.data?.token) {
         updateToken(res.data.token)
       }
-      // Fix: questo form non tocca mai la password, quindi un 204 (nessun
+      // Questo form non tocca mai la password, quindi un 204 (nessun
       // token) qui significa solo "è cambiata la bio" — non serve rilogin.
       // Prima si assumeva sempre "password cambiata" e si forzava il logout
       // anche per un semplice edit della bio.
@@ -93,7 +93,7 @@ function SettingsPage() {
     }
   }
 
-  // Fix (pattern Modifica/Annulla): ripristina i valori originali senza
+  // Ripristina i valori originali senza
   // salvare nulla, e richiude il form
   const handleCancelProfile = () => {
     setUsername(user?.username || '')
@@ -124,7 +124,7 @@ function SettingsPage() {
   }
 
   const handleDeleteAccount = async () => {
-    // Fix: richiede la password come conferma finale, non solo il modal "sei sicuro?"
+    // Richiede la password come conferma finale, non solo il modal "sei sicuro?"
     if (!deletePassword) { setDeleteError('Inserisci la password per confermare'); return }
     setDeleteError('')
     try {

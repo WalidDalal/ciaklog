@@ -51,7 +51,7 @@ public class Review {
     @Builder.Default
     private ReviewStatus status = ReviewStatus.VISIBLE;
 
-    // Fix (auto-nascondimento autore, deciso): campo separato da `status` di
+    // Campo separato da `status` di
     // proposito — nascondere una propria recensione non è una violazione,
     // non tocca il punteggio/violationCount, e non deve MAI finire nella coda
     // di moderazione admin (che legge solo i Report, non questo campo).
@@ -59,6 +59,17 @@ public class Review {
     @Column(name = "hidden_by_author", nullable = false)
     @Builder.Default
     private boolean hiddenByAuthor = false;
+
+    // Nascosta perché l'autore è stato sospeso (temporaneamente o
+    // permanentemente) — flag indipendente da hiddenByAuthor apposta: alla
+    // riabilitazione si azzera SOLO questo, senza toccare eventuali
+    // nascondimenti che l'utente aveva scelto lui stesso prima della
+    // sospensione (altrimenti riabilitare "ri-mostrerebbe" anche quelle).
+    // Come hiddenByAuthor, non è una violazione formale né tocca lo status
+    // di moderazione — è visibile solo all'Admin, mai al pubblico.
+    @Column(name = "hidden_by_suspension", nullable = false)
+    @Builder.Default
+    private boolean hiddenBySuspension = false;
 
     @CreationTimestamp
     @Column(name = "created_at", nullable = false, updatable = false)

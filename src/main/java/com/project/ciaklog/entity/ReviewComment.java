@@ -46,12 +46,19 @@ public class ReviewComment {
     @Builder.Default
     private ReviewStatus status = ReviewStatus.VISIBLE;
 
-    // Fix (auto-nascondimento autore, deciso): campo separato da `status`,
+    // Campo separato da `status`,
     // stesso principio di Review — non è una violazione, non tocca il
     // punteggio, non finisce nella coda admin, reversibile dall'autore
     @Column(name = "hidden_by_author", nullable = false)
     @Builder.Default
     private boolean hiddenByAuthor = false;
+
+    // Stesso principio di Review.hiddenBySuspension — flag indipendente,
+    // così la riabilitazione non ri-mostra anche ciò che l'utente aveva
+    // nascosto lui stesso prima di essere sospeso
+    @Column(name = "hidden_by_suspension", nullable = false)
+    @Builder.Default
+    private boolean hiddenBySuspension = false;
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "review_id", nullable = false)

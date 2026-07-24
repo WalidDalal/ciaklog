@@ -68,7 +68,7 @@ public class UserServiceImpl implements UserService {
                         .build())
                 .collect(Collectors.toList());
 
-        // Fix (Impostazioni — card riepilogo account): riusa gli stessi dati
+        // Riusa gli stessi dati
         // già calcolabili qui, invece di un endpoint dedicato
         long totalReviews = reviewRepository.findAllByUser(user).stream()
                 .filter(r -> r.getStatus() != ReviewStatus.REMOVED)
@@ -149,7 +149,7 @@ public class UserServiceImpl implements UserService {
         User user = userRepository.findByUsername(username)
                 .orElseThrow(() -> new ResourceNotFoundException("Utente non trovato"));
 
-        // Fix: richiedere la password come secondo fattore prima di
+        // Richiedere la password come secondo fattore prima di
         // un'azione irreversibile, non solo la conferma via modal
         if (!passwordEncoder.matches(password, user.getPasswordHash())) {
             throw new BusinessRuleException("Password non corretta");

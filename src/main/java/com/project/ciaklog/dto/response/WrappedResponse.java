@@ -3,7 +3,7 @@ package com.project.ciaklog.dto.response;
 import lombok.Builder;
 import lombok.Getter;
 
-// Fix (Priorità 1 — CiakLog Wrapped): recap personale stile "Spotify Wrapped",
+// Recap personale stile "Spotify Wrapped",
 // calcolato dai dati già esistenti (WatchEntry + Review), nessuna nuova tabella
 // per le statistiche in sé — solo il testo narrativo viene generato al volo.
 @Getter
@@ -12,7 +12,7 @@ public class WrappedResponse {
     private long totalWatched;
     private long totalReviews;
 
-    // Fix (Wrap — proposta accolta): "Visti" e "Recensioni scritte" sono
+    // "Visti" e "Recensioni scritte" sono
     // sempre uguali una volta corretto il bug di conteggio (un titolo VISTO
     // richiede una recensione e viceversa, per regola di business) — quindi
     // ridondanti come due statistiche separate. Aggiunta questa terza, più
