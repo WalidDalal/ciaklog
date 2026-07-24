@@ -45,6 +45,13 @@ public class User {
     @Builder.Default
     private int violationCount = 0;
 
+    // Motivo dell'ultima sospensione manuale (da admin, non da segnalazione
+    // approvata) — prima veniva raccolto dal form ma mai salvato: il drawer
+    // admin mostrava un violationCount incrementato senza nessun dettaglio
+    // ad accompagnarlo. Azzerato alla riabilitazione.
+    @Column(name = "suspension_reason", length = 500)
+    private String suspensionReason;
+
     /**
      * Punteggio classifica — aggiornato in modo persistito ad ogni evento:
      * +10 pubblica recensione

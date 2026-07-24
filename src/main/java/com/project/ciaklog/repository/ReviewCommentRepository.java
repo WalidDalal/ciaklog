@@ -38,6 +38,7 @@ public interface ReviewCommentRepository extends JpaRepository<ReviewComment, UU
             WHERE c.review = :review
               AND (c.status = :status OR (:isAdmin = true AND c.status = com.project.ciaklog.entity.ReviewStatus.HIDDEN))
               AND (c.hiddenByAuthor = false OR c.author.username = :viewerUsername OR :isAdmin = true)
+              AND (c.hiddenBySuspension = false OR :isAdmin = true)
             """)
     Page<ReviewComment> findByReviewAndStatus(
             @Param("review") Review review,
@@ -49,6 +50,10 @@ public interface ReviewCommentRepository extends JpaRepository<ReviewComment, UU
     // Versione non paginata, usata da ReportServiceImpl
     // per nascondere/rimuovere tutte le risposte quando la recensione madre sparisce
     List<ReviewComment> findAllByReviewAndStatus(Review review, ReviewStatus status);
+
+    // Usata da AdminServiceImpl per nascondere/ripristinare in blocco le
+    // risposte di un utente quando viene sospeso/riabilitato
+    List<ReviewComment> findAllByAuthor(com.project.ciaklog.entity.User author);
 
     // Quante risposte l'utente ha
     // scritto sotto le recensioni di altri — sostituisce la ridondanza tra

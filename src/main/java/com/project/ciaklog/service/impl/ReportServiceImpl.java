@@ -226,15 +226,42 @@ public class ReportServiceImpl implements ReportService {
         if (offender.getViolationCount() >= 3) {
             offender.setStatus(UserStatus.PERMANENTLY_SUSPENDED);
             offender.setScore(0);
+            userRepository.save(offender);
+            hideAllContentForSuspendedUser(offender);
         } else if (offender.getViolationCount() == 2) {
             offender.setStatus(UserStatus.SUSPENDED);
             offender.setScore(Math.max(0, offender.getScore() - 20));
+            userRepository.save(offender);
+            hideAllContentForSuspendedUser(offender);
         } else {
             long delta = -15 + reactionBonus;
             offender.setScore((int) Math.max(0, offender.getScore() + delta));
+            userRepository.save(offender);
         }
+    }
 
-        userRepository.save(offender);
+    // Trovato in revisione: questa era la SECONDA via per sospendere un
+    // utente (raggiungendo la soglia di violazioni approvando segnalazioni),
+    // separata da AdminServiceImpl.suspendUser (sospensione manuale diretta)
+    // — solo quest'ultima nascondeva in blocco recensioni/risposte
+    // dell'utente sospeso, questa via restava scoperta e le lasciava
+    // visibili. Stessa logica, stesso flag hiddenBySuspension.
+    private void hideAllContentForSuspendedUser(User user) {
+        List<Review> ownReviews = reviewRepository.findAllByUser(user);
+        for (Review r : ownReviews) {
+            if (r.getStatus() == ReviewStatus.VISIBLE && !r.isHiddenBySuspension()) {
+                r.setHiddenBySuspension(true);
+            }
+        }
+        reviewRepository.saveAll(ownReviews);
+
+        List<ReviewComment> ownComments = reviewCommentRepository.findAllByAuthor(user);
+        for (ReviewComment c : ownComments) {
+            if (c.getStatus() == ReviewStatus.VISIBLE && !c.isHiddenBySuspension()) {
+                c.setHiddenBySuspension(true);
+            }
+        }
+        reviewCommentRepository.saveAll(ownComments);
     }
 
     // "Nascondi direttamente" — crea un Report con reporter = admin, già

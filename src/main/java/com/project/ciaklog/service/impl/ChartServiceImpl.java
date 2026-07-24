@@ -127,7 +127,17 @@ public class ChartServiceImpl implements ChartService {
         double weightedSum = 0;
         double totalWeight = 0;
         for (Review r : reviews) {
-            long days = ChronoUnit.DAYS.between(r.getCreatedAt(), LocalDateTime.now());
+            // Trovato in revisione, causa di un bug bloccante: con created_at
+            // nel futuro (visto coi dati reali di un utente: alcune recensioni
+            // datate mesi dopo "adesso" — un difetto del seed, non dell'app,
+            // ma la formula sottostante non doveva comunque permetterlo),
+            // "days" risultava negativo, il peso 1/(1+days/30) diventava
+            // negativo, e una media pesata con pesi negativi può uscire da
+            // QUALSIASI range sensato (verificato: con questi identici dati si
+            // ottiene 16.3 su una scala 1-5). "days" non può mai essere < 0
+            // ai fini del peso: una recensione "nel futuro" ha comunque il
+            // peso massimo di una recensione di oggi, non uno negativo.
+            long days = Math.max(0, ChronoUnit.DAYS.between(r.getCreatedAt(), LocalDateTime.now()));
             double weight = 1.0 / (1 + (double) days / 30);
             weightedSum += r.getRating() * weight;
             totalWeight += weight;

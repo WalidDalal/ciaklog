@@ -17,6 +17,8 @@ public class ReviewCommentResponse {
     private ReviewStatus status;
     // Come per Review, campo separato
     private boolean hiddenByAuthor;
+    // Stesso principio di ReviewResponse — banner diverso per l'Admin
+    private boolean hiddenBySuspension;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
 }

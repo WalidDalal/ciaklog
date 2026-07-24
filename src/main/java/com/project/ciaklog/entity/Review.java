@@ -60,6 +60,17 @@ public class Review {
     @Builder.Default
     private boolean hiddenByAuthor = false;
 
+    // Nascosta perché l'autore è stato sospeso (temporaneamente o
+    // permanentemente) — flag indipendente da hiddenByAuthor apposta: alla
+    // riabilitazione si azzera SOLO questo, senza toccare eventuali
+    // nascondimenti che l'utente aveva scelto lui stesso prima della
+    // sospensione (altrimenti riabilitare "ri-mostrerebbe" anche quelle).
+    // Come hiddenByAuthor, non è una violazione formale né tocca lo status
+    // di moderazione — è visibile solo all'Admin, mai al pubblico.
+    @Column(name = "hidden_by_suspension", nullable = false)
+    @Builder.Default
+    private boolean hiddenBySuspension = false;
+
     @CreationTimestamp
     @Column(name = "created_at", nullable = false, updatable = false)
     private LocalDateTime createdAt;
