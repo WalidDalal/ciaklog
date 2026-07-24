@@ -5,7 +5,23 @@ import api from '../services/api'
 import useAuthStore from '../store/authStore'
 import useToastStore from '../store/toastStore'
 
-const EMOJI_RATING = ['', '😑', '😐', '🙂', '😊', '🤩']
+// Fix (Profilo — "immagini rosse"): l'avatar grande era sempre var(--accent)
+// (rosso) per chiunque, fisso. Richiesto un colore diverso per utente, ma
+// "casuale, non assegnato da te" — quindi non una lista di colori scelti a
+// mano per singolo utente, ma un hash dello username che sceglie da una
+// piccola palette: stesso utente = sempre lo stesso colore (utile per
+// riconoscerlo a colpo d'occhio), ma quale colore tocchi a chi non è deciso
+// a mano, deriva dai caratteri dello username stesso.
+const AVATAR_COLORS = ['var(--accent)', '#3b82f6', '#22c55e', '#f59e0b', '#8b5cf6', '#ec4899', '#14b8a6', '#eab308']
+function colorForUsername(name) {
+  if (!name) return AVATAR_COLORS[0]
+  let hash = 0
+  for (let i = 0; i < name.length; i++) {
+    hash = (hash * 31 + name.charCodeAt(i)) >>> 0
+  }
+  return AVATAR_COLORS[hash % AVATAR_COLORS.length]
+}
+
 
 function ProfilePage() {
   const { username } = useParams()
@@ -121,7 +137,7 @@ function ProfilePage() {
             {/* Avatar */}
             <div style={{
               width: '88px', height: '88px', borderRadius: '50%', flexShrink: 0,
-              backgroundColor: 'var(--accent)',
+              backgroundColor: colorForUsername(profile.username || username),
               display: 'flex', alignItems: 'center', justifyContent: 'center',
               fontSize: '36px', fontWeight: '800', color: 'white',
             }}>
@@ -233,18 +249,13 @@ function ProfilePage() {
                         </p>
                     )}
 
-                    {/* Stats */}
-                    <div style={{ display: 'flex', gap: '28px', alignItems: 'center' }}>
-                      <div>
-                        {/* Fix (Profilo — trovato in revisione): reviews.length contava solo
-                            le recensioni caricate finora in pagina (10, poi 19 dopo "mostra
-                            altri"...) e includeva quelle REMOVED. profile.totalReviews è già
-                            calcolato correttamente dal backend (totale reale, REMOVED escluse),
-                            la stessa fonte già usata correttamente in Impostazioni. */}
-                        <span style={{ color: 'var(--text)', fontWeight: '700', fontSize: '18px' }}>{profile.totalReviews ?? reviews.length}</span>
-                        <span style={{ color: 'var(--text-dark)', fontSize: '13px', marginLeft: '6px' }}>recensioni</span>
-                      </div>
-                    </div>
+                    {/* Fix (Profilo — contatore recensioni duplicato): c'era questo badge
+                        "N recensioni" qui in cima E un altro contatore nell'intestazione
+                        della sezione "🎬 Recensioni" più sotto, ridondanti tra loro e per
+                        di più con due valori diversi (questo usava profile.totalReviews,
+                        quello sotto usava reviews.length — solo le recensioni caricate in
+                        pagina). Tolto questo, la logica corretta (profile.totalReviews) è
+                        stata spostata nell'intestazione sotto, unica fonte di verità. */}
                   </>
               )}
             </div>
@@ -304,7 +315,11 @@ function ProfilePage() {
             <h2 style={{ color: 'var(--text)', fontSize: '18px', fontWeight: '700', marginBottom: '20px' }}>
               🎬 Recensioni
               <span style={{ color: 'var(--text-dark)', fontSize: '14px', fontWeight: '400', marginLeft: '8px' }}>
-              {reviews.length}
+              {/* Fix: mostra il totale vero (profile.totalReviews, dal backend, REMOVED
+                  escluse), non reviews.length — quello contava solo le recensioni caricate
+                  finora in pagina (10, poi 20, poi 22 solo dopo aver cliccato "carica altre"
+                  abbastanza volte), dando l'impressione di un numero che cambia/sbagliato */}
+              {profile.totalReviews ?? reviews.length}
             </span>
             </h2>
 
@@ -354,18 +369,15 @@ function ProfilePage() {
                         </span>
                             </div>
 
-                            {/* Stelle */}
+                            {/* Fix (Profilo — emoji nel rating, trovata dopo diversi giri):
+                                non era la sezione "In Visione" ma questa — 5 clapperboard 🎬
+                                come "stelle" più una faccina in base al voto, mentre ovunque
+                                nel resto dell'app (Home, Admin, Wrapped) il voto si mostra con
+                                ★/☆ semplici. Allineato allo stesso stile, tolta la faccina. */}
                             <div style={{ display: 'flex', gap: '2px', marginBottom: r.text ? '6px' : '0', alignItems: 'center' }}>
-                              {[1,2,3,4,5].map(n => (
-                                  <span key={n} style={{
-                                    fontSize: '13px',
-                                    filter: n <= r.rating ? 'none' : 'grayscale(1)',
-                                    opacity: n <= r.rating ? 1 : 0.2,
-                                  }}>🎬</span>
-                              ))}
-                              <span style={{ color: 'var(--text-dark)', fontSize: '12px', marginLeft: '6px' }}>
-                          {EMOJI_RATING[r.rating] || ''}
-                        </span>
+                              <span style={{ color: 'var(--gold)', fontSize: '13px' }}>
+                                {'★'.repeat(Math.max(0, Math.min(5, Math.round(r.rating || 0))))}{'☆'.repeat(5 - Math.max(0, Math.min(5, Math.round(r.rating || 0))))}
+                              </span>
                             </div>
 
                             {/* Testo — max 2 righe, gestisce testi lunghi */}

@@ -112,10 +112,10 @@ function WrappedPage() {
             {(data.favoriteTitle || data.leastFavoriteTitle) && (
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', marginTop: '16px' }}>
                 {data.favoriteTitle && (
-                  <StatCard label="Il tuo preferito" value={data.favoriteTitle} sub={`${'★'.repeat(data.favoriteRating)}`} delay={350} />
+                  <StatCard label="Il tuo preferito" value={data.favoriteTitle} sub={`${'★'.repeat(Math.max(0, Math.min(5, Math.round(data.favoriteRating || 0))))}`} delay={350} />
                 )}
                 {data.leastFavoriteTitle && (
-                  <StatCard label="Il meno amato" value={data.leastFavoriteTitle} sub={`${'★'.repeat(data.leastFavoriteRating)}`} delay={400} />
+                  <StatCard label="Il meno amato" value={data.leastFavoriteTitle} sub={`${'★'.repeat(Math.max(0, Math.min(5, Math.round(data.leastFavoriteRating || 0))))}`} delay={400} />
                 )}
               </div>
             )}
