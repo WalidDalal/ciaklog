@@ -18,9 +18,14 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
 import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.Pageable;
+import java.util.ArrayList;
+import java.util.Comparator;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.UUID;
+import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
@@ -124,11 +129,70 @@ public class ReportServiceImpl implements ReportService {
 
     @Override
     @Transactional(readOnly = true)
-    public Page<ReportResponse> getReports(ReportStatus status, Pageable pageable) {
-        Page<Report> reports = (status != null)
-                ? reportRepository.findByStatus(status, pageable)
-                : reportRepository.findAll(pageable);
-        return reports.map(this::toDTO);
+    public Page<ReportResponse> getReports(ReportStatus status, ReportTargetType targetType, Pageable pageable) {
+        // Fix (dashboard admin — filtro per tipo bersaglio): filtro applicato
+        // qui, nella query, PRIMA della paginazione — così vale su tutte le
+        // pagine e non solo su quella caricata in un dato momento.
+        //
+        // Fix (dashboard admin — gruppi di segnalazioni spezzati tra le
+        // pagine): prima si paginava direttamente sulle RIGHE di Report (una
+        // per segnalazione), quindi 2 segnalazioni sullo stesso bersaglio
+        // potevano finire su pagine diverse — es. pagina 1 mostra "2
+        // segnalazioni" (parziali) su una review, pagina 2 ne mostra altre
+        // sulla stessa review come se fosse un caso diverso. Ora si carica la
+        // lista completa (filtrata per status/targetType, senza paginazione
+        // DB), si raggruppa per bersaglio (review o commento), si ordina ogni
+        // gruppo per la segnalazione più recente al suo interno, e SOLO A
+        // QUESTO PUNTO si pagina — sui gruppi, non sulle righe. Un gruppo
+        // finisce quindi sempre intero in una sola pagina.
+        List<Report> all;
+        if (targetType == ReportTargetType.REVIEW) {
+            all = (status != null)
+                    ? reportRepository.findByStatusAndReviewIsNotNull(status)
+                    : reportRepository.findByReviewIsNotNull();
+        } else if (targetType == ReportTargetType.COMMENT) {
+            all = (status != null)
+                    ? reportRepository.findByStatusAndReviewCommentIsNotNull(status)
+                    : reportRepository.findByReviewCommentIsNotNull();
+        } else {
+            all = (status != null)
+                    ? reportRepository.findByStatus(status)
+                    : reportRepository.findAll();
+        }
+
+        // Raggruppa per bersaglio, mantenendo l'ordine di inserimento del
+        // primo incontro (poi riordinato sotto per data più recente del gruppo)
+        LinkedHashMap<String, List<Report>> grouped = new LinkedHashMap<>();
+        for (Report r : all) {
+            String key = r.getReviewComment() != null
+                    ? "comment_" + r.getReviewComment().getId()
+                    : "review_" + r.getReview().getId();
+            grouped.computeIfAbsent(key, k -> new ArrayList<>()).add(r);
+        }
+
+        // Ogni gruppo ordinato internamente per data desc (coerente con l'ordinamento
+        // richiesto dal controller per le righe), poi i gruppi tra loro ordinati
+        // per la segnalazione più recente al loro interno — così un bersaglio
+        // appena segnalato di nuovo torna in cima, come ci si aspetta.
+        List<List<Report>> groups = new ArrayList<>(grouped.values());
+        for (List<Report> g : groups) {
+            g.sort(Comparator.comparing(Report::getCreatedAt).reversed());
+        }
+        groups.sort((a, b) -> b.get(0).getCreatedAt().compareTo(a.get(0).getCreatedAt()));
+
+        int totalGroups = groups.size();
+        int page = pageable.getPageNumber();
+        int size = pageable.getPageSize();
+        int from = Math.min(page * size, totalGroups);
+        int to = Math.min(from + size, totalGroups);
+
+        List<Report> pageContent = new ArrayList<>();
+        for (List<Report> g : groups.subList(from, to)) {
+            pageContent.addAll(g);
+        }
+
+        List<ReportResponse> dtos = pageContent.stream().map(this::toDTO).collect(Collectors.toList());
+        return new PageImpl<>(dtos, pageable, totalGroups);
     }
 
     @Override

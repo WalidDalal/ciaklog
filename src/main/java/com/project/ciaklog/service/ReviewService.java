@@ -14,6 +14,16 @@ public interface ReviewService {
     ReviewResponse updateReview(String username, UUID reviewId, ReviewUpdateRequest dto);
     void deleteReview(String username, UUID reviewId);
     Page<ReviewResponse> getReviewsForMedia(Long tmdbId, ContentType contentType, String viewerUsername, boolean isAdmin, Pageable pageable);
+
+    // Fix (Dettaglio Film/Serie — recensioni troncate a 20): la pagina film
+    // ora pagina davvero le recensioni (non le carica più tutte in un colpo
+    // solo, di default 20 senza "carica altre"), quindi la propria
+    // recensione ("myReview") non si può più cercare dentro la sola pagina
+    // caricata — potrebbe non esserci. Query dedicata e indipendente dalla
+    // paginazione, che sfrutta l'indice univoco utente+media già esistente
+    // (findByUserAndTmdbIdAndContentType, usata anche per evitare doppie
+    // recensioni in createReview).
+    ReviewResponse getMyReviewForMedia(String username, Long tmdbId, ContentType contentType);
     Page<ReviewResponse> getUserReviews(String username, String viewerUsername, boolean isAdmin, Pageable pageable);
 
     // Toggle reversibile, separato

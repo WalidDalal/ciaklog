@@ -2,9 +2,9 @@ import { useEffect } from 'react'
 import useToastStore from '../store/toastStore'
 
 const TYPE_STYLES = {
-    error:   { bg: '#2d1a1a', border: 'var(--accent)', color: '#ff6b6b', icon: '✕' },
-    success: { bg: '#0f2d1a', border: '#22c55e', color: '#4ade80', icon: '✓' },
-    info:    { bg: '#0f1a2d', border: '#3b82f6', color: '#60a5fa', icon: 'ℹ' },
+    error:   { bg: 'var(--danger-bg)', border: 'var(--danger-border)', color: 'var(--danger-text)', icon: '✕' },
+    success: { bg: 'var(--success-bg)', border: 'var(--success-border)', color: 'var(--success-text)', icon: '✓' },
+    info:    { bg: 'var(--info-bg)', border: 'var(--info-border)', color: 'var(--info-text)', icon: 'ℹ' },
 }
 
 function Toast({ toast, onRemove }) {

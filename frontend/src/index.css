@@ -30,6 +30,20 @@
   --gradient-card: linear-gradient(transparent, rgba(0,0,0,0.88));
   --gradient-cta:  linear-gradient(135deg, #1a0a0a, #0f0f1a);
   --border-cta:    #2a1a1a;
+
+  /* Fix (Light Mode — banner di errore non theme-aware): questi colori erano
+     hardcoded uguali in ogni tema (Login, Registrazione, dashboard Admin,
+     notifiche Toast) — restavano scuri anche in Light Mode. Ora sono
+     variabili, coerenti col resto del tema. */
+  --danger-bg:     #2d1a1a;
+  --danger-border: #e50914;
+  --danger-text:   #ff6b6b;
+  --success-bg:    #0f2d1a;
+  --success-border:#22c55e;
+  --success-text:  #4ade80;
+  --info-bg:       #0f1a2d;
+  --info-border:   #3b82f6;
+  --info-text:     #60a5fa;
 }
 
 /* ── Light ── */
@@ -58,6 +72,18 @@
   --gradient-card: linear-gradient(transparent, rgba(0,0,0,0.55));
   --gradient-cta:  linear-gradient(135deg, #fff5f5, #f0f4ff);
   --border-cta:    #fecaca;
+
+  /* Fix (Light Mode — banner di errore non theme-aware): controparti chiare
+     delle variabili di stato definite sopra per il tema dark. */
+  --danger-bg:     #fdecec;
+  --danger-border: #e50914;
+  --danger-text:   #b3111b;
+  --success-bg:    #eafbf1;
+  --success-border:#16a34a;
+  --success-text:  #15803d;
+  --info-bg:       #eaf2fd;
+  --info-border:   #3b82f6;
+  --info-text:     #1d4ed8;
 }
 
 body {

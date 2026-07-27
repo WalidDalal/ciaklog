@@ -11,6 +11,19 @@ const SUGGESTIONS = [
   "Film d'animazione per adulti",
 ]
 
+// Fix (🟡 AI — suggerimenti sbagliati per l'admin): prima si mostravano
+// SEMPRE i chip sopra (di natura cinematografica, per gli utenti) anche
+// nella chat gestionale dell'admin — che invece risponde solo a domande su
+// utenti/segnalazioni/violazioni/statistiche (vedi il prompt dedicato in
+// AiServiceImpl.chatAdmin), quindi quei suggerimenti erano semplicemente
+// fuori contesto e non funzionanti per lui.
+const ADMIN_SUGGESTIONS = [
+  'Quanti utenti sono sospesi?',
+  'Quante segnalazioni sono in attesa?',
+  'Statistiche generali della piattaforma',
+  'Chi ha ricevuto più segnalazioni questo mese?',
+]
+
 // Componente puro della chat — usato sia nella floating che nella pagina intera
 export function ChatCore({ compact = false, initialPrompt = null }) {
   const { token, user } = useAuthStore()
@@ -108,9 +121,11 @@ export function ChatCore({ compact = false, initialPrompt = null }) {
         {messages.length === 0 && (
           <div style={{ textAlign: 'center', color: 'var(--text-dark)', marginTop: '24px' }}>
             <div style={{ fontSize: '32px', marginBottom: '12px' }}>🎬</div>
-            <p style={{ fontSize: '13px', marginBottom: '16px' }}>Chiedimi un consiglio cinematografico!</p>
+            <p style={{ fontSize: '13px', marginBottom: '16px' }}>
+              {isAdmin ? 'Chiedimi dati sulla gestione della piattaforma!' : 'Chiedimi un consiglio cinematografico!'}
+            </p>
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', justifyContent: 'center' }}>
-              {SUGGESTIONS.map(s => (
+              {(isAdmin ? ADMIN_SUGGESTIONS : SUGGESTIONS).map(s => (
                 <button key={s} onClick={() => setInput(s)} style={{
                   padding: '6px 12px', backgroundColor: 'var(--bg-card)', border: '1px solid var(--border-soft)',
                   borderRadius: '16px', color: 'var(--text-muted)', fontSize: '12px', cursor: 'pointer',

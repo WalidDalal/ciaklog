@@ -136,6 +136,23 @@ public class ReviewServiceImpl implements ReviewService {
     }
 
     @Override
+    public ReviewResponse getMyReviewForMedia(String username, Long tmdbId, ContentType contentType) {
+        // Fix (Dettaglio Film/Serie): indipendente dalla paginazione, vedi
+        // commento sull'interfaccia ReviewService per il motivo.
+        // Fix (bug in produzione — 500/LazyInitializationException): usa la
+        // variante con JOIN FETCH r.user (vedi commento sulla query nel
+        // repository) — toDTO() legge r.getUser().getUsername(), non lo
+        // "user" passato qui come secondo argomento, quindi serve che
+        // r.getUser() sia già inizializzato quando si esce da questo metodo
+        // (non è @Transactional, la sessione Hibernate si chiude alla fine
+        // della query).
+        User user = getUser(username);
+        return reviewRepository.findByUserAndTmdbIdAndContentTypeFetchUser(user, tmdbId, contentType)
+                .map(r -> toDTO(r, user))
+                .orElse(null);
+    }
+
+    @Override
     public Page<ReviewResponse> getUserReviews(String username, String viewerUsername, boolean isAdmin, Pageable pageable) {
         User user = getUser(username);
         // Caricare tutte le WatchEntry in una sola query per evitare N+1

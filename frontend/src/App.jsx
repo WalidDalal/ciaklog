@@ -11,6 +11,7 @@ import ChatAiPage from './pages/ChatAiPage'
 import AdminPage from './pages/AdminPage'
 import SettingsPage from './pages/SettingsPage'
 import WrappedPage from './pages/WrappedPage'
+import CreditsPage from './pages/CreditsPage'
 import { ChatFloating } from './components/ChatWidget'
 import ToastContainer from './components/ToastContainer'
 import ErrorBoundary from './components/ErrorBoundary'
@@ -25,6 +26,9 @@ function App() {
                     <Route path="/register" element={<RegisterPage />} />
                     <Route path="/search" element={<SearchPage />} />
                     <Route path="/movie/:id" element={<MovieDetailPage />} />
+                    {/* Fix (attribuzione TMDB — sezione "Crediti" dedicata, richiesta
+                        dai loro Termini d'Uso): pubblica, niente da proteggere. */}
+                    <Route path="/credits" element={<CreditsPage />} />
                     {/* Fix: prima /profile/:username era pubblica ma faceva una
                         Promise.all con /reviews/user/{username} che richiede login —
                         da sloggato la seconda chiamata falliva (401), Promise.all

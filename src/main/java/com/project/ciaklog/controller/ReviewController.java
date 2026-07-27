@@ -41,6 +41,21 @@ public class ReviewController {
         return ResponseEntity.ok(reviewService.getReviewsForMedia(tmdbId, contentType, viewerUsername, isAdmin, pageable));
     }
 
+    // Fix (Dettaglio Film/Serie — recensioni troncate a 20): endpoint dedicato
+    // e indipendente dalla paginazione della lista qui sopra, per sapere in
+    // modo affidabile se l'utente loggato ha già recensito questo film/serie
+    // (prima si cercava dentro le sole recensioni già caricate in pagina).
+    // 204 se non loggato o se non ha ancora recensito.
+    @GetMapping("/media/{contentType}/{tmdbId}/mine")
+    public ResponseEntity<ReviewResponse> getMyReviewForMedia(
+            @AuthenticationPrincipal UserDetails userDetails,
+            @PathVariable ContentType contentType,
+            @PathVariable Long tmdbId) {
+        if (userDetails == null) return ResponseEntity.noContent().build();
+        ReviewResponse mine = reviewService.getMyReviewForMedia(userDetails.getUsername(), tmdbId, contentType);
+        return mine != null ? ResponseEntity.ok(mine) : ResponseEntity.noContent().build();
+    }
+
     //
     // userDetails è nullable, un profilo pubblico è visibile anche da anonimo —
     // ma quando c'è, serve per far vedere all'autore le proprie nascoste e

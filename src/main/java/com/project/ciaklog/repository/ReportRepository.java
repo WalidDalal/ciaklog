@@ -19,6 +19,30 @@ public interface ReportRepository extends JpaRepository<Report, UUID> {
     // Dashboard Admin — lista segnalazioni per stato, paginata
     Page<Report> findByStatus(ReportStatus status, Pageable pageable);
 
+    // Fix (dashboard admin — filtro per tipo bersaglio): il filtro
+    // recensioni/risposte prima veniva applicato lato frontend sui soli
+    // report già caricati in pagina, quindi funzionava solo sulla pagina
+    // visualizzata in quel momento e non su tutte. Ora il filtro è nella
+    // query, applicato PRIMA della paginazione — combinato con lo status.
+    Page<Report> findByStatusAndReviewIsNotNull(ReportStatus status, Pageable pageable);
+    Page<Report> findByStatusAndReviewCommentIsNotNull(ReportStatus status, Pageable pageable);
+    Page<Report> findByReviewIsNotNull(Pageable pageable);
+    Page<Report> findByReviewCommentIsNotNull(Pageable pageable);
+
+    // Fix (dashboard admin — gruppi di segnalazioni spezzati tra le pagine):
+    // le varianti Page qui sopra paginano per RIGA di segnalazione, non per
+    // bersaglio (review/commento) — se una review ha 2 segnalazioni e altre 6
+    // segnalazioni (su altri bersagli) la seguono, le 2 possono finire in una
+    // pagina e altre segnalazioni sullo STESSO bersaglio in quella dopo,
+    // mostrando conteggi incoerenti. Queste varianti List (non paginate) sono
+    // usate per raggruppare per bersaglio in Java e paginare i GRUPPI, non le
+    // righe — vedi ReportServiceImpl.getReports().
+    List<Report> findByStatusAndReviewIsNotNull(ReportStatus status);
+    List<Report> findByStatusAndReviewCommentIsNotNull(ReportStatus status);
+    List<Report> findByReviewIsNotNull();
+    List<Report> findByReviewCommentIsNotNull();
+    List<Report> findByStatus(ReportStatus status);
+
     // Per verificare segnalazione duplicata
     boolean existsByReporterAndReview(User reporter, Review review);
 

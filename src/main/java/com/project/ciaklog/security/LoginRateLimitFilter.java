@@ -22,8 +22,19 @@ import java.util.concurrent.ConcurrentLinkedDeque;
 @Component
 public class LoginRateLimitFilter extends OncePerRequestFilter {
 
-    private static final int MAX_ATTEMPTS_PER_WINDOW = 5;
-    private static final long WINDOW_MS = 15 * 60 * 1000L; // 15 minuti
+    // Fix (🟡 soglia identica a quella per email): questo filtro (per IP) aveva
+    // la STESSA soglia stretta di LoginRateLimiter (per email, dentro
+    // AuthServiceImpl) — 5 tentativi/15min. In locale, dove l'IP è sempre lo
+    // stesso, i due limiti scattano insieme e bloccano TUTTO da quell'indirizzo,
+    // inclusi login corretti su account diversi. Le due soglie hanno scopi
+    // diversi: quella per email deve restare stretta (blocca solo l'account
+    // preso di mira); questa per IP serve a beccare scanning/credential-stuffing
+    // su MOLTI account dallo stesso indirizzo, quindi va larga — alzata a
+    // 40 tentativi/ora (non 5/15min), pensata per non scattare durante un uso
+    // normale (anche condiviso, es. NAT/ufficio) ma comunque intercettare un
+    // attacco vero.
+    private static final int MAX_ATTEMPTS_PER_WINDOW = 40;
+    private static final long WINDOW_MS = 60 * 60 * 1000L; // 1 ora
 
     private final ConcurrentHashMap<String, Deque<Long>> attemptsLog = new ConcurrentHashMap<>();
 
@@ -51,7 +62,14 @@ public class LoginRateLimitFilter extends OncePerRequestFilter {
             return;
         }
 
-        timestamps.addLast(now);
         filterChain.doFilter(request, response);
+
+        // Fix: prima si registrava un "tentativo" per OGNI richiesta, anche i login
+        // riusciti — bastava fare login/logout ripetuti con credenziali corrette per
+        // finire bloccati. Ora conta solo le risposte 401 (credenziali sbagliate),
+        // coerente con LoginRateLimiter che già registra solo i fallimenti.
+        if (response.getStatus() == HttpServletResponse.SC_UNAUTHORIZED) {
+            timestamps.addLast(now);
+        }
     }
 }
