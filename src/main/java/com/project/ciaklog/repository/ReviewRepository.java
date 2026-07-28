@@ -88,6 +88,19 @@ public interface ReviewRepository extends JpaRepository<Review, UUID> {
 
     Optional<Review> findByUserAndTmdbIdAndContentType(User user, Long tmdbId, ContentType contentType);
 
+    // Fix (endpoint GET /reviews/media/{type}/{id}/mine — bug in produzione,
+    // LazyInitializationException): a differenza delle query gemelle qui sopra
+    // (findByTmdbIdAndContentTypeAndStatus), questa non faceva JOIN FETCH r.user
+    // — toDTO() chiama r.getUser().getUsername(), quindi fuori transazione
+    // (il metodo del service non è @Transactional) l'accesso al proxy lazy
+    // falliva con 500. Query dedicata con fetch esplicito, usata solo da
+    // getMyReviewForMedia per non toccare gli altri usi del metodo sopra
+    // (createReview, ecc. — dove il proxy lazy non serve).
+    @Query(
+            "SELECT r FROM Review r JOIN FETCH r.user WHERE r.user = :user AND r.tmdbId = :tmdbId AND r.contentType = :contentType")
+    Optional<Review> findByUserAndTmdbIdAndContentTypeFetchUser(
+            @Param("user") User user, @Param("tmdbId") Long tmdbId, @Param("contentType") ContentType contentType);
+
     // Usata per calcoli statistici (media voti),
     // qui l'eccezione per il proprietario non serve — una recensione auto-nascosta
     // non deve influenzare la media mostrata a tutti, punto, indipendentemente da chi guarda
@@ -114,9 +127,14 @@ public interface ReviewRepository extends JpaRepository<Review, UUID> {
             WHERE r.status = com.project.ciaklog.entity.ReviewStatus.VISIBLE
               AND r.hiddenByAuthor = false
               AND r.hiddenBySuspension = false
-              AND r.createdAt >= :since
+              AND (r.createdAt >= :since OR r.updatedAt >= :since)
             GROUP BY r.tmdbId, r.contentType
             ORDER BY COUNT(r) DESC
             """)
+    // Fix (Homepage — "più discussi"): prima contava solo createdAt >= since,
+    // quindi una recensione scritta mesi fa ma MODIFICATA negli ultimi 7 giorni
+    // non contribuiva mai al trending, anche se è un'interazione recente vera
+    // e propria. updatedAt viene aggiornato da @UpdateTimestamp su ogni save
+    // (Review.java), quindi è affidabile: ora basta l'uno O l'altro.
     List<Object[]> findTrendingGrouped(@Param("since") LocalDateTime since);
 }

@@ -62,6 +62,7 @@ package com.project.ciaklog.security;
  */
 
 import jakarta.servlet.FilterChain;
+import jakarta.servlet.http.HttpServletResponse;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -90,16 +91,33 @@ class LoginRateLimitFilterTest {
     @Test
     @DisplayName("Entro il limite, i tentativi di login passano normalmente")
     void tentativiEntroLimite_passanoNormalmente() throws Exception {
-        for (int i = 0; i < 5; i++) {
+        // Nota: soglia reale del progetto = 40 tentativi/ora.
+        // Il filtro conta un tentativo solo se la risposta a valle è 401
+        // (credenziali sbagliate — vedi il fix in LoginRateLimitFilter, "conta
+        // solo i fallimenti, non i login riusciti"). Un FilterChain mockato di
+        // default non tocca la response, che resta 200 — quindi il contatore
+        // non scatterebbe mai. Simulo qui un filterChain "a valle" che
+        // restituisce sempre 401, così ogni giro viene davvero conteggiato.
+        doAnswer(inv -> {
+            HttpServletResponse resp = inv.getArgument(1);
+            resp.setStatus(401);
+            return null;
+        }).when(filterChain).doFilter(any(), any());
+
+        for (int i = 0; i < 40; i++) {
             MockHttpServletRequest request = new MockHttpServletRequest("POST", "/api/auth/login");
             request.setRemoteAddr("1.2.3.4");
             MockHttpServletResponse response = new MockHttpServletResponse();
 
             filter.doFilter(request, response, filterChain);
 
-            assertThat(response.getStatus()).isEqualTo(200); // default MockHttpServletResponse, nessun 429 impostato
+            // Il 401 qui rappresenta un tentativo con credenziali sbagliate ma
+            // NON bloccato dal rate limiter — l'unica cosa che questo test
+            // vuole escludere è il 429 (bloccato), non verificare l'esito
+            // dell'autenticazione in sé.
+            assertThat(response.getStatus()).isNotEqualTo(429);
         }
-        verify(filterChain, times(5)).doFilter(any(), any());
+        verify(filterChain, times(40)).doFilter(any(), any());
     }
 
     @Test
@@ -107,22 +125,30 @@ class LoginRateLimitFilterTest {
     void oltreIlLimite_bloccaCon429() throws Exception {
         String ip = "9.9.9.9";
 
-        // 5 tentativi consentiti
-        for (int i = 0; i < 5; i++) {
+        // Stesso motivo del test sopra: serve simulare risposte 401 perché il
+        // filtro conteggi davvero i 40 tentativi.
+        doAnswer(inv -> {
+            HttpServletResponse resp = inv.getArgument(1);
+            resp.setStatus(401);
+            return null;
+        }).when(filterChain).doFilter(any(), any());
+
+        // 40 tentativi consentiti (soglia reale del progetto)
+        for (int i = 0; i < 40; i++) {
             MockHttpServletRequest request = new MockHttpServletRequest("POST", "/api/auth/login");
             request.setRemoteAddr(ip);
             filter.doFilter(request, new MockHttpServletResponse(), filterChain);
         }
 
-        // Il sesto deve essere bloccato
-        MockHttpServletRequest sesto = new MockHttpServletRequest("POST", "/api/auth/login");
-        sesto.setRemoteAddr(ip);
-        MockHttpServletResponse rispostaSesto = new MockHttpServletResponse();
+        // Il 41° deve essere bloccato
+        MockHttpServletRequest attempt41 = new MockHttpServletRequest("POST", "/api/auth/login");
+        attempt41.setRemoteAddr(ip);
+        MockHttpServletResponse risposta41 = new MockHttpServletResponse();
 
-        filter.doFilter(sesto, rispostaSesto, filterChain);
+        filter.doFilter(attempt41, risposta41, filterChain);
 
-        assertThat(rispostaSesto.getStatus()).isEqualTo(429);
-        verify(filterChain, times(5)).doFilter(any(), any()); // il sesto NON arriva al filterChain
+        assertThat(risposta41.getStatus()).isEqualTo(429);
+        verify(filterChain, times(40)).doFilter(any(), any()); // il 41° NON arriva al filterChain
     }
 
     @Test

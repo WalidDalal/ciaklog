@@ -3,6 +3,7 @@ package com.project.ciaklog.exception;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.validation.FieldError;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
@@ -79,6 +80,18 @@ public class GlobalExceptionHandler {
     public ResponseEntity<Map<String, Object>> handleTypeMismatch(MethodArgumentTypeMismatchException ex) {
         String message = String.format("Valore non valido per '%s': %s", ex.getName(), ex.getValue());
         return buildResponse(HttpStatus.BAD_REQUEST, message);
+    }
+
+    // 400 — body JSON malformato o valore enum non valido (es. status:
+    // "DA_VEDERE" invece di "TO_WATCH" su POST /api/library). Fix (🟡 trovato
+    // durante i test funzionali): mancava questo handler, quindi
+    // HttpMessageNotReadableException cadeva nel catch-all generico qui sotto
+    // e tornava un 500 — un input malformato dal client non deve mai
+    // risultare in un errore "interno del server".
+    @ExceptionHandler(HttpMessageNotReadableException.class)
+    public ResponseEntity<Map<String, Object>> handleMalformedJson(HttpMessageNotReadableException ex) {
+        log.warn("Richiesta con body non leggibile: {}", ex.getMessage());
+        return buildResponse(HttpStatus.BAD_REQUEST, "Richiesta non valida: controlla i dati inviati.");
     }
 
     // 500 — tutto il resto (deve stare per ultimo)

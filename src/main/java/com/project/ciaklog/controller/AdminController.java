@@ -53,7 +53,18 @@ public class AdminController {
             @RequestParam(defaultValue = "asc") String sortDir) {
         String field = SORTABLE_FIELDS.getOrDefault(sortBy, "username");
         Sort.Direction direction = "desc".equalsIgnoreCase(sortDir) ? Sort.Direction.DESC : Sort.Direction.ASC;
-        PageRequest pageable = PageRequest.of(page, size, Sort.by(direction, field));
+        // Fix: gli admin devono comparire sempre per primi in assoluto, su TUTTE
+        // le pagine — prima l'ordinamento era un singolo criterio (Sort.by(direction,
+        // field)) e il "pinning" degli admin in cima veniva rifatto solo lato
+        // frontend, DOPO la paginazione: se i 2 admin finivano su pagine diverse in
+        // base al criterio scelto, ognuno veniva fissato in cima alla propria pagina
+        // separatamente, mai insieme. Ora il ruolo è il criterio di ordinamento
+        // primario (ASC: "ADMIN" < "USER" alfabeticamente), applicato PRIMA della
+        // paginazione — gli admin finiscono sempre nelle prime righe in assoluto.
+        // Il campo scelto dall'utente resta come criterio secondario, per ordinare
+        // tra loro gli utenti dello stesso "livello" (admin tra loro, user tra loro).
+        Sort sort = Sort.by(Sort.Order.asc("role"), new Sort.Order(direction, field));
+        PageRequest pageable = PageRequest.of(page, size, sort);
         return ResponseEntity.ok(adminService.listUsers(pageable, search));
     }
 

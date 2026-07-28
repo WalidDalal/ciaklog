@@ -32,6 +32,12 @@ public class User {
     @Column(length = 200)
     private String bio;
 
+    // Colore avatar scelto manualmente dall'utente in Impostazioni (uno dei
+    // valori della palette AVATAR_COLORS lato frontend). Null = nessuna scelta
+    // esplicita, si usa il colore automatico derivato dallo username.
+    @Column(name = "profile_color", length = 30)
+    private String profileColor;
+
     @Column(nullable = false)
     @Enumerated(EnumType.STRING)
     private Role role;

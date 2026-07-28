@@ -10,6 +10,7 @@ import java.util.List;
 public class UserProfileResponse {
     private String username;
     private String bio;
+    private String profileColor; // null = usa il colore automatico (hash username) lato frontend
     private List<String> topGenres;
 
     // Dati già disponibili,

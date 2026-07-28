@@ -41,6 +41,7 @@ function ProfilePage() {
   const [editing, setEditing] = useState(false)
   const [editUsername, setEditUsername] = useState('')
   const [editBio, setEditBio] = useState('')
+  const [editColor, setEditColor] = useState('')
   const [saving, setSaving] = useState(false)
 
   useEffect(() => {
@@ -54,6 +55,7 @@ function ProfilePage() {
           setProfile(profileRes.data)
           setEditUsername(profileRes.data.username || username)
           setEditBio(profileRes.data.bio || '')
+          setEditColor(profileRes.data.profileColor || '')
           const data = reviewsRes.data
           setReviews(data.content || data || [])
           // Stesso problema di AdminPage — con PageSerializationMode.VIA_DTO
@@ -84,9 +86,10 @@ function ProfilePage() {
       const res = await api.put('/users/me', {
         username: editUsername !== username ? editUsername : undefined,
         bio: editBio,
+        profileColor: editColor,
       })
       if (res.data?.token) updateToken(res.data.token)
-      setProfile(p => ({ ...p, bio: editBio, username: editUsername }))
+      setProfile(p => ({ ...p, bio: editBio, username: editUsername, profileColor: editColor || null }))
       setEditing(false)
       toast.show('Profilo aggiornato!', 'success')
       // Se l'username è cambiato naviga al nuovo URL
@@ -137,7 +140,7 @@ function ProfilePage() {
             {/* Avatar */}
             <div style={{
               width: '88px', height: '88px', borderRadius: '50%', flexShrink: 0,
-              backgroundColor: colorForUsername(profile.username || username),
+              backgroundColor: profile.profileColor || colorForUsername(profile.username || username),
               display: 'flex', alignItems: 'center', justifyContent: 'center',
               fontSize: '36px', fontWeight: '800', color: 'white',
             }}>
@@ -171,6 +174,37 @@ function ProfilePage() {
                         {editBio.length}/200
                       </div>
                     </div>
+                    <div>
+                      <label style={{ color: 'var(--text-muted)', fontSize: '12px', display: 'block', marginBottom: '6px' }}>Colore profilo</label>
+                      <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', alignItems: 'center' }}>
+                        {AVATAR_COLORS.map(c => (
+                            <button
+                                key={c}
+                                type="button"
+                                onClick={() => setEditColor(c)}
+                                title={c}
+                                style={{
+                                  width: '26px', height: '26px', borderRadius: '50%', backgroundColor: c,
+                                  border: editColor === c ? '2px solid var(--text)' : '2px solid transparent',
+                                  outline: editColor === c ? '2px solid var(--bg)' : 'none', outlineOffset: '1px',
+                                  cursor: 'pointer', padding: 0,
+                                }}
+                            />
+                        ))}
+                        <button
+                            type="button"
+                            onClick={() => setEditColor('')}
+                            title="Colore automatico (in base allo username)"
+                            style={{
+                              padding: '4px 10px', borderRadius: '14px', fontSize: '11px',
+                              border: `1px solid ${editColor === '' ? 'var(--text)' : 'var(--border-soft)'}`,
+                              backgroundColor: 'transparent', color: 'var(--text-muted)', cursor: 'pointer',
+                            }}
+                        >
+                          Automatico
+                        </button>
+                      </div>
+                    </div>
                     <div style={{ display: 'flex', gap: '8px' }}>
                       <button
                           onClick={handleSaveProfile}
@@ -184,7 +218,7 @@ function ProfilePage() {
                         {saving ? 'Salvataggio...' : 'Salva'}
                       </button>
                       <button
-                          onClick={() => { setEditing(false); setEditUsername(profile.username || username); setEditBio(profile.bio || '') }}
+                          onClick={() => { setEditing(false); setEditUsername(profile.username || username); setEditBio(profile.bio || ''); setEditColor(profile.profileColor || '') }}
                           style={{
                             padding: '8px 16px', backgroundColor: 'transparent',
                             border: '1px solid var(--border)', borderRadius: '8px',
@@ -249,13 +283,16 @@ function ProfilePage() {
                         </p>
                     )}
 
-                    {/* Fix (Profilo — contatore recensioni duplicato): c'era questo badge
-                        "N recensioni" qui in cima E un altro contatore nell'intestazione
-                        della sezione "🎬 Recensioni" più sotto, ridondanti tra loro e per
-                        di più con due valori diversi (questo usava profile.totalReviews,
-                        quello sotto usava reviews.length — solo le recensioni caricate in
-                        pagina). Tolto questo, la logica corretta (profile.totalReviews) è
-                        stata spostata nell'intestazione sotto, unica fonte di verità. */}
+                    {/* Fix (Profilo — contatore recensioni duplicato): qui c'era un
+                        blocco "Stats" con "N recensioni" basato sul totale reale
+                        (profile.totalReviews), ma sotto, nell'header della sezione
+                        Recensioni, c'è un secondo contatore (reviews.length) che invece
+                        cresce 10 alla volta man mano che si clicca "Carica altre
+                        recensioni" — due numeri diversi per lo stesso concetto,
+                        confusionario (es. "22 recensioni" qui sopra ma "10" appena sotto
+                        finché non carichi tutto). Rimosso questo, il secondo resta: è
+                        quello corretto per riflettere cosa è effettivamente visibile in
+                        pagina in quel momento. */}
                   </>
               )}
             </div>
@@ -312,13 +349,19 @@ function ProfilePage() {
 
           {/* ── Recensioni ── */}
           <div>
+            {/* Fix (Profilo — "tornato il problema", la causa vera): l'header
+                mostrava reviews.length, cioè quante recensioni sono caricate
+                finora in pagina (10, poi 20 dopo un click su "Carica altre") —
+                un numero che CAMBIA mentre carichi, invece del totale reale.
+                Il fix precedente aveva tolto il contatore statico in alto
+                pensando risolvesse la confusione tra due numeri diversi, ma il
+                problema vero era proprio questo: il numero qui doveva essere
+                il totale reale fin da subito, non "quanti ne ho scaricati
+                finora". Stessa causa, stesso fix già fatto in Dettaglio
+                Film/Serie per "Recensioni della community (N)". */}
             <h2 style={{ color: 'var(--text)', fontSize: '18px', fontWeight: '700', marginBottom: '20px' }}>
               🎬 Recensioni
               <span style={{ color: 'var(--text-dark)', fontSize: '14px', fontWeight: '400', marginLeft: '8px' }}>
-              {/* Fix: mostra il totale vero (profile.totalReviews, dal backend, REMOVED
-                  escluse), non reviews.length — quello contava solo le recensioni caricate
-                  finora in pagina (10, poi 20, poi 22 solo dopo aver cliccato "carica altre"
-                  abbastanza volte), dando l'impressione di un numero che cambia/sbagliato */}
               {profile.totalReviews ?? reviews.length}
             </span>
             </h2>

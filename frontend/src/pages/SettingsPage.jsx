@@ -16,6 +16,20 @@ const CARD_STYLE = {
   borderRadius: '12px', padding: '28px', marginBottom: '20px',
 }
 
+// Fix (Impostazioni — colore profilo): stessa palette/logica di ProfilePage.jsx
+// (colorForUsername), qui duplicata perché non condivisa in un modulo comune.
+// Il colore va modificato da qui O da "Modifica profilo" in ProfilePage — stesso
+// campo profileColor sul backend, cambia solo da dove lo apri.
+const AVATAR_COLORS = ['var(--accent)', '#3b82f6', '#22c55e', '#f59e0b', '#8b5cf6', '#ec4899', '#14b8a6', '#eab308']
+function colorForUsername(name) {
+  if (!name) return AVATAR_COLORS[0]
+  let hash = 0
+  for (let i = 0; i < name.length; i++) {
+    hash = (hash * 31 + name.charCodeAt(i)) >>> 0
+  }
+  return AVATAR_COLORS[hash % AVATAR_COLORS.length]
+}
+
 function SettingsPage() {
   const { user, token, logout, updateToken } = useAuthStore()
   const navigate = useNavigate()
@@ -23,11 +37,16 @@ function SettingsPage() {
 
   const [username, setUsername] = useState(user?.username || '')
   const [bio, setBio] = useState('')
+  // Fix (Impostazioni — colore profilo): mancava del tutto qui, si poteva
+  // cambiare solo dalla pagina Profilo pubblico ("Modifica profilo"). Stesso
+  // campo (profileColor), stesso salvataggio via PUT /users/me.
+  const [profileColor, setProfileColor] = useState('')
 
   // Tengo i valori originali per poterli
   // ripristinare se l'utente annulla senza salvare, invece di avere sempre
   // tutto editabile
   const [originalBio, setOriginalBio] = useState('')
+  const [originalProfileColor, setOriginalProfileColor] = useState('')
   const [editingProfile, setEditingProfile] = useState(false)
 
   // Card riepilogo account, dati già
@@ -39,8 +58,11 @@ function SettingsPage() {
     if (user?.username) {
       api.get(`/users/${user.username}`).then(r => {
         const b = r.data?.bio || ''
+        const c = r.data?.profileColor || ''
         setBio(b)
         setOriginalBio(b)
+        setProfileColor(c)
+        setOriginalProfileColor(c)
         setAccountSummary({
           memberSince: r.data?.memberSince,
           score: r.data?.score,
@@ -73,7 +95,11 @@ function SettingsPage() {
     e.preventDefault()
     setLoadingProfile(true)
     try {
-      const payload = { bio }
+      // profileColor: '' significa esplicitamente "torna al colore
+      // automatico" per il backend (vedi UpdateCredentialsRequest), quindi va
+      // mandato così com'è — trasformarlo in null significherebbe "non
+      // modificare", cioè ignorare la scelta "Automatico" dell'utente.
+      const payload = { bio, profileColor }
       if (username !== user?.username) payload.username = username
       const res = await api.put('/users/me', payload)
       if (res.data?.token) {
@@ -85,6 +111,7 @@ function SettingsPage() {
       // anche per un semplice edit della bio.
       toast.show('Profilo aggiornato!', 'success')
       setOriginalBio(bio)
+      setOriginalProfileColor(profileColor)
       setEditingProfile(false)
     } catch (err) {
       toast.show(err.response?.data?.error || 'Errore durante il salvataggio')
@@ -98,13 +125,23 @@ function SettingsPage() {
   const handleCancelProfile = () => {
     setUsername(user?.username || '')
     setBio(originalBio)
+    setProfileColor(originalProfileColor)
     setEditingProfile(false)
   }
 
   const handlePasswordSubmit = async (e) => {
     e.preventDefault()
     if (newPassword !== confirmPassword) { toast.show('Le password non coincidono'); return }
-    if (newPassword.length < 8) { toast.show('La password deve essere di almeno 8 caratteri'); return }
+    // Fix (disallineamento con la registrazione): qui si controllava solo la
+    // lunghezza (8+ caratteri) — RegisterPage controlla anche maiuscola,
+    // minuscola e numero (stesso pattern richiesto dal backend, vedi
+    // UpdateCredentialsRequest.newPassword). Una password come "aaaaaaaa"
+    // passava questo controllo lato client per poi essere rifiutata dal
+    // backend con un errore generico, invece di essere segnalata subito qui.
+    if (!/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d).{8,}$/.test(newPassword)) {
+      toast.show('La password deve contenere almeno 8 caratteri, una maiuscola, una minuscola e un numero')
+      return
+    }
     setLoadingPassword(true)
     try {
       await api.put('/users/me', { currentPassword, newPassword })
@@ -151,7 +188,7 @@ function SettingsPage() {
         <div style={{ ...CARD_STYLE, display: 'flex', alignItems: 'center', gap: '20px' }}>
           <div style={{
             width: '72px', height: '72px', borderRadius: '50%', flexShrink: 0,
-            backgroundColor: 'var(--accent)',
+            backgroundColor: profileColor || colorForUsername(username || user?.username),
             display: 'flex', alignItems: 'center', justifyContent: 'center',
             fontSize: '30px', fontWeight: '800', color: 'white',
           }}>
@@ -246,6 +283,39 @@ function SettingsPage() {
                   style={{ ...INPUT_STYLE, resize: 'vertical' }}
                 />
               </div>
+              <div style={{ marginBottom: '20px' }}>
+                <label style={{ display: 'block', color: 'var(--text-muted)', fontSize: '13px', marginBottom: '6px' }}>
+                  Colore profilo
+                </label>
+                <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', alignItems: 'center' }}>
+                  {AVATAR_COLORS.map(c => (
+                    <button
+                      key={c}
+                      type="button"
+                      onClick={() => setProfileColor(c)}
+                      title={c}
+                      style={{
+                        width: '26px', height: '26px', borderRadius: '50%', backgroundColor: c,
+                        border: profileColor === c ? '2px solid var(--text)' : '2px solid transparent',
+                        outline: profileColor === c ? '2px solid var(--bg)' : 'none', outlineOffset: '1px',
+                        cursor: 'pointer', padding: 0,
+                      }}
+                    />
+                  ))}
+                  <button
+                    type="button"
+                    onClick={() => setProfileColor('')}
+                    title="Colore automatico (in base allo username)"
+                    style={{
+                      padding: '4px 10px', borderRadius: '14px', fontSize: '11px',
+                      border: `1px solid ${profileColor === '' ? 'var(--text)' : 'var(--border-soft)'}`,
+                      backgroundColor: 'transparent', color: 'var(--text-muted)', cursor: 'pointer',
+                    }}
+                  >
+                    Automatico
+                  </button>
+                </div>
+              </div>
               <div style={{ display: 'flex', gap: '10px' }}>
                 <button
                   type="submit"
@@ -329,6 +399,23 @@ function SettingsPage() {
                   {showNew ? '🙈' : '👁️'}
                 </button>
               </div>
+              {/* Fix (disallineamento con RegisterPage): stesso indicatore live
+                  già usato in registrazione — qui prima non c'era nulla, solo
+                  un controllo silenzioso sulla lunghezza al submit. */}
+              {newPassword.length > 0 && (
+                <div style={{ display: 'flex', gap: '10px', marginTop: '8px', flexWrap: 'wrap' }}>
+                  {[
+                    { ok: newPassword.length >= 8, label: '8+ caratteri' },
+                    { ok: /[a-z]/.test(newPassword), label: 'minuscola' },
+                    { ok: /[A-Z]/.test(newPassword), label: 'maiuscola' },
+                    { ok: /\d/.test(newPassword), label: 'numero' },
+                  ].map(req => (
+                    <span key={req.label} style={{ fontSize: '11px', color: req.ok ? '#22c55e' : 'var(--text-dark)' }}>
+                      {req.ok ? '✓' : '·'} {req.label}
+                    </span>
+                  ))}
+                </div>
+              )}
             </div>
             <div style={{ marginBottom: '24px' }}>
               <label style={{ display: 'block', color: 'var(--text-muted)', fontSize: '13px', marginBottom: '6px' }}>Conferma nuova password</label>

@@ -63,7 +63,7 @@ function LoginPage() {
           </div>
 
           {error && (
-            <div style={{ backgroundColor: '#2d1a1a', border: '1px solid #e50914', borderRadius: '8px', padding: '12px', color: '#ff6b6b', fontSize: '14px', marginBottom: '20px', textAlign: 'center' }}>
+            <div style={{ backgroundColor: 'var(--danger-bg)', border: '1px solid var(--danger-border)', borderRadius: '8px', padding: '12px', color: 'var(--danger-text)', fontSize: '14px', marginBottom: '20px', textAlign: 'center' }}>
               {error}
             </div>
           )}

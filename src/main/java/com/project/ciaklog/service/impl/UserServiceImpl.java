@@ -39,6 +39,13 @@ public class UserServiceImpl implements UserService {
     private final PasswordEncoder passwordEncoder;
     private final JwtService jwtService;
 
+    // Stessa palette di AVATAR_COLORS in ProfilePage.jsx — l'utente sceglie
+    // da un set fisso, non un colore arbitrario, per coerenza col design e
+    // per evitare che chiunque possa mandare un valore CSS non valido/malevolo.
+    private static final List<String> ALLOWED_PROFILE_COLORS = List.of(
+            "var(--accent)", "#3b82f6", "#22c55e", "#f59e0b", "#8b5cf6", "#ec4899", "#14b8a6", "#eab308"
+    );
+
     @Override
     public UserProfileResponse getPublicProfile(String username) {
         User user = userRepository.findByUsername(username)
@@ -81,6 +88,7 @@ public class UserServiceImpl implements UserService {
         return UserProfileResponse.builder()
                 .username(user.getUsername())
                 .bio(user.getBio())
+                .profileColor(user.getProfileColor())
                 .topGenres(topGenres.isEmpty() ? Collections.emptyList() : topGenres)
                 .watching(watchingItems)
                 .memberSince(memberSince)
@@ -96,7 +104,8 @@ public class UserServiceImpl implements UserService {
     @Override
     @Transactional
     public AuthResponse updateCredentials(String username, UpdateCredentialsRequest dto) {
-        if (dto.getUsername() == null && dto.getNewPassword() == null && dto.getBio() == null) {
+        if (dto.getUsername() == null && dto.getNewPassword() == null && dto.getBio() == null
+                && dto.getProfileColor() == null) {
             throw new BusinessRuleException("Almeno un campo da aggiornare è obbligatorio");
         }
 
@@ -116,6 +125,16 @@ public class UserServiceImpl implements UserService {
 
         if (dto.getBio() != null) {
             user.setBio(dto.getBio().isBlank() ? null : dto.getBio().trim());
+        }
+
+        if (dto.getProfileColor() != null) {
+            if (dto.getProfileColor().isBlank()) {
+                user.setProfileColor(null); // "" = torna al colore automatico
+            } else if (!ALLOWED_PROFILE_COLORS.contains(dto.getProfileColor())) {
+                throw new BusinessRuleException("Colore profilo non valido");
+            } else {
+                user.setProfileColor(dto.getProfileColor());
+            }
         }
 
         if (dto.getNewPassword() != null && !dto.getNewPassword().isBlank()) {

@@ -4,6 +4,7 @@ import com.project.ciaklog.dto.request.ReportActionRequest;
 import com.project.ciaklog.dto.request.ReportRequest;
 import com.project.ciaklog.dto.response.ReportResponse;
 import com.project.ciaklog.entity.ReportStatus;
+import com.project.ciaklog.entity.ReportTargetType;
 import com.project.ciaklog.service.ReportService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -41,10 +42,14 @@ public class ReportController {
     @PreAuthorize("hasRole('ADMIN')")
     public ResponseEntity<Page<ReportResponse>> getReports(
             @RequestParam(required = false) ReportStatus status,
+            // Fix (dashboard admin — filtro per tipo bersaglio): il filtro
+            // recensioni/risposte ora è un parametro di query, applicato
+            // lato backend prima della paginazione (vedi ReportServiceImpl)
+            @RequestParam(required = false) ReportTargetType targetType,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "20") int size) {
         PageRequest pageable = PageRequest.of(page, size, Sort.by("createdAt").descending());
-        return ResponseEntity.ok(reportService.getReports(status, pageable));
+        return ResponseEntity.ok(reportService.getReports(status, targetType, pageable));
     }
 
     // Solo Admin — risolve una segnalazione (APPROVED/REJECTED)
