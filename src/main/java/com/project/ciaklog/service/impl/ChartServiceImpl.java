@@ -62,6 +62,7 @@ public class ChartServiceImpl implements ChartService {
             com.project.ciaklog.entity.User u = users.get(i);
             result.add(ChartUserResponse.builder()
                     .username(u.getUsername())
+                    .profileColor(u.getProfileColor())
                     .score(u.getScore())
                     .reviewCount(null)
                     .rank(rank)

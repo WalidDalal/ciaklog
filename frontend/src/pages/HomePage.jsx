@@ -17,8 +17,29 @@ function StarRating({ rating }) {
 
 const AVATAR_COLORS = ['var(--accent)', '#3b82f6', '#22c55e', '#f59e0b', '#8b5cf6', '#ec4899']
 
-function UserAvatar({ username, size = 48, index = 0 }) {
-    const color = AVATAR_COLORS[index % AVATAR_COLORS.length]
+// Fix (🟡 avatar tutti dello stesso colore in classifica): stessa palette e
+// stessa logica hash già usate correttamente in ProfilePage.jsx/SettingsPage.jsx
+// (colorForUsername) — qui duplicata perché non condivisa in un modulo comune.
+function colorForUsername(username) {
+    if (!username) return AVATAR_COLORS[0]
+    let hash = 0
+    for (let i = 0; i < username.length; i++) {
+        hash = (hash * 31 + username.charCodeAt(i)) >>> 0
+    }
+    return AVATAR_COLORS[hash % AVATAR_COLORS.length]
+}
+
+// Fix (🟡 avatar tutti dello stesso colore in classifica): prima il colore
+// veniva scelto con AVATAR_COLORS[index % ...] dove "index" era la posizione
+// nel loop di chiamata (es. indice tra utenti a pari merito nello stesso
+// rank) — con pochi pareggi quell'indice era quasi sempre 0 per ogni utente,
+// risultando nello stesso colore (il primo della palette, rosso) per quasi
+// tutti. Ora usa il vero profileColor dell'utente se disponibile (passato
+// dal backend solo per la classifica, vedi ChartUserResponse), altrimenti
+// lo stesso colore hash-based già usato in Profilo/Impostazioni — mai più
+// legato alla posizione nel loop.
+function UserAvatar({ username, size = 48, profileColor = null }) {
+    const color = profileColor || colorForUsername(username)
     return (
         <div style={{
             width: size, height: size, borderRadius: '50%', backgroundColor: color,
@@ -146,7 +167,7 @@ function TrendingQuoteCard({ item, reviews }) {
                                 borderLeft: `3px solid ${i === 0 ? 'var(--accent)' : '#3b82f6'}`,
                             }}>
                                 <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '6px' }}>
-                                    <UserAvatar username={r.username} size={22} index={i} />
+                                    <UserAvatar username={r.username} size={22} />
                                     <span style={{ color: 'var(--text-muted)', fontSize: '12px', fontWeight: '600' }}>{r.username}</span>
                                     <span style={{ color: 'var(--gold)', fontSize: '11px', marginLeft: 'auto' }}>{'★'.repeat(r.rating)}</span>
                                 </div>
@@ -698,12 +719,12 @@ function HomePage() {
                                     {/* Più utenti a pari merito: un piccolo cluster di avatar affiancati,
                                         stesso rank badge condiviso, stessa colonna del podio sotto */}
                                     <div style={{ display: 'flex', justifyContent: 'center', gap: '4px', flexWrap: 'wrap', marginBottom: '8px' }}>
-                                        {users.map((u, ui) => {
+                                        {users.map((u) => {
                                             const isMe = logged && user?.username === u.username
                                             return (
                                                 <Link to={`/profile/${u.username}`} key={u.username} title={u.username}>
                                                     <div style={{ position: 'relative', display: 'inline-block' }}>
-                                                        <UserAvatar username={u.username} size={avatarSize} index={ui} />
+                                                        <UserAvatar username={u.username} size={avatarSize} profileColor={u.profileColor} />
                                                         {!isChampion && (
                                                             <div style={{
                                                                 position: 'absolute', bottom: -4, right: -4,
@@ -769,9 +790,9 @@ function HomePage() {
                                     <div key={rank} style={{ display: 'flex', alignItems: 'center', gap: '16px', padding: '12px 16px', backgroundColor: anyIsMe ? '#1a0f0f' : 'var(--bg-nav)', border: `1px solid ${anyIsMe ? 'var(--accent)' : 'var(--bg-hover)'}`, borderRadius: '10px' }}>
                                         <span style={{ color: 'var(--text-dark)', fontSize: '14px', fontWeight: '700', minWidth: '28px' }}>#{rank}</span>
                                         <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap', flex: 1 }}>
-                                            {users.map((u, ui) => (
+                                            {users.map((u) => (
                                                 <Link to={`/profile/${u.username}`} key={u.username} style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                                                    <UserAvatar username={u.username} size={30} index={ui} />
+                                                    <UserAvatar username={u.username} size={30} profileColor={u.profileColor} />
                                                     <span style={{ color: 'var(--text)', fontWeight: '600' }}>{u.username}</span>
                                                     {logged && user?.username === u.username && <span style={{ color: 'var(--gold)', fontSize: '12px', fontWeight: '600' }}>Tu ⭐</span>}
                                                 </Link>

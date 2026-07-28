@@ -90,7 +90,10 @@ class LoginRateLimitFilterTest {
     @Test
     @DisplayName("Entro il limite, i tentativi di login passano normalmente")
     void tentativiEntroLimite_passanoNormalmente() throws Exception {
-        for (int i = 0; i < 5; i++) {
+        // Nota: soglia reale del progetto = 40 tentativi/ora (non 5/15min come nel
+        // commento TDD originale in cima al file, superato dall'implementazione
+        // effettiva in LoginRateLimitFilter — vedi il fix lì per il perché).
+        for (int i = 0; i < 40; i++) {
             MockHttpServletRequest request = new MockHttpServletRequest("POST", "/api/auth/login");
             request.setRemoteAddr("1.2.3.4");
             MockHttpServletResponse response = new MockHttpServletResponse();
@@ -99,7 +102,7 @@ class LoginRateLimitFilterTest {
 
             assertThat(response.getStatus()).isEqualTo(200); // default MockHttpServletResponse, nessun 429 impostato
         }
-        verify(filterChain, times(5)).doFilter(any(), any());
+        verify(filterChain, times(40)).doFilter(any(), any());
     }
 
     @Test
@@ -107,22 +110,22 @@ class LoginRateLimitFilterTest {
     void oltreIlLimite_bloccaCon429() throws Exception {
         String ip = "9.9.9.9";
 
-        // 5 tentativi consentiti
-        for (int i = 0; i < 5; i++) {
+        // 40 tentativi consentiti (soglia reale del progetto)
+        for (int i = 0; i < 40; i++) {
             MockHttpServletRequest request = new MockHttpServletRequest("POST", "/api/auth/login");
             request.setRemoteAddr(ip);
             filter.doFilter(request, new MockHttpServletResponse(), filterChain);
         }
 
-        // Il sesto deve essere bloccato
-        MockHttpServletRequest sesto = new MockHttpServletRequest("POST", "/api/auth/login");
-        sesto.setRemoteAddr(ip);
-        MockHttpServletResponse rispostaSesto = new MockHttpServletResponse();
+        // Il 41° deve essere bloccato
+        MockHttpServletRequest attempt41 = new MockHttpServletRequest("POST", "/api/auth/login");
+        attempt41.setRemoteAddr(ip);
+        MockHttpServletResponse risposta41 = new MockHttpServletResponse();
 
-        filter.doFilter(sesto, rispostaSesto, filterChain);
+        filter.doFilter(attempt41, risposta41, filterChain);
 
-        assertThat(rispostaSesto.getStatus()).isEqualTo(429);
-        verify(filterChain, times(5)).doFilter(any(), any()); // il sesto NON arriva al filterChain
+        assertThat(risposta41.getStatus()).isEqualTo(429);
+        verify(filterChain, times(40)).doFilter(any(), any()); // il 41° NON arriva al filterChain
     }
 
     @Test
