@@ -18,6 +18,8 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.LocalDate;
+
 import java.util.UUID;
 
 @Service
@@ -41,22 +43,48 @@ public class ReviewServiceImpl implements ReviewService {
 
         ContentType contentType = dto.getContentType();
 
-        if (reviewRepository.existsByUserAndTmdbIdAndContentType(user, dto.getTmdbId(), contentType)) {
+        // Fix (🔴 trovato nei test funzionali): deleteReview fa un soft delete
+        // (status → REMOVED, la riga resta nel DB), ma questo controllo usava
+        // existsByUserAndTmdbIdAndContentType (senza filtro sullo status) —
+        // quindi chi eliminava la propria recensione e provava a riscriverne
+        // una nuova sullo stesso titolo restava bloccato per sempre con
+        // "Hai già recensito questo contenuto", anche se per lui/lei risultava
+        // cancellata. Stessa variante AndStatusNot già usata altrove nel
+        // codice (es. WatchEntryServiceImpl) per lo stesso tipo di controllo.
+        if (reviewRepository.existsByUserAndTmdbIdAndContentTypeAndStatusNot(user, dto.getTmdbId(), contentType, ReviewStatus.REMOVED)) {
             throw new DuplicateResourceException("Hai già recensito questo contenuto");
         }
 
-        boolean isWatched = watchEntryRepository
+        // Fix (🔴 regola violata, trovato nei test funzionali: "non può mai
+        // esistere un'entry WATCHED senza recensione, né una recensione senza
+        // entry WATCHED"): prima si richiedeva che l'entry fosse GIÀ WATCHED
+        // per poter recensire — costringendo un passaggio a due tempi (segna
+        // Visto, POI recensisci, magari su una pagina diversa) che lasciava
+        // una finestra in cui l'entry restava WATCHED senza recensione per
+        // sempre, se l'utente cambiava pagina prima di scrivere la
+        // recensione. Ora è questo metodo stesso a far scattare il passaggio
+        // a WATCHED, DOPO aver validato tutto (testo/rating), nella stessa
+        // transazione: se la validazione fallisce non cambia nulla, se la
+        // recensione va a buon fine l'entry diventa WATCHED nello stesso
+        // istante — non esiste più uno stato intermedio salvato sul DB.
+        // Basta che il contenuto sia in libreria (in un qualunque stato),
+        // non più che sia già WATCHED. Il passaggio diretto a WATCHED tramite
+        // l'endpoint di update status separato e tramite l'aggiunta diretta
+        // alla libreria sono stati bloccati (vedi WatchEntryServiceImpl) —
+        // l'unico modo per arrivare a WATCHED è passare da qui.
+        WatchEntry entry = watchEntryRepository
                 .findByUserAndTmdbIdAndContentType(user, dto.getTmdbId(), contentType)
-                .map(e -> e.getStatus() == WatchStatus.WATCHED)
-                .orElse(false);
-
-        if (!isWatched) {
-            throw new BusinessRuleException("Puoi recensire solo contenuti che hai contrassegnato come 'Visto'");
-        }
+                .orElseThrow(() -> new BusinessRuleException("Aggiungi questo contenuto alla libreria prima di recensirlo"));
 
         // Testo obbligatorio solo per le recensioni di contenuti visti
         if (dto.getText() == null || dto.getText().isBlank()) {
             throw new BusinessRuleException("Il testo della recensione è obbligatorio per i contenuti visti");
+        }
+
+        if (entry.getStatus() != WatchStatus.WATCHED) {
+            entry.setStatus(WatchStatus.WATCHED);
+            entry.setWatchedDate(LocalDate.now());
+            watchEntryRepository.save(entry);
         }
 
         Review review = Review.builder()

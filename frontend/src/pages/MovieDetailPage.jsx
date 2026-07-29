@@ -846,7 +846,13 @@ function MovieDetailPage() {
       : (normalizedTmdb ?? normalizedCiak)
   const ciakLogVotes = detail.ciakLogVoteCount ?? detail.numeroVotiCiakLog
   const isMovie = (detail.contentType ?? mediaType) === 'MOVIE'
-  const canReview = token && !isAdmin && watchEntry?.status === 'WATCHED'
+  // Fix (🔴 regola violata, coerenza col backend): richiedeva già
+  // status === 'WATCHED', ma ora WATCHED si raggiunge SOLO scrivendo una
+  // recensione (vedi ReviewServiceImpl.createReview) — con questo gate
+  // sarebbe stato impossibile scrivere la prima recensione in assoluto,
+  // cane che si morde la coda. Ora basta che il titolo sia in libreria, in
+  // un qualunque stato — la recensione stessa lo farà diventare Visto.
+  const canReview = token && !isAdmin && !!watchEntry
 
   return (
     <div style={{ backgroundColor: 'var(--bg)', minHeight: '100vh' }}>
@@ -1035,7 +1041,12 @@ function MovieDetailPage() {
           {!isAdmin && (
             <>
               <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap', marginBottom: '8px' }}>
-                {['TO_WATCH', 'WATCHING', 'WATCHED'].map(s => (
+                {/* Fix (🔴 regola violata): tolto 'WATCHED' da qui — cliccarlo
+                    avrebbe chiamato addToLibrary/updateStatus con status
+                    WATCHED direttamente, percorso ora bloccato lato backend
+                    (WatchEntryServiceImpl). L'unico modo per arrivare a Visto
+                    è scrivere una recensione, vedi il form più sotto. */}
+                {['TO_WATCH', 'WATCHING'].map(s => (
                   <button key={s} onClick={() => handleAddToLibrary(s)} disabled={libraryLoading}
                     title={watchEntry?.status === s ? 'Clicca di nuovo per rimuovere dalla libreria' : ''}
                     style={{
@@ -1230,20 +1241,17 @@ function MovieDetailPage() {
               </>
 
             ) : (
-              /* Non ancora WATCHED — messaggio informativo */
+              /* Non ancora in libreria — con canReview aggiornato sopra, questo
+                 ramo scatta solo se watchEntry non esiste affatto: appena il
+                 titolo è in libreria (qualunque stato) canReview è già true e
+                 si passa al form di recensione. Tolto il vecchio bottone
+                 "Segna come Visto e recensisci", che chiamava un salto diretto
+                 a WATCHED ora bloccato lato backend (vedi WatchEntryServiceImpl). */
               <div style={{ textAlign: 'center', padding: '12px 0' }}>
                 <div style={{ fontSize: '32px', marginBottom: '10px' }}>🎬</div>
                 <p style={{ color: 'var(--text-muted)', fontSize: '14px', marginBottom: '12px' }}>
-                  Puoi lasciare una recensione solo dopo aver contrassegnato questo contenuto come <strong style={{ color: 'var(--text)' }}>Visto</strong>.
+                  Aggiungi questo contenuto alla libreria per poter lasciare una recensione — scrivendola lo segnerai automaticamente come <strong style={{ color: 'var(--text)' }}>Visto</strong>.
                 </p>
-                {!watchEntry && (
-                  <p style={{ color: 'var(--text-dark)', fontSize: '13px' }}>Aggiungilo alla libreria e impostalo come "✅ Visto".</p>
-                )}
-                {watchEntry && watchEntry.status !== 'WATCHED' && (
-                  <button onClick={() => handleAddToLibrary('WATCHED')} style={{ padding: '10px 24px', backgroundColor: 'var(--accent)', border: 'none', borderRadius: '8px', color: 'var(--text)', fontSize: '14px', fontWeight: '600', cursor: 'pointer' }}>
-                    Segna come Visto e recensisci
-                  </button>
-                )}
               </div>
             )}
           </div>
