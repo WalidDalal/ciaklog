@@ -237,7 +237,7 @@ public class AiServiceImpl implements AiService {
 
         } catch (Exception e) {
             log.error("Errore nella chiamata a Groq per utente {}: {}", username, e.getMessage());
-            throw new RuntimeException("Assistente temporaneamente non disponibile", e);
+            throw new com.project.ciaklog.exception.AiServiceUnavailableException("Assistente temporaneamente non disponibile", e);
         }
     }
 
@@ -288,7 +288,7 @@ public class AiServiceImpl implements AiService {
 
         } catch (Exception e) {
             log.error("Errore nella chat admin per {}: {}", username, e.getMessage());
-            throw new RuntimeException("Assistente temporaneamente non disponibile", e);
+            throw new com.project.ciaklog.exception.AiServiceUnavailableException("Assistente temporaneamente non disponibile", e);
         }
     }
 
@@ -460,7 +460,7 @@ public class AiServiceImpl implements AiService {
             return StructureReviewResponse.builder().text(cleaned).build();
         } catch (Exception e) {
             log.error("Errore nella strutturazione recensione per {}: {}", username, e.getMessage());
-            throw new RuntimeException("Assistente temporaneamente non disponibile", e);
+            throw new com.project.ciaklog.exception.AiServiceUnavailableException("Assistente temporaneamente non disponibile", e);
         }
     }
 
@@ -507,7 +507,7 @@ public class AiServiceImpl implements AiService {
             return StructureReviewResponse.builder().text(cleaned).build();
         } catch (Exception e) {
             log.error("Errore nella strutturazione risposta per {}: {}", username, e.getMessage());
-            throw new RuntimeException("Assistente temporaneamente non disponibile", e);
+            throw new com.project.ciaklog.exception.AiServiceUnavailableException("Assistente temporaneamente non disponibile", e);
         }
     }
 
@@ -571,7 +571,7 @@ public class AiServiceImpl implements AiService {
                     .build();
         } catch (Exception e) {
             log.error("Errore nella risposta AI su film {} per {}: {}", request.getTmdbId(), username, e.getMessage());
-            throw new RuntimeException("Assistente temporaneamente non disponibile", e);
+            throw new com.project.ciaklog.exception.AiServiceUnavailableException("Assistente temporaneamente non disponibile", e);
         }
     }
 
@@ -650,7 +650,7 @@ public class AiServiceImpl implements AiService {
 
         String opinion = generateNarrative(prompt);
         if (opinion.isBlank()) {
-            throw new RuntimeException("Assistente temporaneamente non disponibile");
+            throw new com.project.ciaklog.exception.AiServiceUnavailableException("Assistente temporaneamente non disponibile");
         }
         return ReviewOpinionResponse.builder().opinion(opinion).build();
     }
@@ -773,21 +773,21 @@ public class AiServiceImpl implements AiService {
                 log.warn("Groq risposto {} al tentativo {}/{}", response.statusCode(), attempt + 1, MAX_RETRIES + 1);
 
                 if (!isTransient || attempt == MAX_RETRIES) {
-                    throw new RuntimeException("Groq API non disponibile (status " + response.statusCode() + ")");
+                    throw new com.project.ciaklog.exception.AiServiceUnavailableException("Groq API non disponibile (status " + response.statusCode() + ")");
                 }
 
             } catch (java.io.IOException | InterruptedException e) {
                 // Errore di rete — retriable
                 log.warn("Errore di rete Groq al tentativo {}/{}: {}", attempt + 1, MAX_RETRIES + 1, e.getMessage());
                 lastException = e;
-                if (attempt == MAX_RETRIES) throw new RuntimeException("Assistente temporaneamente non disponibile", e);
+                if (attempt == MAX_RETRIES) throw new com.project.ciaklog.exception.AiServiceUnavailableException("Assistente temporaneamente non disponibile", e);
             }
 
             // Backoff esponenziale: 1.5s, 3s
             Thread.sleep(RETRY_BACKOFF_MS * (long) Math.pow(2, attempt));
         }
 
-        throw new RuntimeException("Assistente temporaneamente non disponibile", lastException);
+        throw new com.project.ciaklog.exception.AiServiceUnavailableException("Assistente temporaneamente non disponibile", lastException);
     }
 
     private List<String> parseTitlesFromResponse(String rawResponse) {

@@ -29,6 +29,16 @@ function ReplyThread({ reviewId, reviewText, reviewOwnerUsername, token, current
   const [commentsPage, setCommentsPage] = useState(0)
   const [commentsTotalPages, setCommentsTotalPages] = useState(1)
   const [commentsTotalElements, setCommentsTotalElements] = useState(0)
+  // Fix (🔴 "Risposte (N)" sparisce dopo un refresh — trovato nei test
+  // funzionali): il conteggio veniva popolato solo dentro loadComments(),
+  // chiamata SOLO quando l'utente espande manualmente il thread (o con
+  // autoExpand) — dopo un refresh "loaded" torna false e il numero sparisce
+  // finché non riespandi. Ora un fetch leggero e separato (size:1, prende
+  // solo il totale dai metadati di paginazione, non la lista intera) parte
+  // subito al mount, indipendentemente dall'espansione — il numero resta
+  // sempre visibile, senza dover caricare tutte le risposte in anticipo per
+  // ogni singola recensione della pagina.
+  const [countLoaded, setCountLoaded] = useState(false)
   const [loadingMoreComments, setLoadingMoreComments] = useState(false)
   const [showComposer, setShowComposer] = useState(false)
   const [text, setText] = useState('')
@@ -108,6 +118,17 @@ function ReplyThread({ reviewId, reviewText, reviewOwnerUsername, token, current
     setExpanded(v => !v)
     if (!loaded) loadComments()
   }
+
+  // Fix (🔴 "Risposte (N)" sparisce dopo un refresh): fetch leggero e
+  // indipendente dall'espansione, vedi commento su countLoaded sopra.
+  // size:1 basta — serve solo `page.totalElements` dai metadati di
+  // paginazione, non i dati dei commenti stessi.
+  useEffect(() => {
+    api.get(`/reviews/${reviewId}/comments`, { params: { page: 0, size: 1 } })
+      .then(r => setCommentsTotalElements(r.data.page?.totalElements ?? r.data.totalElements ?? 0))
+      .catch(() => {})
+      .finally(() => setCountLoaded(true))
+  }, [reviewId])
 
   // Se questo thread contiene la risposta
   // segnalata (arrivata da "Vedi nel contesto"), si apre e carica da sola
@@ -199,7 +220,7 @@ function ReplyThread({ reviewId, reviewText, reviewOwnerUsername, token, current
   return (
     <div style={{ marginTop: '14px', paddingTop: '12px', borderTop: '1px solid var(--border-soft)' }}>
       <button onClick={toggleExpanded} style={{ background: 'none', border: 'none', color: 'var(--text-dark)', fontSize: '12px', cursor: 'pointer', padding: 0 }}>
-        {expanded ? '▲ Nascondi risposte' : `💬 Risposte${loaded ? ` (${visibleCommentsCount})` : ''}`}
+        {expanded ? '▲ Nascondi risposte' : `💬 Risposte${countLoaded ? ` (${visibleCommentsCount})` : ''}`}
       </button>
 
       {expanded && (
@@ -782,6 +803,11 @@ function MovieDetailPage() {
       // handleSubmitReview, ma al contrario.
       setReviewsTotalElements(prev => Math.max(0, prev - 1))
       setMyReview(null)
+      // Fix (chiarito dopo: non "torna a Da vedere" ma "nessuno stato, esce
+      // del tutto dalla libreria" — coerente col backend che ora elimina
+      // l'entry invece di retrocederla). Con watchEntry null, il form mostra
+      // "Aggiungi alla libreria" invece dei pulsanti Da vedere/In visione.
+      setWatchEntry(null)
       setRating(0); setText(''); setEditMode(false)
       setReviewSuccess('Recensione eliminata.')
     } catch (err) {
@@ -1040,26 +1066,45 @@ function MovieDetailPage() {
           {/* Bottoni libreria — nascosti per ADMIN */}
           {!isAdmin && (
             <>
-              <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap', marginBottom: '8px' }}>
-                {/* Fix (🔴 regola violata): tolto 'WATCHED' da qui — cliccarlo
-                    avrebbe chiamato addToLibrary/updateStatus con status
-                    WATCHED direttamente, percorso ora bloccato lato backend
-                    (WatchEntryServiceImpl). L'unico modo per arrivare a Visto
-                    è scrivere una recensione, vedi il form più sotto. */}
-                {['TO_WATCH', 'WATCHING'].map(s => (
-                  <button key={s} onClick={() => handleAddToLibrary(s)} disabled={libraryLoading}
-                    title={watchEntry?.status === s ? 'Clicca di nuovo per rimuovere dalla libreria' : ''}
-                    style={{
-                      padding: '10px 18px', borderRadius: '8px', fontSize: '13px', fontWeight: '600',
-                      border: `1px solid ${watchEntry?.status === s ? 'var(--accent)' : 'var(--border-soft)'}`,
-                      backgroundColor: watchEntry?.status === s ? 'var(--accent)' : 'var(--bg-hover)',
-                      color: 'var(--text)', cursor: 'pointer',
-                      opacity: libraryLoading ? 0.6 : 1,
-                  }}>{watchEntry?.status === s ? `${STATUS_LABELS[s]} ✕` : STATUS_LABELS[s]}</button>
-                ))}
-              </div>
+              {/* Fix (🟡 "quella scrittina piccola non fa capire" — trovato nei
+                  test funzionali): "Salvato come: Visto" in testo piccolo grigio
+                  sotto i bottoni passava facilmente inosservato, specialmente
+                  ora che WATCHED non è più tra i pulsanti cliccabili (nessun
+                  pulsante "attivo" evidenziato lo segnalava più). Quando lo
+                  stato è WATCHED, mostro un badge grande e verde al posto della
+                  riga di pulsanti — non cliccabile (coerente col fatto che ora
+                  ci si arriva solo scrivendo una recensione, e si esce da
+                  WATCHED solo eliminandola). */}
+              {watchEntry?.status === 'WATCHED' ? (
+                <div style={{
+                  display: 'inline-flex', alignItems: 'center', gap: '8px',
+                  padding: '10px 18px', borderRadius: '8px', fontSize: '14px', fontWeight: '700',
+                  backgroundColor: 'rgba(34,197,94,0.15)', border: '1px solid #22c55e', color: '#4ade80',
+                  marginBottom: '8px',
+                }}>
+                  ✅ Visto
+                </div>
+              ) : (
+                <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap', marginBottom: '8px' }}>
+                  {/* Fix (🔴 regola violata): tolto 'WATCHED' da qui — cliccarlo
+                      avrebbe chiamato addToLibrary/updateStatus con status
+                      WATCHED direttamente, percorso ora bloccato lato backend
+                      (WatchEntryServiceImpl). L'unico modo per arrivare a Visto
+                      è scrivere una recensione, vedi il form più sotto. */}
+                  {['TO_WATCH', 'WATCHING'].map(s => (
+                    <button key={s} onClick={() => handleAddToLibrary(s)} disabled={libraryLoading}
+                      title={watchEntry?.status === s ? 'Clicca di nuovo per rimuovere dalla libreria' : ''}
+                      style={{
+                        padding: '10px 18px', borderRadius: '8px', fontSize: '13px', fontWeight: '600',
+                        border: `1px solid ${watchEntry?.status === s ? 'var(--accent)' : 'var(--border-soft)'}`,
+                        backgroundColor: watchEntry?.status === s ? 'var(--accent)' : 'var(--bg-hover)',
+                        color: 'var(--text)', cursor: 'pointer',
+                        opacity: libraryLoading ? 0.6 : 1,
+                    }}>{watchEntry?.status === s ? `${STATUS_LABELS[s]} ✕` : STATUS_LABELS[s]}</button>
+                  ))}
+                </div>
+              )}
               {libraryError && <p style={{ color: '#ff6b6b', fontSize: '13px', marginTop: '6px' }}>{libraryError}</p>}
-              {watchEntry && <p style={{ color: 'var(--text-muted)', fontSize: '13px', marginTop: '6px' }}>Salvato come: <strong style={{ color: 'var(--text)' }}>{STATUS_LABELS[watchEntry.status]}</strong></p>}
             </>
           )}
 

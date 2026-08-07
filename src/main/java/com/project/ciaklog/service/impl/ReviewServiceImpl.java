@@ -134,6 +134,17 @@ public class ReviewServiceImpl implements ReviewService {
         review.setStatus(ReviewStatus.REMOVED);
         reviewRepository.save(review);
 
+        // Fix (chiarito dopo: non "torna a TO_WATCH" ma "nessuno stato,
+        // esce del tutto dalla libreria" — né Da vedere né In visione):
+        // eliminando la recensione, l'entry WATCHED viene rimossa
+        // completamente invece di essere retrocessa a un altro stato.
+        WatchEntry entry = watchEntryRepository
+                .findByUserAndTmdbIdAndContentType(user, review.getTmdbId(), review.getContentType())
+                .orElse(null);
+        if (entry != null && entry.getStatus() == WatchStatus.WATCHED) {
+            watchEntryRepository.delete(entry);
+        }
+
         user.setScore(Math.max(0, user.getScore() - POINTS_CREATE_REVIEW));
         userRepository.save(user);
     }

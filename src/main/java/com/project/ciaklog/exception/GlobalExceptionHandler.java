@@ -37,6 +37,16 @@ public class GlobalExceptionHandler {
         return buildResponse(HttpStatus.BAD_REQUEST, ex.getMessage());
     }
 
+    // 503 — l'AI/LLM esterna (Groq) non risponde o è temporaneamente giù.
+    // Fix (🟡 trovato nei test funzionali): prima finiva nel catch-all
+    // generico e tornava 500, indistinguibile da un vero bug interno — un
+    // problema esterno e temporaneo deve dirlo chiaramente al frontend.
+    @ExceptionHandler(AiServiceUnavailableException.class)
+    public ResponseEntity<Map<String, Object>> handleAiUnavailable(AiServiceUnavailableException ex) {
+        log.warn("Servizio AI non disponibile: {}", ex.getMessage());
+        return buildResponse(HttpStatus.SERVICE_UNAVAILABLE, "Il servizio AI non è disponibile al momento, riprova tra poco.");
+    }
+
     // 401 — non autenticato / credenziali errate
     @ExceptionHandler(UnauthorizedException.class)
     public ResponseEntity<Map<String, Object>> handleUnauthorized(UnauthorizedException ex) {
