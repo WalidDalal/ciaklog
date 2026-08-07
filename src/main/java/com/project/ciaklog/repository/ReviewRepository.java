@@ -96,8 +96,18 @@ public interface ReviewRepository extends JpaRepository<Review, UUID> {
     // falliva con 500. Query dedicata con fetch esplicito, usata solo da
     // getMyReviewForMedia per non toccare gli altri usi del metodo sopra
     // (createReview, ecc. — dove il proxy lazy non serve).
+    // Fix (🔴 trovato nei test funzionali — grave): questa query non filtrava
+    // per status, quindi trovava ANCHE le recensioni REMOVED (eliminate con
+    // soft-delete da deleteReview — la riga resta nel DB, solo lo status
+    // cambia). Risultato: dopo aver eliminato la propria recensione,
+    // l'eliminazione sembrava funzionare solo "in locale" (stato React
+    // aggiornato subito) — ma al refresh la pagina richiamava questo
+    // endpoint, che ripescava la stessa riga REMOVED e la rimostrava come se
+    // il delete non fosse mai avvenuto. Escluse le REMOVED; le HIDDEN
+    // (nascoste da moderazione) restano visibili al proprietario, che deve
+    // sapere che la sua recensione è stata nascosta.
     @Query(
-            "SELECT r FROM Review r JOIN FETCH r.user WHERE r.user = :user AND r.tmdbId = :tmdbId AND r.contentType = :contentType")
+            "SELECT r FROM Review r JOIN FETCH r.user WHERE r.user = :user AND r.tmdbId = :tmdbId AND r.contentType = :contentType AND r.status <> com.project.ciaklog.entity.ReviewStatus.REMOVED")
     Optional<Review> findByUserAndTmdbIdAndContentTypeFetchUser(
             @Param("user") User user, @Param("tmdbId") Long tmdbId, @Param("contentType") ContentType contentType);
 
