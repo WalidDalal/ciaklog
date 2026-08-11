@@ -41,6 +41,7 @@ public interface ReviewRepository extends JpaRepository<Review, UUID> {
               AND (r.status = :status OR (:isAdmin = true AND r.status = com.project.ciaklog.entity.ReviewStatus.HIDDEN))
               AND (r.hiddenByAuthor = false OR r.user.username = :viewerUsername OR :isAdmin = true)
               AND (r.hiddenBySuspension = false OR :isAdmin = true)
+              AND (r.hiddenByDeletion = false OR :isAdmin = true)
             """)
     Page<Review> findByTmdbIdAndContentTypeAndStatus(
             @Param("tmdbId") Long tmdbId,
@@ -67,6 +68,7 @@ public interface ReviewRepository extends JpaRepository<Review, UUID> {
               AND (r.status = :status OR (:isAdmin = true AND r.status = com.project.ciaklog.entity.ReviewStatus.HIDDEN))
               AND (r.hiddenByAuthor = false OR r.user.username = :viewerUsername OR :isAdmin = true)
               AND (r.hiddenBySuspension = false OR :isAdmin = true)
+              AND (r.hiddenByDeletion = false OR :isAdmin = true)
             """)
     Page<Review> findByUser(
             @Param("user") User user,
@@ -88,10 +90,33 @@ public interface ReviewRepository extends JpaRepository<Review, UUID> {
 
     Optional<Review> findByUserAndTmdbIdAndContentType(User user, Long tmdbId, ContentType contentType);
 
+    // Fix (endpoint GET /reviews/media/{type}/{id}/mine — bug in produzione,
+    // LazyInitializationException): a differenza delle query gemelle qui sopra
+    // (findByTmdbIdAndContentTypeAndStatus), questa non faceva JOIN FETCH r.user
+    // — toDTO() chiama r.getUser().getUsername(), quindi fuori transazione
+    // (il metodo del service non è @Transactional) l'accesso al proxy lazy
+    // falliva con 500. Query dedicata con fetch esplicito, usata solo da
+    // getMyReviewForMedia per non toccare gli altri usi del metodo sopra
+    // (createReview, ecc. — dove il proxy lazy non serve).
+    // Fix (🔴 trovato nei test funzionali — grave): questa query non filtrava
+    // per status, quindi trovava ANCHE le recensioni REMOVED (eliminate con
+    // soft-delete da deleteReview — la riga resta nel DB, solo lo status
+    // cambia). Risultato: dopo aver eliminato la propria recensione,
+    // l'eliminazione sembrava funzionare solo "in locale" (stato React
+    // aggiornato subito) — ma al refresh la pagina richiamava questo
+    // endpoint, che ripescava la stessa riga REMOVED e la rimostrava come se
+    // il delete non fosse mai avvenuto. Escluse le REMOVED; le HIDDEN
+    // (nascoste da moderazione) restano visibili al proprietario, che deve
+    // sapere che la sua recensione è stata nascosta.
+    @Query(
+            "SELECT r FROM Review r JOIN FETCH r.user WHERE r.user = :user AND r.tmdbId = :tmdbId AND r.contentType = :contentType AND r.status <> com.project.ciaklog.entity.ReviewStatus.REMOVED")
+    Optional<Review> findByUserAndTmdbIdAndContentTypeFetchUser(
+            @Param("user") User user, @Param("tmdbId") Long tmdbId, @Param("contentType") ContentType contentType);
+
     // Usata per calcoli statistici (media voti),
     // qui l'eccezione per il proprietario non serve — una recensione auto-nascosta
     // non deve influenzare la media mostrata a tutti, punto, indipendentemente da chi guarda
-    @Query("SELECT r FROM Review r WHERE r.tmdbId = :tmdbId AND r.contentType = :contentType AND r.status = 'VISIBLE' AND r.hiddenByAuthor = false AND r.hiddenBySuspension = false")
+    @Query("SELECT r FROM Review r WHERE r.tmdbId = :tmdbId AND r.contentType = :contentType AND r.status = 'VISIBLE' AND r.hiddenByAuthor = false AND r.hiddenBySuspension = false AND r.hiddenByDeletion = false")
     List<Review> findVisibleByTmdbIdAndContentType(@Param("tmdbId") Long tmdbId, @Param("contentType") ContentType contentType);
 
     @Query("""
@@ -100,6 +125,7 @@ public interface ReviewRepository extends JpaRepository<Review, UUID> {
             WHERE r.status = com.project.ciaklog.entity.ReviewStatus.VISIBLE
               AND r.hiddenByAuthor = false
               AND r.hiddenBySuspension = false
+              AND r.hiddenByDeletion = false
               AND r.contentType = :contentType
             GROUP BY r.tmdbId, r.contentType
             HAVING COUNT(r) >= :minVotes
@@ -114,9 +140,15 @@ public interface ReviewRepository extends JpaRepository<Review, UUID> {
             WHERE r.status = com.project.ciaklog.entity.ReviewStatus.VISIBLE
               AND r.hiddenByAuthor = false
               AND r.hiddenBySuspension = false
-              AND r.createdAt >= :since
+              AND r.hiddenByDeletion = false
+              AND (r.createdAt >= :since OR r.updatedAt >= :since)
             GROUP BY r.tmdbId, r.contentType
             ORDER BY COUNT(r) DESC
             """)
+    // Fix (Homepage — "più discussi"): prima contava solo createdAt >= since,
+    // quindi una recensione scritta mesi fa ma MODIFICATA negli ultimi 7 giorni
+    // non contribuiva mai al trending, anche se è un'interazione recente vera
+    // e propria. updatedAt viene aggiornato da @UpdateTimestamp su ogni save
+    // (Review.java), quindi è affidabile: ora basta l'uno O l'altro.
     List<Object[]> findTrendingGrouped(@Param("since") LocalDateTime since);
 }

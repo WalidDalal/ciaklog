@@ -120,7 +120,21 @@ public class AiServiceImpl implements AiService {
                     ] }
                     """.formatted(libraryProfile, request.getMessage());
         } else {
-            // Messaggi successivi: comportamento normale
+            // Fix (🟡 AI — 2 bug con la stessa causa): questo prompt (messaggi
+            // successivi al primo) chiedeva SOLO un array di titoli, senza un
+            // campo "reply" — quindi il modello non aveva nessun modo di
+            // rispondere a parole a una domanda informativa (es. "quanti film
+            // ho in visione?"), né di spiegare che una domanda è fuori tema:
+            // poteva solo restituire titoli o un array vuoto. Risultato: 1)
+            // "quanti film ho in visione" veniva interpretato come "consigliami
+            // dei titoli dalla mia lista" e il modello ne restituiva 3 seguendo
+            // l'abitudine dei consigli, senza mai dire il totale reale; 2) una
+            // domanda fuori tema tornava array vuoto, che il codice sotto
+            // trasformava SEMPRE nel messaggio generico "Non ho trovato
+            // suggerimenti validi" invece di spiegare che l'assistente risponde
+            // solo a domande su film/serie. Stesso schema { reply, titles } del
+            // primo messaggio, con l'aggiunta di istruzioni per le domande
+            // informative sulla libreria (usa i dati forniti, conta per davvero).
             prompt = """
                     Sei l'assistente AI di CiakLog, un'app di tracking film/serie TV.
                     Profilo cinematografico dell'utente:
@@ -129,18 +143,40 @@ public class AiServiceImpl implements AiService {
                     %s
                     Richiesta attuale: %s
 
-                    IMPORTANTE — resta sempre nei binari di CiakLog: rispondi SOLO a richieste su film,
-                    serie TV o consigli di visione. Se la richiesta attuale non riguarda questi argomenti,
-                    rispondi con un array vuoto: []
+                    IMPORTANTE — resta sempre nei binari di CiakLog:
+                    Rispondi SOLO a richieste su film, serie TV, consigli di visione o l'uso della piattaforma.
+                    Se la richiesta attuale non riguarda questi argomenti, nel campo "reply" spiega
+                    gentilmente che puoi aiutare solo con film, serie TV e consigli di visione, e lascia
+                    "titles" vuoto ([]) — NON un messaggio generico, spiega proprio questo.
 
-                    Rispondi SOLO con un array JSON di titoli esistenti (max 5), formato:
-                    ["Titolo 1", "Titolo 2", ...]
-                    Niente testo aggiuntivo, solo l'array JSON.
+                    Se la richiesta è una DOMANDA INFORMATIVA sulla libreria dell'utente (es. "quanti film
+                    ho in visione?", "quali serie ho da vedere?", "cosa ho segnato come visto?"), rispondi
+                    nel campo "reply" usando i dati REALI forniti sopra nel profilo — conta per davvero gli
+                    elementi con lo stato richiesto, non inventare né arrotondare, e se il profilo qui sopra
+                    è troncato ad alcuni titoli, dillo (es. "hai N titoli in totale, i più recenti sono...").
+                    In questo caso "titles" può restare vuoto: la risposta è nel testo, non serve allegare
+                    schede titolo per una domanda sui propri dati.
+
+                    Se il messaggio è solo un saluto, small talk, un ringraziamento o non contiene una
+                    richiesta reale, rispondi in modo naturale e amichevole ma lascia "titles" vuoto ([]).
+
+                    Se invece la richiesta attuale è una vera richiesta di consigli o suggerimenti (es.
+                    "consigliami qualcosa di simile a X", "cosa guardo stasera", "un film leggero"),
+                    rispondi in modo naturale e amichevole in italiano (1-2 frasi) e poi suggerisci titoli
+                    pertinenti nel campo "titles" — presta attenzione a richieste situazionali (mood,
+                    durata, quanto è recente) e adatta i suggerimenti al contesto, non solo al genere.
+
+                    Per ogni titolo consigliato, aggiungi un motivo brevissimo (max 12 parole).
+
+                    Formato risposta — SOLO questo JSON, niente altro:
+                    { "reply": "testo naturale qui", "titles": [
+                      { "title": "Titolo 1", "reason": "motivo breve" }
+                    ] }
                     """.formatted(libraryProfile, historyText, request.getMessage());
         }
 
         try {
-            String rawResponse = callGroq(prompt);
+            String rawResponse = callGroq(prompt, true);
 
             String reply;
             List<String> titles;
@@ -148,30 +184,29 @@ public class AiServiceImpl implements AiService {
             // per i messaggi successivi e nei fallback (nessun motivo disponibile)
             Map<String, String> reasons = new java.util.LinkedHashMap<>();
 
-            if (isFirstMessage) {
-                // Parsing formato { "reply": "...", "titles": [{ "title": ..., "reason": ... }] }
-                try {
-                    String cleaned = rawResponse.replaceAll("```json|```", "").trim();
-                    JsonNode root = mapper.readTree(cleaned);
-                    reply = root.path("reply").asText("Ciao! Ecco alcuni suggerimenti per te:");
-                    final java.util.List<String> titlesList = new java.util.ArrayList<>();
-                    root.path("titles").forEach(n -> {
-                        // N può essere sia stringa (formato vecchio/fallback del modello)
-                        // sia oggetto { title, reason } — gestisco entrambi senza far crashare il parsing
-                        String title = n.isObject() ? n.path("title").asText() : n.asText();
-                        String reason = n.isObject() ? n.path("reason").asText(null) : null;
-                        if (title != null && !title.isBlank()) {
-                            titlesList.add(title);
-                            if (reason != null && !reason.isBlank()) reasons.put(title, reason);
-                        }
-                    });
-                    titles = titlesList;
-                } catch (Exception e) {
-                    // Fallback: tratta come array di titoli
-                    reply = "Ecco alcuni titoli che potrebbero piacerti:";
-                    titles = parseTitlesFromResponse(rawResponse);
-                }
-            } else {
+            // Fix (🟡 AI): prima solo isFirstMessage usava questo parsing
+            // (reply + titles con motivo); i messaggi successivi avevano un
+            // ramo diverso che leggeva un semplice array di titoli, senza
+            // reply — ora che entrambi i prompt (sopra) chiedono lo stesso
+            // schema JSON, il parsing è unico per i due casi.
+            try {
+                String cleaned = rawResponse.replaceAll("```json|```", "").trim();
+                JsonNode root = mapper.readTree(cleaned);
+                reply = root.path("reply").asText(isFirstMessage ? "Ciao! Ecco alcuni suggerimenti per te:" : "Ecco alcuni titoli che potrebbero piacerti:");
+                final java.util.List<String> titlesList = new java.util.ArrayList<>();
+                root.path("titles").forEach(n -> {
+                    // N può essere sia stringa (formato vecchio/fallback del modello)
+                    // sia oggetto { title, reason } — gestisco entrambi senza far crashare il parsing
+                    String title = n.isObject() ? n.path("title").asText() : n.asText();
+                    String reason = n.isObject() ? n.path("reason").asText(null) : null;
+                    if (title != null && !title.isBlank()) {
+                        titlesList.add(title);
+                        if (reason != null && !reason.isBlank()) reasons.put(title, reason);
+                    }
+                });
+                titles = titlesList;
+            } catch (Exception e) {
+                // Fallback: tratta come array di titoli
                 reply = "Ecco alcuni titoli che potrebbero piacerti:";
                 titles = parseTitlesFromResponse(rawResponse);
             }
@@ -186,7 +221,15 @@ public class AiServiceImpl implements AiService {
             // validi" al posto del saluto vero e proprio del modello. Ora si
             // sovrascrive solo se il modello AVEVA proposto dei titoli (falliti a
             // risolversi su TMDB) — se erano vuoti di proposito, il reply resta intatto
-            if (suggestions.isEmpty() && (!isFirstMessage || !titles.isEmpty())) {
+            // Fix (🟡 AI): prima questa condizione sovrascriveva SEMPRE il reply
+            // per i messaggi non-primi quando "titles" era vuoto — ma ora anche
+            // il prompt dei messaggi successivi lascia "titles" vuoto di
+            // proposito per domande informative, fuori tema o saluti (con la
+            // vera risposta nel campo "reply", non in "titles"). La regola è
+            // unica per entrambi i casi ora: si sovrascrive solo se il modello
+            // AVEVA proposto dei titoli che poi non si sono risolti su TMDB —
+            // mai quando erano vuoti di proposito.
+            if (suggestions.isEmpty() && !titles.isEmpty()) {
                 reply = "Non ho trovato suggerimenti validi, prova a riformulare la richiesta.";
             }
 
@@ -200,7 +243,7 @@ public class AiServiceImpl implements AiService {
 
         } catch (Exception e) {
             log.error("Errore nella chiamata a Groq per utente {}: {}", username, e.getMessage());
-            throw new RuntimeException("Assistente temporaneamente non disponibile", e);
+            throw new com.project.ciaklog.exception.AiServiceUnavailableException("Assistente temporaneamente non disponibile", e);
         }
     }
 
@@ -251,7 +294,7 @@ public class AiServiceImpl implements AiService {
 
         } catch (Exception e) {
             log.error("Errore nella chat admin per {}: {}", username, e.getMessage());
-            throw new RuntimeException("Assistente temporaneamente non disponibile", e);
+            throw new com.project.ciaklog.exception.AiServiceUnavailableException("Assistente temporaneamente non disponibile", e);
         }
     }
 
@@ -350,7 +393,7 @@ public class AiServiceImpl implements AiService {
 
         List<TmdbSearchResultResponse> suggestions;
         try {
-            String rawResponse = callGroq(prompt);
+            String rawResponse = callGroq(prompt, true);
             List<String> titles = new java.util.ArrayList<>();
             Map<String, String> reasons = new java.util.LinkedHashMap<>();
             parseTitlesAndReasons(rawResponse, titles, reasons);
@@ -423,7 +466,7 @@ public class AiServiceImpl implements AiService {
             return StructureReviewResponse.builder().text(cleaned).build();
         } catch (Exception e) {
             log.error("Errore nella strutturazione recensione per {}: {}", username, e.getMessage());
-            throw new RuntimeException("Assistente temporaneamente non disponibile", e);
+            throw new com.project.ciaklog.exception.AiServiceUnavailableException("Assistente temporaneamente non disponibile", e);
         }
     }
 
@@ -470,7 +513,7 @@ public class AiServiceImpl implements AiService {
             return StructureReviewResponse.builder().text(cleaned).build();
         } catch (Exception e) {
             log.error("Errore nella strutturazione risposta per {}: {}", username, e.getMessage());
-            throw new RuntimeException("Assistente temporaneamente non disponibile", e);
+            throw new com.project.ciaklog.exception.AiServiceUnavailableException("Assistente temporaneamente non disponibile", e);
         }
     }
 
@@ -534,7 +577,7 @@ public class AiServiceImpl implements AiService {
                     .build();
         } catch (Exception e) {
             log.error("Errore nella risposta AI su film {} per {}: {}", request.getTmdbId(), username, e.getMessage());
-            throw new RuntimeException("Assistente temporaneamente non disponibile", e);
+            throw new com.project.ciaklog.exception.AiServiceUnavailableException("Assistente temporaneamente non disponibile", e);
         }
     }
 
@@ -613,7 +656,7 @@ public class AiServiceImpl implements AiService {
 
         String opinion = generateNarrative(prompt);
         if (opinion.isBlank()) {
-            throw new RuntimeException("Assistente temporaneamente non disponibile");
+            throw new com.project.ciaklog.exception.AiServiceUnavailableException("Assistente temporaneamente non disponibile");
         }
         return ReviewOpinionResponse.builder().opinion(opinion).build();
     }
@@ -637,11 +680,11 @@ public class AiServiceImpl implements AiService {
                 rispetto a quello che ha già visto, ma considerando anche i trend della community.
                 Per ogni titolo aggiungi un motivo brevissimo (max 12 parole) del perché lo consigli oggi.
                 Rispondi SOLO con questo JSON, niente altro:
-                [
+                { "titles": [
                   { "title": "Titolo 1", "reason": "motivo breve" },
                   { "title": "Titolo 2", "reason": "motivo breve" },
                   { "title": "Titolo 3", "reason": "motivo breve" }
-                ]
+                ] }
                 """.formatted(libraryProfile, watchingNow, trendingNow);
     }
 
@@ -704,12 +747,31 @@ public class AiServiceImpl implements AiService {
     private static final long RETRY_BACKOFF_MS = 1500L;
 
     private String callGroq(String prompt) throws Exception {
-        String body = mapper.writeValueAsString(Map.of(
-                "model", GROQ_MODEL,
-                "messages", List.of(
-                        Map.of("role", "user", "content", prompt)
-                )
-        ));
+        return callGroq(prompt, false);
+    }
+
+    // Fix (🟡 FIX — Assistente AI, titoli mancanti "a volte"): il body della
+    // richiesta a Groq non specificava mai response_format — per le chiamate
+    // che si aspettano il JSON { reply, titles } (chat utente e getDaily),
+    // il modello poteva occasionalmente restituire testo extra prima/dopo il
+    // JSON o deviare leggermente dal formato. In quel caso il parsing
+    // principale falliva e si cadeva nel fallback parseTitlesFromResponse,
+    // che tratta l'intera risposta come un array — ma sull'oggetto
+    // { reply, titles } questo produce spazzatura (itera i VALORI
+    // dell'oggetto: il testo del "reply" finisce trattato come se fosse un
+    // titolo di film), che poi non si risolve mai su TMDB e fa sparire i
+    // suggerimenti veri. Le chiamate che si aspettano testo semplice
+    // (chatAdmin, structureReview/Comment, movieQuestion, generateNarrative)
+    // continuano a passare jsonMode=false, dato che quel prompt chiede
+    // esplicitamente "NON restituire JSON, solo testo naturale".
+    private String callGroq(String prompt, boolean jsonMode) throws Exception {
+        Map<String, Object> bodyMap = new java.util.LinkedHashMap<>();
+        bodyMap.put("model", GROQ_MODEL);
+        bodyMap.put("messages", List.of(Map.of("role", "user", "content", prompt)));
+        if (jsonMode) {
+            bodyMap.put("response_format", Map.of("type", "json_object"));
+        }
+        String body = mapper.writeValueAsString(bodyMap);
 
         HttpRequest httpRequest = HttpRequest.newBuilder()
                 .uri(URI.create(GROQ_URL))
@@ -736,29 +798,39 @@ public class AiServiceImpl implements AiService {
                 log.warn("Groq risposto {} al tentativo {}/{}", response.statusCode(), attempt + 1, MAX_RETRIES + 1);
 
                 if (!isTransient || attempt == MAX_RETRIES) {
-                    throw new RuntimeException("Groq API non disponibile (status " + response.statusCode() + ")");
+                    throw new com.project.ciaklog.exception.AiServiceUnavailableException("Groq API non disponibile (status " + response.statusCode() + ")");
                 }
 
             } catch (java.io.IOException | InterruptedException e) {
                 // Errore di rete — retriable
                 log.warn("Errore di rete Groq al tentativo {}/{}: {}", attempt + 1, MAX_RETRIES + 1, e.getMessage());
                 lastException = e;
-                if (attempt == MAX_RETRIES) throw new RuntimeException("Assistente temporaneamente non disponibile", e);
+                if (attempt == MAX_RETRIES) throw new com.project.ciaklog.exception.AiServiceUnavailableException("Assistente temporaneamente non disponibile", e);
             }
 
             // Backoff esponenziale: 1.5s, 3s
             Thread.sleep(RETRY_BACKOFF_MS * (long) Math.pow(2, attempt));
         }
 
-        throw new RuntimeException("Assistente temporaneamente non disponibile", lastException);
+        throw new com.project.ciaklog.exception.AiServiceUnavailableException("Assistente temporaneamente non disponibile", lastException);
     }
 
     private List<String> parseTitlesFromResponse(String rawResponse) {
         try {
             String cleaned = rawResponse.replaceAll("```json|```", "").trim();
-            JsonNode arr = mapper.readTree(cleaned);
+            JsonNode root = mapper.readTree(cleaned);
+            // Fix: questo fallback trattava SEMPRE la risposta come array nudo —
+            // ma lo schema atteso da chat() è { reply, titles }, un oggetto. Se
+            // root è un oggetto, iterare direttamente su di esso itera sui suoi
+            // VALORI (Jackson), quindi il testo di "reply" finiva aggiunto come
+            // se fosse un titolo di film. Ora si legge il campo "titles" quando
+            // presente, come nel parsing principale.
+            JsonNode arr = root.has("titles") ? root.path("titles") : root;
             List<String> titles = new ArrayList<>();
-            arr.forEach(node -> titles.add(node.asText()));
+            arr.forEach(node -> {
+                String title = node.isObject() ? node.path("title").asText() : node.asText();
+                if (title != null && !title.isBlank()) titles.add(title);
+            });
             return titles;
         } catch (Exception e) {
             log.warn("Impossibile fare il parsing della risposta AI come JSON: {}", rawResponse);
@@ -772,7 +844,13 @@ public class AiServiceImpl implements AiService {
     private void parseTitlesAndReasons(String rawResponse, List<String> outTitles, Map<String, String> outReasons) {
         try {
             String cleaned = rawResponse.replaceAll("```json|```", "").trim();
-            JsonNode arr = mapper.readTree(cleaned);
+            JsonNode root = mapper.readTree(cleaned);
+            // Fix: il prompt ora chiede { "titles": [...] } (oggetto, non più
+            // array nudo) per essere compatibile con response_format
+            // json_object di Groq — qui si legge il campo "titles" se
+            // presente, con fallback al vecchio formato ad array puro per
+            // compatibilità con risposte già in cache/salvate.
+            JsonNode arr = root.has("titles") ? root.path("titles") : root;
             arr.forEach(node -> {
                 String title = node.isObject() ? node.path("title").asText() : node.asText();
                 String reason = node.isObject() ? node.path("reason").asText(null) : null;
@@ -796,7 +874,26 @@ public class AiServiceImpl implements AiService {
             return "Libreria vuota — nessun dato disponibile, fornisci suggerimenti generici.";
         }
 
+        // Fix (🟡 AI — conteggio impreciso, es. "3 film in visione" quando in
+        // realtà sono 13): prima il modello vedeva SOLO la lista qui sotto,
+        // troncata a LIBRARY_PROFILE_LIMIT titoli — se doveva rispondere a una
+        // domanda sul totale, non aveva modo di saperlo con certezza (e in
+        // pratica tendeva a "suggerire" 3 titoli invece di contare per davvero).
+        // Ora i totali reali per stato (calcolati con COUNT, non con la lista
+        // troncata) vengono dati esplicitamente in cima, così il modello può
+        // rispondere con il numero vero anche quando la lista sotto è parziale.
+        long watching = watchEntryRepository.countByUserAndStatus(user, WatchStatus.WATCHING);
+        long toWatch = watchEntryRepository.countByUserAndStatus(user, WatchStatus.TO_WATCH);
+        long watched = watchEntryRepository.countByUserAndStatus(user, WatchStatus.WATCHED);
+
         StringBuilder sb = new StringBuilder();
+        sb.append("Totali REALI in libreria (usa questi numeri per rispondere a domande sul totale, non contare quelli elencati sotto): ")
+                .append(watching).append(" in visione (WATCHING), ")
+                .append(toWatch).append(" da vedere (TO_WATCH), ")
+                .append(watched).append(" visti (WATCHED).\n");
+        if (watching + toWatch + watched > LIBRARY_PROFILE_LIMIT) {
+            sb.append("Elenco qui sotto TRONCATO ai ").append(LIBRARY_PROFILE_LIMIT).append(" più recenti, non tutti:\n");
+        }
         entries.forEach(e ->
                 sb.append("- ").append(e.getTitle())
                         .append(" (").append(e.getStatus()).append(")\n"));

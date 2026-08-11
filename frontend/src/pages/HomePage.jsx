@@ -7,39 +7,39 @@ import HeroSection from '../components/HeroSection'
 
 function StarRating({ rating }) {
     if (!rating) return null
-    // Fix (Homepage — bug bloccante trovato in revisione): un rating fuori
-    // range (es. 12.9, o negativo) mandava 5 - Math.round(rating) sotto zero,
-    // e String.repeat() lancia RangeError su un numero negativo — crashava
-    // l'intera Home tramite l'ErrorBoundary. Il valore in sé non dovrebbe mai
-    // uscire da 1-5 (è la scala di CiakLog), ma qui lo blindiamo comunque:
-    // meglio un voto troncato che una pagina bianca.
-    const clamped = Math.min(5, Math.max(0, Math.round(rating)))
     return (
         <span style={{ color: 'var(--gold)', fontSize: '13px' }}>
-      {'★'.repeat(clamped)}{'☆'.repeat(5 - clamped)}
+      {'★'.repeat(Math.round(rating))}{'☆'.repeat(5 - Math.round(rating))}
             <span style={{ color: 'var(--text-muted)', marginLeft: '6px', fontSize: '12px' }}>{rating?.toFixed(1)}</span>
     </span>
     )
 }
 
-const AVATAR_COLORS = ['var(--accent)', '#3b82f6', '#22c55e', '#f59e0b', '#8b5cf6', '#ec4899', '#14b8a6', '#eab308']
+const AVATAR_COLORS = ['var(--accent)', '#3b82f6', '#22c55e', '#f59e0b', '#8b5cf6', '#ec4899']
 
-// Fix (Profilo — "immagini rosse", stesso principio esteso qui): prima il
-// colore dipendeva dalla posizione nella lista (index), quindi lo stesso
-// utente poteva avere colori diversi in punti diversi dell'app (es. 2° nella
-// classifica vs 5° nella lista sotto). Un hash dello username è deterministico
-// per utente — stesso colore ovunque — senza sceglierlo a mano per ciascuno.
-function colorForUsername(name) {
-    if (!name) return AVATAR_COLORS[0]
+// Fix (🟡 avatar tutti dello stesso colore in classifica): stessa palette e
+// stessa logica hash già usate correttamente in ProfilePage.jsx/SettingsPage.jsx
+// (colorForUsername) — qui duplicata perché non condivisa in un modulo comune.
+function colorForUsername(username) {
+    if (!username) return AVATAR_COLORS[0]
     let hash = 0
-    for (let i = 0; i < name.length; i++) {
-        hash = (hash * 31 + name.charCodeAt(i)) >>> 0
+    for (let i = 0; i < username.length; i++) {
+        hash = (hash * 31 + username.charCodeAt(i)) >>> 0
     }
     return AVATAR_COLORS[hash % AVATAR_COLORS.length]
 }
 
-function UserAvatar({ username, size = 48 }) {
-    const color = colorForUsername(username)
+// Fix (🟡 avatar tutti dello stesso colore in classifica): prima il colore
+// veniva scelto con AVATAR_COLORS[index % ...] dove "index" era la posizione
+// nel loop di chiamata (es. indice tra utenti a pari merito nello stesso
+// rank) — con pochi pareggi quell'indice era quasi sempre 0 per ogni utente,
+// risultando nello stesso colore (il primo della palette, rosso) per quasi
+// tutti. Ora usa il vero profileColor dell'utente se disponibile (passato
+// dal backend solo per la classifica, vedi ChartUserResponse), altrimenti
+// lo stesso colore hash-based già usato in Profilo/Impostazioni — mai più
+// legato alla posizione nel loop.
+function UserAvatar({ username, size = 48, profileColor = null }) {
+    const color = profileColor || colorForUsername(username)
     return (
         <div style={{
             width: size, height: size, borderRadius: '50%', backgroundColor: color,
@@ -78,16 +78,50 @@ function TrendingQuoteCard({ item, reviews }) {
     // di 7 giorni SOLO per il trending vero — il fallback ai titoli popolari
     // (item.weeklyReviewCount == null) esiste apposta per i casi con poca
     // attività settimanale, quindi lì mostriamo comunque i commenti disponibili
+    // Fix ("Mostra altri" allungava la card): espandere la card in-place per
+    // mostrare più recensioni la rendeva più alta delle altre nella stessa
+    // riga del carosello — con 2+ recensioni una card cresceva, mentre le
+    // altre con 1 sola recensione restavano basse: incoerente. "Vedi altri"
+    // ora porta al dettaglio del film/serie (la card è già tutta un <Link>,
+    // quindi basta un testo cliccabile senza stopPropagation) invece di
+    // espandere qui — l'altezza della card resta sempre la stessa per tutte.
     const weekAgo = Date.now() - 7 * 24 * 60 * 60 * 1000
-    const visible = reviews
+    // Fix (Homepage — "più discussi"): il backend conta come "di questa
+    // settimana" una recensione con createdAt O updatedAt recenti (vedi
+    // ReviewRepository.findTrendingGrouped), ma qui si filtrava solo su
+    // createdAt — una recensione modificata di recente (createdAt vecchio,
+    // updatedAt nuovo) veniva conteggiata nel numero ("2 recensioni questa
+    // settimana") ma spariva dalla lista mostrata sotto. Ora il filtro
+    // guarda entrambe le date, come il backend.
+    const filtered = reviews
         .filter(r => r.text && r.text.trim().length > 0)
-        .filter(r => item.weeklyReviewCount == null || !r.createdAt || new Date(r.createdAt).getTime() >= weekAgo)
-        .slice(0, 2)
+        .filter(r => {
+            if (item.weeklyReviewCount == null) return true
+            const createdRecent = r.createdAt && new Date(r.createdAt).getTime() >= weekAgo
+            const updatedRecent = r.updatedAt && new Date(r.updatedAt).getTime() >= weekAgo
+            return (!r.createdAt && !r.updatedAt) || createdRecent || updatedRecent
+        })
+    // Fix: prima si mostravano sempre e solo le prime 2 (slice(0, 2) fisso),
+    // col numero sopra che diceva "5 recensioni" senza modo di vederle tutte —
+    // solo un cambio di testo, non una vera funzionalità. "Visible" resta
+    // sempre limitato a 2 (mai espanso in-place, vedi fix più sopra), con
+    // "Vedi altri" che porta al dettaglio per leggere il resto.
+    const visible = filtered.slice(0, 2)
+    const hiddenCount = filtered.length - visible.length
     return (
         <Link to={`/movie/${item.tmdbId}?type=${item.contentType}`}>
             <div style={{
                 backgroundColor: 'var(--bg-nav)', border: '1px solid var(--border)', borderRadius: '14px',
-                overflow: 'hidden', display: 'flex', flexDirection: 'column', height: '100%',
+                overflow: 'hidden', display: 'flex', flexDirection: 'column',
+                // Fix (spazio vuoto sotto "Vedi altri"): height:'100%' qui, anche
+                // con alignItems:'start' sulla griglia (vedi sopra), fa comunque
+                // riempire alla card l'intera altezza della riga — perché il
+                // browser prima calcola l'altezza della riga in base al
+                // contenuto più alto tra le 3 card, POI un figlio con height:100%
+                // si espande a riempirla comunque. Rimosso: ora l'altezza della
+                // card è solo quella del suo contenuto reale (0/1/2 recensioni),
+                // alignItems:'start' evita che venga comunque tirata giù al
+                // livello della più alta della riga.
             }}
                  onMouseEnter={e => e.currentTarget.style.borderColor = 'var(--accent)'}
                  onMouseLeave={e => e.currentTarget.style.borderColor = 'var(--border)'}
@@ -107,16 +141,21 @@ function TrendingQuoteCard({ item, reviews }) {
                             che sembrava un errore invece di semplicemente non applicarsi */}
                         {item.weeklyReviewCount != null && (
                             <div style={{ color: 'var(--text-dark)', fontSize: '12px', marginTop: '6px' }}>
-                                {/* Fix (Homepage — trovato in revisione): "5 recensioni questa
-                                    settimana" con solo 2 card sotto sembrava un bug — in realtà è
-                                    voluto (le card sono solo un'anteprima), ma senza dirlo non si
-                                    capiva. Ora precisa "mostrate 2" quando ce ne sono di più. */}
                                 💬 {item.weeklyReviewCount} {item.weeklyReviewCount === 1 ? 'recensione' : 'recensioni'} questa settimana
-                                {item.weeklyReviewCount > 2 && ` (mostrate 2)`}
                             </div>
                         )}
                     </div>
                 </div>
+                {/* Fix (era troppo spazio vuoto): il tentativo precedente
+                    riservava un'altezza minima fissa uguale per tutte, per
+                    pareggiare le card — ma bastava più del necessario, quindi
+                    tutte le card (anche quelle con 1 sola recensione)
+                    mostravano parecchio vuoto sotto. La causa vera era lo
+                    stretch automatico della griglia CSS: risolta mettendo
+                    alignItems:'start' sulla griglia stessa (vedi sopra) — ogni
+                    card ora è alta solo quanto il suo contenuto reale, senza
+                    riempimenti artificiali e senza più lo stretch che le
+                    pareggiava tutte alla più alta della riga. */}
                 <div style={{ padding: '0 16px 16px', display: 'flex', flexDirection: 'column', gap: '10px', flex: 1 }}>
                     {visible.length === 0
                         ? <div style={{ color: 'var(--text-dark)', fontSize: '13px', fontStyle: 'italic', padding: '8px 0' }}>
@@ -128,9 +167,9 @@ function TrendingQuoteCard({ item, reviews }) {
                                 borderLeft: `3px solid ${i === 0 ? 'var(--accent)' : '#3b82f6'}`,
                             }}>
                                 <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '6px' }}>
-                                    <UserAvatar username={r.username} size={22} index={i} />
+                                    <UserAvatar username={r.username} size={22} />
                                     <span style={{ color: 'var(--text-muted)', fontSize: '12px', fontWeight: '600' }}>{r.username}</span>
-                                    <span style={{ color: 'var(--gold)', fontSize: '11px', marginLeft: 'auto' }}>{'★'.repeat(Math.max(0, Math.min(5, Math.round(r.rating || 0))))}</span>
+                                    <span style={{ color: 'var(--gold)', fontSize: '11px', marginLeft: 'auto' }}>{'★'.repeat(r.rating)}</span>
                                 </div>
                                 <p style={{
                                     color: 'var(--text)', fontSize: '13px', lineHeight: 1.5, margin: 0,
@@ -141,6 +180,16 @@ function TrendingQuoteCard({ item, reviews }) {
                             </div>
                         ))
                     }
+                    {hiddenCount > 0 && (
+                        <span
+                            style={{
+                                color: 'var(--accent)', fontSize: '12px', fontWeight: '600',
+                                padding: '4px 0', display: 'block',
+                            }}
+                        >
+                            Vedi altri {hiddenCount} {hiddenCount === 1 ? 'commento' : 'commenti'} →
+                        </span>
+                    )}
                 </div>
             </div>
         </Link>
@@ -160,7 +209,7 @@ function TrendingCarousel({ trending, trendingReviews }) {
 
     return (
         <div>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '16px', marginBottom: '20px' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '16px', marginBottom: '20px', alignItems: 'start' }}>
                 {visible.map(item => (
                     <TrendingQuoteCard
                         key={item.tmdbId}
@@ -221,6 +270,11 @@ function HomePage() {
     const [recentFilms, setRecentFilms] = useState([])
     const [watching, setWatching] = useState([])
     const [toWatch, setToWatch] = useState([])
+    // Fix (🔴 FIX — Homepage loggato/guest): GET /api/ai/daily esisteva nel
+    // backend (AiController, riga 51) ma non era collegato da nessuna parte
+    // in Home — nessuna card lo consumava. Stesso pattern del bug DELETE
+    // /reviews già visto altrove. Aggiunta qui la card "Consiglio del giorno".
+    const [dailyPick, setDailyPick] = useState(null)
     // Conteggio segnalazioni in attesa, mostrato nell'hero
     // al posto del badge "sei #X in classifica" che per l'Admin non ha senso
     const [pendingReportsCount, setPendingReportsCount] = useState(0)
@@ -268,6 +322,14 @@ function HomePage() {
                 .catch(() => {})
         }
 
+        // Consiglio del giorno — solo utenti normali loggati (endpoint
+        // protetto con hasRole('USER'), un admin riceverebbe 403)
+        if (token && user?.role !== 'ADMIN') {
+            api.get('/ai/daily', { signal })
+                .then(r => setDailyPick(r.data))
+                .catch(() => {})
+        }
+
         return () => controller.abort()
     }, [token])
 
@@ -277,6 +339,14 @@ function HomePage() {
     // nessuno andava mai a recuperare le loro recensioni: 3 titoli, zero
     // commenti sotto, sempre. Ora carica le recensioni per qualunque lista sia
     // effettivamente mostrata (evitando di richiederle due volte se già in cache).
+    // Fix (Homepage — "più discussi", il vero bug): il fix precedente filtrava
+    // l'array ricevuto guardando anche updatedAt, ma l'array stesso veniva
+    // popolato ordinando per createdAt — una recensione modificata di recente
+    // ma scritta tempo fa (createdAt vecchio) non rientrava nemmeno tra le
+    // prime 5 caricate, quindi il filtro non poteva comunque trovarla.
+    // @UpdateTimestamp su Review.updatedAt scatta sia alla creazione che alla
+    // modifica (vedi entity Review), quindi ordinare per updatedAt desc porta
+    // sempre in cima sia le nuove recensioni SIA quelle appena modificate.
     useEffect(() => {
         const itemsShown = trending.length > 0 ? trending : recentFilms
         if (itemsShown.length === 0) return
@@ -284,7 +354,7 @@ function HomePage() {
         itemsShown.forEach(item => {
             const key = `${item.tmdbId}_${item.contentType}`
             if (trendingReviews[key]) return
-            api.get(`/reviews/media/${item.contentType}/${item.tmdbId}`, { params: { size: 5, sort: 'createdAt,desc' }, signal: controller.signal })
+            api.get(`/reviews/media/${item.contentType}/${item.tmdbId}`, { params: { size: 5, sort: 'updatedAt,desc' }, signal: controller.signal })
                 .then(res => {
                     const reviews = res.data.content || res.data
                     setTrendingReviews(prev => ({ ...prev, [key]: reviews }))
@@ -494,6 +564,37 @@ function HomePage() {
                 </section>
             )}
 
+            {/* ── CONSIGLIO DEL GIORNO (AI) — loggato, solo utenti normali ── */}
+            {logged && user?.role !== 'ADMIN' && dailyPick?.suggestions?.length > 0 && (
+                <section style={{ padding: '0 64px 48px' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '16px' }}>
+                        <h2 style={{ fontSize: '18px', fontWeight: '700' }}>🤖 Consiglio del giorno</h2>
+                        <Link to="/chat" style={{ color: 'var(--accent)', fontSize: '13px', fontWeight: '600' }}>Chiedi altro all'AI →</Link>
+                    </div>
+                    <div style={{ display: 'flex', gap: '12px', overflowX: 'auto', paddingBottom: '4px' }}>
+                        {dailyPick.suggestions.slice(0, 6).map(item => (
+                            <Link to={`/movie/${item.tmdbId}?type=${item.contentType}`} key={`${item.tmdbId}_${item.contentType}`} style={{ flexShrink: 0 }}>
+                                <div style={{ width: '140px', backgroundColor: 'var(--bg-card)', borderRadius: '8px', overflow: 'hidden', border: '1px solid var(--border)' }}
+                                     onMouseEnter={e => e.currentTarget.style.borderColor = 'var(--accent)'}
+                                     onMouseLeave={e => e.currentTarget.style.borderColor = 'var(--border)'}
+                                >
+                                    {item.posterPath
+                                        ? <img src={`https://image.tmdb.org/t/p/w200${item.posterPath}`} alt={item.title} style={{ width: '100%', height: '198px', objectFit: 'cover' }} />
+                                        : <div style={{ width: '100%', height: '198px', backgroundColor: 'var(--border)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '32px' }}>🎬</div>
+                                    }
+                                    <div style={{ padding: '8px' }}>
+                                        <div style={{ color: 'var(--text)', fontSize: '12px', fontWeight: '600', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{item.title}</div>
+                                        {item.reason && (
+                                            <div style={{ color: 'var(--text-muted)', fontSize: '10px', marginTop: '4px', lineHeight: 1.3 }}>{item.reason}</div>
+                                        )}
+                                    </div>
+                                </div>
+                            </Link>
+                        ))}
+                    </div>
+                </section>
+            )}
+
             {/* Fix (Home Admin): toggle visibile solo per l'Admin — le sezioni
                 community restano disponibili ma collassate di default */}
             {isAdmin && (
@@ -662,12 +763,12 @@ function HomePage() {
                                     {/* Più utenti a pari merito: un piccolo cluster di avatar affiancati,
                                         stesso rank badge condiviso, stessa colonna del podio sotto */}
                                     <div style={{ display: 'flex', justifyContent: 'center', gap: '4px', flexWrap: 'wrap', marginBottom: '8px' }}>
-                                        {users.map((u, ui) => {
+                                        {users.map((u) => {
                                             const isMe = logged && user?.username === u.username
                                             return (
                                                 <Link to={`/profile/${u.username}`} key={u.username} title={u.username}>
                                                     <div style={{ position: 'relative', display: 'inline-block' }}>
-                                                        <UserAvatar username={u.username} size={avatarSize} index={ui} />
+                                                        <UserAvatar username={u.username} size={avatarSize} profileColor={u.profileColor} />
                                                         {!isChampion && (
                                                             <div style={{
                                                                 position: 'absolute', bottom: -4, right: -4,
@@ -733,9 +834,9 @@ function HomePage() {
                                     <div key={rank} style={{ display: 'flex', alignItems: 'center', gap: '16px', padding: '12px 16px', backgroundColor: anyIsMe ? '#1a0f0f' : 'var(--bg-nav)', border: `1px solid ${anyIsMe ? 'var(--accent)' : 'var(--bg-hover)'}`, borderRadius: '10px' }}>
                                         <span style={{ color: 'var(--text-dark)', fontSize: '14px', fontWeight: '700', minWidth: '28px' }}>#{rank}</span>
                                         <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap', flex: 1 }}>
-                                            {users.map((u, ui) => (
+                                            {users.map((u) => (
                                                 <Link to={`/profile/${u.username}`} key={u.username} style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                                                    <UserAvatar username={u.username} size={30} index={ui} />
+                                                    <UserAvatar username={u.username} size={30} profileColor={u.profileColor} />
                                                     <span style={{ color: 'var(--text)', fontWeight: '600' }}>{u.username}</span>
                                                     {logged && user?.username === u.username && <span style={{ color: 'var(--gold)', fontSize: '12px', fontWeight: '600' }}>Tu ⭐</span>}
                                                 </Link>
@@ -779,6 +880,20 @@ function HomePage() {
                 <div style={{ color: 'var(--text-dark)', fontSize: '13px', textAlign: 'center' }}>
                     <div>Progetto di <span style={{ color: 'var(--text)', fontWeight: '600' }}>Walid Dalal</span></div>
                     <div style={{ marginTop: '2px' }}>© 2026 CiakLog</div>
+                    {/* Fix (🔴 attribuzione TMDB — versione completa): il fix
+                        precedente metteva qui solo un testo, non conforme ai
+                        requisiti reali di TMDB (serve anche il logo, in una
+                        sezione "Crediti" dedicata — vedi CreditsPage.jsx). Questo
+                        link resta come punto d'accesso da qui, ma rimanda alla
+                        sezione vera. */}
+                    <Link
+                        to="/credits"
+                        style={{ display: 'block', marginTop: '6px', color: 'var(--text-dark)', fontSize: '11px', textDecoration: 'none' }}
+                        onMouseEnter={e => e.currentTarget.style.color = 'var(--text-muted)'}
+                        onMouseLeave={e => e.currentTarget.style.color = 'var(--text-dark)'}
+                    >
+                        Crediti e attribuzioni
+                    </Link>
                 </div>
 
 

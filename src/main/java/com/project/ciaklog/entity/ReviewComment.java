@@ -60,6 +60,12 @@ public class ReviewComment {
     @Builder.Default
     private boolean hiddenBySuspension = false;
 
+    // Stesso principio di Review.hiddenByDeletion — irreversibile, mai
+    // riportato a false (l'eliminazione dell'account non si annulla)
+    @Column(name = "hidden_by_deletion", nullable = false)
+    @Builder.Default
+    private boolean hiddenByDeletion = false;
+
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "review_id", nullable = false)
     private Review review;

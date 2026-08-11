@@ -159,20 +159,55 @@ function LibraryPage() {
 
     useEffect(() => {
         setLoading(true)
-        api.get('/library', { params: { size: 200 } })
-            .then(r => setAllEntries(r.data.content || r.data))
-            .catch(() => setAllEntries([]))
-            .finally(() => setLoading(false))
+        // Fix (Libreria — cap fisso a 200): prima si caricava una sola pagina da
+        // 200 elementi — un utente con più di 200 titoli salvati perdeva
+        // silenziosamente filtri/conteggi oltre quella soglia. Ora si caricano
+        // TUTTE le pagine (200 alla volta) finché il backend non segnala che è
+        // l'ultima, accumulandole — la UI resta invariata (filtro/conteggio
+        // client-side), ma senza più un tetto arbitrario.
+        const loadAllEntries = async () => {
+            let page = 0
+            let all = []
+            try {
+                while (true) {
+                    const r = await api.get('/library', { params: { page, size: 200 } })
+                    const content = r.data.content || r.data
+                    all = all.concat(content)
+                    const isLast = r.data.page ? (page + 1 >= r.data.page.totalPages) : (r.data.last ?? true)
+                    if (isLast || content.length === 0) break
+                    page += 1
+                }
+                setAllEntries(all)
+            } catch {
+                setAllEntries([])
+            } finally {
+                setLoading(false)
+            }
+        }
+        loadAllEntries()
 
         if (user?.username) {
-            api.get(`/reviews/user/${user.username}`, { params: { size: 200 } })
-                .then(r => {
-                    const list = r.data.content || r.data
+            // Stesso motivo del loop sopra: se non lo si pagina del tutto, oltre
+            // le prime 200 recensioni scritte manca il badge voto sulle card
+            // WATCHED corrispondenti (cosmetico, ma stessa causa).
+            const loadAllMyReviews = async () => {
+                let page = 0
+                let all = []
+                try {
+                    while (true) {
+                        const r = await api.get(`/reviews/user/${user.username}`, { params: { page, size: 200 } })
+                        const content = r.data.content || r.data
+                        all = all.concat(content)
+                        const isLast = r.data.page ? (page + 1 >= r.data.page.totalPages) : (r.data.last ?? true)
+                        if (isLast || content.length === 0) break
+                        page += 1
+                    }
                     const map = {}
-                    list.forEach(rev => { map[`${rev.tmdbId}_${rev.contentType}`] = rev.rating })
+                    all.forEach(rev => { map[`${rev.tmdbId}_${rev.contentType}`] = rev.rating })
                     setRatingMap(map)
-                })
-                .catch(() => {})
+                } catch { /* badge voto assente, non bloccante */ }
+            }
+            loadAllMyReviews()
         }
     }, [token, navigate, user?.username])
 

@@ -16,7 +16,9 @@ function Navbar() {
   const logged = !!token
 
   const handleSearch = (e) => {
-    if (e.key === 'Enter' && search.trim()) {
+    // Fix (🟡 minimo 2 caratteri non coerente): allineato allo stesso
+    // controllo di SearchPage.jsx — prima qui bastava "non vuoto".
+    if (e.key === 'Enter' && search.trim().length >= 2) {
       navigate(`/search?q=${encodeURIComponent(search.trim())}`)
       setSearch('')
     }
@@ -115,7 +117,7 @@ function Navbar() {
               {user?.role === 'ADMIN' && (
                 <Link to="/admin">
                   <button style={{ padding: '8px 14px', backgroundColor: 'var(--accent-subtle)', border: '1px solid #e5091466', borderRadius: '6px', color: 'var(--accent)', fontSize: '14px', fontWeight: '600', cursor: 'pointer', whiteSpace: 'nowrap' }}>
-                    🛡️ Admin
+                    🛡️ Dashboard
                   </button>
                 </Link>
               )}

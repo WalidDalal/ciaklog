@@ -19,6 +19,7 @@ public class ReviewCommentResponse {
     private boolean hiddenByAuthor;
     // Stesso principio di ReviewResponse — banner diverso per l'Admin
     private boolean hiddenBySuspension;
+    private boolean hiddenByDeletion;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
 }

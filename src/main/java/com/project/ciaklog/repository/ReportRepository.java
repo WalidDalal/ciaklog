@@ -19,6 +19,45 @@ public interface ReportRepository extends JpaRepository<Report, UUID> {
     // Dashboard Admin — lista segnalazioni per stato, paginata
     Page<Report> findByStatus(ReportStatus status, Pageable pageable);
 
+    // Fix (dashboard admin — filtro per tipo bersaglio): il filtro
+    // recensioni/risposte prima veniva applicato lato frontend sui soli
+    // report già caricati in pagina, quindi funzionava solo sulla pagina
+    // visualizzata in quel momento e non su tutte. Ora il filtro è nella
+    // query, applicato PRIMA della paginazione — combinato con lo status.
+    Page<Report> findByStatusAndReviewIsNotNull(ReportStatus status, Pageable pageable);
+    Page<Report> findByStatusAndReviewCommentIsNotNull(ReportStatus status, Pageable pageable);
+    Page<Report> findByReviewIsNotNull(Pageable pageable);
+    Page<Report> findByReviewCommentIsNotNull(Pageable pageable);
+
+    // Fix (dashboard admin — gruppi di segnalazioni spezzati tra le pagine):
+    // le varianti Page qui sopra paginano per RIGA di segnalazione, non per
+    // bersaglio (review/commento) — se una review ha 2 segnalazioni e altre 6
+    // segnalazioni (su altri bersagli) la seguono, le 2 possono finire in una
+    // pagina e altre segnalazioni sullo STESSO bersaglio in quella dopo,
+    // mostrando conteggi incoerenti. Queste varianti List (non paginate) sono
+    // usate per raggruppare per bersaglio in Java e paginare i GRUPPI, non le
+    // righe — vedi ReportServiceImpl.getReports().
+    // Fix (🔴 FIX — Segnalazioni Approvate: pagine incoerenti, es. "2 pagine
+    // ma la prima ne mostra solo 5 e la seconda è vuota"): queste query non
+    // avevano un ORDER BY esplicito. Senza di esso il DB NON garantisce lo
+    // stesso ordine tra due chiamate identiche — e qui la lista viene
+    // ricaricata e riordinata DA ZERO a ogni singola richiesta (pagina 1 e
+    // pagina 2 sono due chiamate HTTP separate). Se l'ordine restituito dal
+    // DB cambia anche solo leggermente tra le due (es. per timestamp con
+    // valori identici tra più segnalazioni, molto comune con dati di test
+    // creati in blocco), alcuni gruppi finiscono ordinati diversamente nelle
+    // due chiamate: il totale (usato per calcolare il numero di pagine)
+    // resta corretto, ma il CONTENUTO delle singole pagine no — alcuni
+    // gruppi possono non comparire in nessuna pagina, altri comparire due
+    // volte. Aggiunto un ORDER BY deterministico (data + id come tie-break
+    // stabile) così lo stesso identico ordine viene restituito ad ogni
+    // chiamata, indipendentemente da eventuali timestamp coincidenti.
+    List<Report> findByStatusAndReviewIsNotNullOrderByCreatedAtDescIdAsc(ReportStatus status);
+    List<Report> findByStatusAndReviewCommentIsNotNullOrderByCreatedAtDescIdAsc(ReportStatus status);
+    List<Report> findByReviewIsNotNullOrderByCreatedAtDescIdAsc();
+    List<Report> findByReviewCommentIsNotNullOrderByCreatedAtDescIdAsc();
+    List<Report> findByStatusOrderByCreatedAtDescIdAsc(ReportStatus status);
+
     // Per verificare segnalazione duplicata
     boolean existsByReporterAndReview(User reporter, Review review);
 

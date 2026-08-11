@@ -1,12 +1,12 @@
-import { useEffect, useState, useCallback, useMemo } from 'react'
+import { useEffect, useState, useCallback, useMemo, useRef } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
 import Navbar from '../components/Navbar'
 import api from '../services/api'
 import useAuthStore from '../store/authStore'
 import useToastStore from '../store/toastStore'
 
-const statusColor = (s) => ({ ACTIVE: '#22c55e', SUSPENDED: '#f59e0b', PERMANENTLY_SUSPENDED: 'var(--accent)' }[s] || 'var(--text-dark)')
-const statusLabel = (s) => ({ ACTIVE: 'Attivo', SUSPENDED: 'Sospeso', PERMANENTLY_SUSPENDED: 'Sospeso perm.' }[s] || s)
+const statusColor = (s) => ({ ACTIVE: '#22c55e', SUSPENDED: '#f59e0b', PERMANENTLY_SUSPENDED: 'var(--accent)', DELETED: 'var(--text-dark)' }[s] || 'var(--text-dark)')
+const statusLabel = (s) => ({ ACTIVE: 'Attivo', SUSPENDED: 'Sospeso', PERMANENTLY_SUSPENDED: 'Sospeso perm.', DELETED: 'Eliminato' }[s] || s)
 
 // Modal motivo sospensione — appare quando si sospende manualmente dalla tabella
 function SuspendModal({ username, onConfirm, onCancel }) {
@@ -214,8 +214,33 @@ function AdminPage() {
 
   const [reports, setReports] = useState([])
   const [reportsLoading, setReportsLoading] = useState(false)
+  // Fix (🔴 FIX — "torna alla dashboard admin" dalla pagina 2+): reportsPage
+  // era un useState semplice, non sincronizzato con l'URL come reportFilter
+  // ed expandedReport qui sotto. "Torna alla dashboard admin" (MovieDetailPage,
+  // navigate(-1)) rimonta AdminPage da zero: filtro ed elemento espanso
+  // sopravvivevano perché letti dall'URL al mount, reportsPage no — tornava
+  // sempre a 0 (pagina 1) anche se prima si era in pagina 2 o successive.
+  // Stessa sincronizzazione URL già usata per gli altri due stati.
+  const [reportsPage, setReportsPageState] = useState(() => {
+    const p = parseInt(searchParams.get('reportsPage'), 10)
+    return Number.isFinite(p) && p >= 0 ? p : 0
+  })
+  const setReportsPage = (updater) => {
+    // Fix (🔴 FIX — "Cannot update a component (BrowserRouter) while
+    // rendering a different component"): setSearchParams veniva chiamato
+    // DENTRO la funzione di update passata a setReportsPageState — le
+    // funzioni updater di uno state devono essere pure, nessun side-effect
+    // al loro interno. React può invocarle in momenti in cui aggiornare un
+    // ALTRO componente (qui il BrowserRouter, tramite setSearchParams) non è
+    // sicuro, da cui il warning. Ora si calcola "next" fuori da qualsiasi
+    // updater e si chiamano i due setter in sequenza, normalmente.
+    const next = typeof updater === 'function' ? updater(reportsPage) : updater
+    setReportsPageState(next)
+    setSearchParams(sp => { sp.set('reportsPage', String(next)); return sp }, { replace: true })
+  }
+  const [reportsTotalPages, setReportsTotalPages] = useState(1)
   const [reportFilter, setReportFilterState] = useState(searchParams.get('filter') || 'PENDING')
-  const setReportFilter = (f) => { setReportFilterState(f); setSearchParams(prev => { prev.set('filter', f); return prev }, { replace: true }) }
+  const setReportFilter = (f) => { setReportFilterState(f); setReportsPage(0); setSearchParams(prev => { prev.set('filter', f); return prev }, { replace: true }) }
   const [expandedReport, setExpandedReportState] = useState(searchParams.get('expanded') || null)
   const setExpandedReport = (key) => {
     setExpandedReportState(key)
@@ -236,27 +261,25 @@ function AdminPage() {
 
   const loadStats = async () => {
     try {
-      const [usersRes, reportsRes] = await Promise.all([
-        api.get('/admin/users', { params: { page: 0, size: 1 } }),
-        api.get('/reports', { params: { status: 'PENDING', size: 500 } }),
-      ])
-      // L'app serializza le risposte paginate con PageSerializationMode.VIA_DTO
-      // (vedi CiaklogApplication.java) — totalElements/totalPages NON sono più in
-      // cima all'oggetto ma annidati sotto `.page.` (es. { content: [...], page: {
-      // totalElements, totalPages, number } }). Leggerli in cima dava sempre
-      // undefined → 0 segnalazioni/utenti mostrati anche quando ce n'erano
-      const pendingList = Array.isArray(reportsRes.data) ? reportsRes.data : (reportsRes.data.content || [])
-      // Fix (dashboard admin): "N segnalazioni" da solo può fuorviare — 4
-      // segnalazioni potrebbero essere tutte sulla STESSA recensione. Conta
-      // anche quanti elementi distinti (recensioni + risposte) sono coinvolti,
-      // stessa logica di raggruppamento già usata per la lista sotto.
-      const distinctTargets = new Set(
-          pendingList.map(r => r.targetType === 'COMMENT' ? `comment_${r.reviewCommentId}` : `review_${r.reviewId}`)
-      ).size
+      // Fix (dashboard admin — card "Segnalazioni in attesa"): mostrava lo
+      // stesso numero sia come valore principale sia come "elementi" (es.
+      // "1 su 1 elemento" anche quando 3 utenti diversi avevano segnalato la
+      // STESSA recensione) — il valore principale veniva letto da
+      // page.totalElements dell'endpoint paginato /reports, che conta i
+      // GRUPPI (bersagli distinti), non le singole segnalazioni; "elementi"
+      // veniva ricalcolato a parte ma sugli stessi dati raggruppati, quindi
+      // finiva sempre uguale. Il nuovo endpoint /reports/summary distingue
+      // esplicitamente le due cose: totalReports = righe di segnalazione
+      // (es. 3, un utente per volta), totalTargets = bersagli distinti (es.
+      // 1, la stessa recensione) — così il valore principale è quello giusto
+      // (3) invece del gruppo (1) duplicato in entrambi i punti.
+      const usersReq = api.get('/admin/users', { params: { page: 0, size: 1 } })
+      const summaryReq = api.get('/reports/summary', { params: { status: 'PENDING' } })
+      const [usersRes, summaryRes] = await Promise.all([usersReq, summaryReq])
       setStats({
         totalUsers: usersRes.data.page?.totalElements ?? users.length,
-        pendingReports: Array.isArray(reportsRes.data) ? reportsRes.data.length : reportsRes.data.page?.totalElements ?? pendingList.length,
-        pendingReportTargets: distinctTargets,
+        totalReports: summaryRes.data.totalReports,
+        totalReportTargets: summaryRes.data.totalTargets,
       })
     } catch { }
   }
@@ -275,21 +298,64 @@ function AdminPage() {
     finally { setUsersLoading(false) }
   }, [usersPage, userSearch, usersSortBy, usersSortDir])
 
+  // Fix (dashboard admin — filtro per tipo bersaglio): prima non c'era modo
+  // di vedere solo le segnalazioni su recensioni o solo quelle su risposte,
+  // in nessuna delle 3 sezioni (In attesa/Approvate/Rifiutate). Dichiarato
+  // qui sopra (prima di loadReports) perché ora è un parametro della
+  // richiesta al backend, non più un filtro applicato dopo sui dati caricati.
+  const [targetTypeFilter, setTargetTypeFilterState] = useState('ALL') // ALL | REVIEW | COMMENT
+  // Stesso motivo di setReportFilter sopra: cambiare filtro senza tornare a
+  // pagina 0 poteva lasciarti su una pagina 3 che con il nuovo filtro non
+  // esiste nemmeno più (es. 2 sole pagine di risultati filtrati).
+  const setTargetTypeFilter = (f) => { setTargetTypeFilterState(f); setReportsPage(0) }
+
+  // Fix (🔴 FIX — "7 elementi ma dice 1 di 2"): loadReports non aveva
+  // nessuna protezione contro le risposte fuori ordine. Cambiando filtro
+  // velocemente (Tutti → Recensioni → Risposte) partono più richieste in
+  // parallelo; se una risposta VECCHIA (es. di "Tutti", magari più lenta)
+  // arriva DOPO quella nuova di "Recensioni", sovrascriveva reportsTotalPages
+  // con un numero che non corrisponde più al contenuto mostrato — contenuto
+  // corretto (l'ultima richiesta), paginazione sbagliata (una richiesta
+  // precedente). Con questo contatore, solo la risposta della richiesta più
+  // recente viene applicata allo stato; le altre vengono scartate.
+  const reportsRequestId = useRef(0)
+
   const loadReports = async () => {
+    const requestId = ++reportsRequestId.current
     setReportsLoading(true)
     try {
-      // Fix (dashboard admin — trovato in revisione): nessun "size" specificato,
-      // quindi il backend applicava il default (20) — con più di 20 segnalazioni
-      // pendenti (es. dopo molti test) l'admin ne vedeva solo le prime, in modo
-      // silenzioso, senza nessun avviso o paginazione a compensare. La sezione
-      // Segnalazioni è pensata per essere lavorata tutta insieme (raggruppata
-      // per bersaglio), quindi qui serve l'elenco intero, non una pagina alla volta.
-      // Nessun filtro "Tutti" — se non c'è filtro si usa PENDING di default
-      const params = reportFilter ? { status: reportFilter, size: 500 } : { size: 500 }
+      // Fix (dashboard admin): prima si caricava sempre tutto con size:500,
+      // senza paginazione reale — come "Utenti totali", ora anche qui pagina
+      // vera (size 10), coerente col resto della dashboard.
+      // Fix (dashboard admin — filtro per tipo bersaglio): il filtro
+      // recensioni/risposte prima veniva applicato lato frontend SOLO sui
+      // report della pagina corrente, quindi "funzionava" solo lì e
+      // spariva cambiando pagina. Ora targetType va al backend, che filtra
+      // PRIMA di paginare — vale su tutte le pagine, in tutte e 3 le sezioni.
+      const params = {
+        status: reportFilter || 'PENDING',
+        page: reportsPage,
+        size: 10,
+        targetType: targetTypeFilter === 'ALL' ? undefined : targetTypeFilter,
+      }
       const res = await api.get('/reports', { params })
-      setReports(res.data.content || res.data)
-    } catch { setReports([]) }
-    finally { setReportsLoading(false) }
+      if (requestId !== reportsRequestId.current) return // risposta di una richiesta superata, ignorala
+      const content = res.data.content || res.data
+      // Fix (🔴 FIX — "resto bloccato lì, sparisce anche la navigazione"):
+      // se la pagina richiesta risulta vuota (es. il conteggio dei gruppi è
+      // cambiato tra una richiesta e l'altra, o si è finiti oltre l'ultima
+      // pagina reale) e non siamo già sulla prima pagina, non ha senso
+      // mostrare "Nessuna segnalazione" e lasciare l'utente bloccato lì:
+      // torniamo automaticamente a pagina 1 invece di affidarci solo ai
+      // controlli di navigazione.
+      if (content.length === 0 && reportsPage > 0) {
+        setReportsPage(0)
+        return
+      }
+      setReports(content)
+      setReportsTotalPages(res.data.page?.totalPages || 1)
+    } catch { if (requestId === reportsRequestId.current) setReports([]) }
+    finally { if (requestId === reportsRequestId.current) setReportsLoading(false) }
   }
 
   useEffect(() => { loadStats() }, [token, user])
@@ -301,7 +367,7 @@ function AdminPage() {
 
   useEffect(() => {
     if (tab === 'reports') loadReports()
-  }, [tab, reportFilter])
+  }, [tab, reportFilter, reportsPage, targetTypeFilter])
 
   const handleSuspend = async (userId, reason) => {
     try {
@@ -319,6 +385,13 @@ function AdminPage() {
   // di mostrarle come righe separate — così l'admin vede "X — N segnalazioni".
   // Nota: la vera distinzione visiva recensioni/risposte nella dashboard è un
   // pezzo a parte — questa è solo la patch minima per non rompersi con i due target.
+  // Fix (🟡 gruppi spezzati tra le pagine): il backend ora raggruppa per
+  // bersaglio PRIMA di paginare (vedi ReportServiceImpl.getReports) — un
+  // gruppo non arriva mai spezzato su due pagine diverse, quindi questo
+  // raggruppamento qui è solo per la resa visiva (accorpare le righe di uno
+  // stesso bersaglio in una card), non deve più "correggere" nulla.
+  // (targetTypeFilter dichiarato più sopra, prima di loadReports — il filtro
+  // per tipo bersaglio ora è lato backend, qui restano solo raggruppamento)
   const reportGroups = useMemo(() => {
     const map = new Map()
     reports.forEach(r => {
@@ -334,10 +407,22 @@ function AdminPage() {
   // (es. SPAM e INAPPROPRIATE_CONTENT), finalReasonCategory è quello scelto
   // dall'admin tra quelli effettivamente usati — normalizza tutti i report
   // del gruppo sullo stesso motivo invece di lasciarne "vincere" uno a caso.
+  // Fix (🔴 FIX — contatore non si aggiorna sulle segnalazioni multi-utente):
+  // Promise.all lanciava tutte le PUT in parallelo — per un gruppo con più
+  // segnalazioni pendenti sullo STESSO bersaglio, più richieste concorrenti
+  // finivano per leggere/scrivere lo stesso Review e lo stesso User
+  // (penalizeOffender in ReportServiceImpl) prima che l'una vedesse il
+  // commit dell'altra: un classico lost update — nessun errore visibile,
+  // ma lo stato finale (violationCount, contatori) poteva risultare
+  // incoerente. Con un solo report (caso singolo utente) non c'è
+  // concorrenza, infatti lì il contatore scalava sempre correttamente.
+  // Ora le richieste vengono inviate in sequenza, una alla volta.
   const handleReportGroup = async (group, action, finalReasonCategory) => {
     const pendingIds = group.filter(r => r.status === 'PENDING').map(r => r.id)
     try {
-      await Promise.all(pendingIds.map(id => api.put(`/reports/${id}`, { action, finalReasonCategory })))
+      for (const id of pendingIds) {
+        await api.put(`/reports/${id}`, { action, finalReasonCategory })
+      }
       loadReports(); loadStats()
     } catch (err) { toast.show(err.response?.data?.error || 'Errore') }
   }
@@ -374,14 +459,19 @@ function AdminPage() {
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '16px', marginBottom: '32px' }}>
                 {[
                   { label: 'Utenti totali', value: stats.totalUsers, icon: '👥', color: '#3b82f6' },
-                  { label: 'Segnalazioni in attesa', value: stats.pendingReports, sub: stats.pendingReportTargets != null ? `su ${stats.pendingReportTargets} ${stats.pendingReportTargets === 1 ? 'elemento' : 'elementi'}` : null, icon: '🚩', color: stats.pendingReports > 0 ? '#f59e0b' : '#22c55e' },
+                  { label: 'Segnalazioni in attesa', value: stats.totalReports, sub: stats.totalReportTargets != null ? `su ${stats.totalReportTargets} ${stats.totalReportTargets === 1 ? 'elemento' : 'elementi'}` : null, icon: '🚩', color: stats.totalReports > 0 ? '#f59e0b' : '#22c55e' },
                   /* Fix (dashboard admin): la terza card mostrava sempre "Pagina X/Y"
                      riferito alla paginazione utenti, anche nel tab Segnalazioni —
-                     dove non esiste paginazione (lista caricata per intero) e quel
-                     numero era quindi fuorviante. Ora è contestuale al tab attivo. */
+                     dove prima non esisteva paginazione (lista caricata per intero)
+                     e quel numero era fuorviante, sostituito con "Segnalazioni
+                     visualizzate" (ridondante con "Segnalazioni in attesa" qui sopra,
+                     stesso numero in pratica). Ora le Segnalazioni hanno paginazione
+                     vera anche loro, quindi la card è "Pagina" in entrambi i tab,
+                     contestuale a quello attivo — nessuna ridondanza, nessun numero
+                     fuori contesto. */
                   tab === 'users'
                     ? { label: 'Pagina', value: `${usersPage + 1} / ${usersTotalPages}`, icon: '📄', color: 'var(--text-muted)' }
-                    : { label: 'Segnalazioni visualizzate', value: reports.length, icon: '📋', color: 'var(--text-muted)' },
+                    : { label: 'Pagina', value: `${reportsPage + 1} / ${reportsTotalPages}`, icon: '📄', color: 'var(--text-muted)' },
                 ].map(s => (
                     <div key={s.label} style={{ backgroundColor: 'var(--bg-nav)', border: '1px solid var(--border-soft)', borderRadius: '10px', padding: '20px' }}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '8px' }}>
@@ -398,17 +488,56 @@ function AdminPage() {
               </div>
           )}
 
-          <div style={{ display: 'flex', gap: '8px', marginBottom: '28px' }}>
-            {[{ label: '👥 Utenti', value: 'users' }, { label: '🚩 Segnalazioni', value: 'reports' }].map(t => (
-                <button key={t.value} onClick={() => setTab(t.value)} style={{
-                  padding: '10px 24px', borderRadius: '8px', fontSize: '14px', fontWeight: '600',
-                  border: `1px solid ${tab === t.value ? 'var(--accent)' : 'var(--border-soft)'}`,
-                  backgroundColor: tab === t.value ? 'var(--accent)' : 'transparent',
-                  color: 'var(--text)', cursor: 'pointer',
-                }}>
-                  {t.label}
-                </button>
-            ))}
+          {/* Fix (dashboard admin — "accanto a Utenti/Segnalazioni", cioè i TAB,
+              non le card statistiche sopra — chiarito dopo il primo tentativo):
+              il filtro Stato ora sta nella stessa riga dei bottoni tab
+              👥 Utenti / 🚩 Segnalazioni, a destra, solo quando il tab
+              Segnalazioni è attivo (dove il filtro ha senso). */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: '16px', marginBottom: '28px', flexWrap: 'wrap' }}>
+            <div style={{ display: 'flex', gap: '8px' }}>
+              {[{ label: '👥 Utenti', value: 'users' }, { label: '🚩 Segnalazioni', value: 'reports' }].map(t => (
+                  <button key={t.value} onClick={() => setTab(t.value)} style={{
+                    padding: '10px 24px', borderRadius: '8px', fontSize: '14px', fontWeight: '600',
+                    border: `1px solid ${tab === t.value ? 'var(--accent)' : 'var(--border-soft)'}`,
+                    backgroundColor: tab === t.value ? 'var(--accent)' : 'transparent',
+                    color: 'var(--text)', cursor: 'pointer',
+                  }}>
+                    {t.label}
+                  </button>
+              ))}
+            </div>
+
+            {/* Fix (dashboard admin — "al centro della riga", non a destra):
+                era con justify-content:'space-between', che con solo 2 elementi
+                (tab a sinistra, filtro) spinge il filtro sul bordo destro
+                invece che al centro. Ora il filtro sta in un blocco flex:1 con
+                justify-content centrato, quindi cade più o meno a metà dello
+                spazio rimasto dopo i tab. */}
+            {tab === 'reports' && (
+                <div style={{ flex: '1 1 auto', display: 'flex', justifyContent: 'center' }}>
+                  <div>
+                    <div style={{ fontSize: '11px', fontWeight: '700', color: 'var(--text-dark)', textTransform: 'uppercase', letterSpacing: '0.03em', marginBottom: '6px', textAlign: 'center' }}>
+                      Stato
+                    </div>
+                    <div style={{ display: 'flex', gap: '8px' }}>
+                      {[
+                        { label: '⏳ In attesa', value: 'PENDING' },
+                        { label: '✅ Approvate', value: 'APPROVED' },
+                        { label: '❌ Rifiutate', value: 'REJECTED' },
+                      ].map(f => (
+                          <button key={f.value} onClick={() => setReportFilter(f.value)} style={{
+                            padding: '6px 16px', borderRadius: '20px', fontSize: '13px',
+                            border: `1px solid ${reportFilter === f.value ? 'var(--accent)' : 'var(--border-soft)'}`,
+                            backgroundColor: reportFilter === f.value ? 'var(--accent)' : 'transparent',
+                            color: 'var(--text)', cursor: 'pointer',
+                          }}>
+                            {f.label}
+                          </button>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+            )}
           </div>
 
           {/* ── TAB UTENTI ── */}
@@ -459,11 +588,15 @@ function AdminPage() {
                         {/* Fix (dashboard admin — trovato in revisione): gli admin comparivano
                             sempre per primi per puro caso (coincidenza di username/dati nel
                             seed), dando l'impressione che l'ordinamento non funzionasse per
-                            loro. Reso esplicito: gli admin restano fissi in cima (sezione
-                            separata da un bordo), gli utenti normali sotto seguono
-                            l'ordinamento scelto. Comportamento dichiarato, non un effetto
-                            collaterale che sembra un bug. */}
-                        {[...users].sort((a, b) => (b.role === 'ADMIN') - (a.role === 'ADMIN')).map((u, i, arr) => (
+                            loro. FIX VERO (backend, AdminController): il ruolo è ora il
+                            criterio di ordinamento primario applicato PRIMA della
+                            paginazione, quindi `users` arriva già con gli admin in cima su
+                            TUTTE le pagine, insieme, mai spezzati tra una pagina e l'altra.
+                            Tolto il riordino qui: era un cerotto lato frontend che sistemava
+                            solo la pagina già arrivata (se i 2 admin finivano su pagine
+                            diverse, ognuno restava fissato in cima alla propria pagina
+                            separatamente). Tenuto solo il bordo separatore visivo sotto. */}
+                        {users.map((u, i, arr) => (
                             <tr key={u.username} style={{
                               borderBottom: '1px solid var(--border)',
                               borderTop: u.role !== 'ADMIN' && i > 0 && arr[i - 1].role === 'ADMIN' ? '2px solid var(--border-soft)' : undefined,
@@ -553,22 +686,32 @@ function AdminPage() {
           {/* ── TAB SEGNALAZIONI ── */}
           {tab === 'reports' && (
               <div>
-                {/* Filtri — rimosso "Tutte" */}
-                <div style={{ display: 'flex', gap: '8px', marginBottom: '24px' }}>
-                  {[
-                    { label: '⏳ In attesa', value: 'PENDING' },
-                    { label: '✅ Approvate', value: 'APPROVED' },
-                    { label: '❌ Rifiutate', value: 'REJECTED' },
-                  ].map(f => (
-                      <button key={f.value} onClick={() => setReportFilter(f.value)} style={{
-                        padding: '6px 16px', borderRadius: '20px', fontSize: '13px',
-                        border: `1px solid ${reportFilter === f.value ? 'var(--accent)' : 'var(--border-soft)'}`,
-                        backgroundColor: reportFilter === f.value ? 'var(--accent)' : 'transparent',
-                        color: 'var(--text)', cursor: 'pointer',
-                      }}>
-                        {f.label}
-                      </button>
-                  ))}
+                {/* Fix (dashboard admin — "spostiamo il primo filtro nella riga di
+                    utenti/segnalazioni"): il filtro Stato non è più qui — è stato
+                    spostato su, nella stessa riga delle card statistiche
+                    (Utenti totali / Segnalazioni in attesa), centrato accanto a
+                    loro. Resta qui invece il filtro "Tipo di contenuto", che
+                    l'utente non ha chiesto di spostare. */}
+                <div style={{ marginBottom: '24px' }}>
+                  <div style={{ fontSize: '11px', fontWeight: '700', color: 'var(--text-dark)', textTransform: 'uppercase', letterSpacing: '0.03em', marginBottom: '6px' }}>
+                    Tipo di contenuto — vale in tutte e 3 le sezioni sopra
+                  </div>
+                  <div style={{ display: 'flex', gap: '8px' }}>
+                    {[
+                      { label: 'Tutti', value: 'ALL' },
+                      { label: '🎬 Recensioni', value: 'REVIEW' },
+                      { label: '💬 Risposte', value: 'COMMENT' },
+                    ].map(f => (
+                        <button key={f.value} onClick={() => setTargetTypeFilter(f.value)} style={{
+                          padding: '5px 14px', borderRadius: '20px', fontSize: '12px',
+                          border: `1px solid ${targetTypeFilter === f.value ? 'var(--text-muted)' : 'var(--border-soft)'}`,
+                          backgroundColor: targetTypeFilter === f.value ? 'var(--border-soft)' : 'transparent',
+                          color: 'var(--text-muted)', cursor: 'pointer',
+                        }}>
+                          {f.label}
+                        </button>
+                    ))}
+                  </div>
                 </div>
 
                 {reportsLoading ? (
@@ -582,6 +725,14 @@ function AdminPage() {
                       {reportGroups.map(group => {
                         const first = group[0]
                         const isComment = first.targetType === 'COMMENT'
+                        // Fix (🔴 FIX — "other" senza descrizione nella segnalazione): il
+                        // motivo finale (dopo la risoluzione) è normalizzato su TUTTI i
+                        // report del gruppo (vedi resolveReport/finalReasonCategory), ma
+                        // reasonText resta quello scritto dal singolo segnalante — "first"
+                        // è solo il report più recente del gruppo, non necessariamente
+                        // quello che ha davvero scritto OTHER con la descrizione. Cerchiamo
+                        // nel gruppo il primo report che abbia un reasonText valorizzato.
+                        const otherReasonText = group.find(r => r.reasonCategory === 'OTHER' && r.reasonText)?.reasonText
                         const groupKey = isComment ? `comment_${first.reviewCommentId}` : `review_${first.reviewId}`
                         const authorUsername = isComment ? first.commentAuthorUsername : first.reviewAuthorUsername
                         const contentText = isComment ? first.commentText : first.reviewText
@@ -609,26 +760,32 @@ function AdminPage() {
                             decisione è già presa su UN motivo solo (quello scelto
                             dall'admin, o l'unico presente) — mostrare ancora "3
                             segnalazioni" lì è fuorviante, quindi mostriamo quel motivo. */}
+                        {/* Fix (Light Mode): questi 3 badge avevano lo sfondo hardcoded
+                            (#2d1a1a, un rosso scuro fisso) invece di var(--accent-subtle),
+                            già usata correttamente qui sopra per il badge categoria (riga
+                            535) — restavano scuri anche in Light Mode. */}
                         {reportFilter === 'PENDING' ? (
-                            <span style={{ padding: '3px 10px', borderRadius: '4px', fontSize: '12px', fontWeight: '600', backgroundColor: '#2d1a1a', color: 'var(--accent)', border: '1px solid #e5091444', flexShrink: 0 }}>
+                            <span style={{ padding: '3px 10px', borderRadius: '4px', fontSize: '12px', fontWeight: '600', backgroundColor: 'var(--accent-subtle)', color: 'var(--accent)', border: '1px solid #e5091444', flexShrink: 0 }}>
                               {group.length} {group.length === 1 ? 'segnalazione' : 'segnalazioni'}
                             </span>
                         ) : (
                             <span
-                                title={first.reasonCategory === 'OTHER' ? (first.reasonText || 'Nessun dettaglio') : undefined}
-                                style={{ padding: '3px 10px', borderRadius: '4px', fontSize: '12px', fontWeight: '600', backgroundColor: '#2d1a1a', color: 'var(--accent)', border: '1px solid #e5091444', flexShrink: 0, cursor: first.reasonCategory === 'OTHER' ? 'help' : 'default' }}
+                                style={{ padding: '3px 10px', borderRadius: '4px', fontSize: '12px', fontWeight: '600', backgroundColor: 'var(--accent-subtle)', color: 'var(--accent)', border: '1px solid #e5091444', flexShrink: 0 }}
                             >
-                              motivo: {first.reasonCategory === 'OTHER' ? (first.reasonText ? `Altro — ${first.reasonText}` : 'Altro') : first.reasonCategory}
+                              motivo: {first.reasonCategory === 'OTHER' ? (otherReasonText || 'Altro') : first.reasonCategory}
                             </span>
                         )}
                                 <span style={{ color: 'var(--text)', fontSize: '14px', flex: 1 }}>
                           {isComment ? 'Risposta' : 'Recensione'} di <strong>{authorUsername || '—'}</strong>
-                          {/* "segnalata da X, Y" ha senso solo quando
-                              c'è ancora una decisione da prendere (filtro Pendenti) — su una
-                              segnalazione già approvata/rifiutata non serve più, la decisione
-                              è già presa indipendentemente da chi l'ha segnalata */}
+                          {/* Fix (🟡 nomi segnalanti visibili anche a tendina chiusa): questa
+                              riga sommario è sempre visibile (fa parte dell'header cliccabile,
+                              non della sezione "{expanded && (...)}" più sotto) — elencare i
+                              nomi qui li mostrava anche prima di aprire il dettaglio. Ora mostra
+                              solo il conteggio ("segnalata da 3 utenti"); i nomi restano visibili
+                              solo dentro il dettaglio espanso (riga ~833), dove l'admin li vede
+                              uno per uno insieme al motivo di ciascuna segnalazione. */}
                           {group.length > 1 && reportFilter === 'PENDING' && (
-                              <span style={{ color: 'var(--text-dark)' }}> — segnalata da {group.map(r => r.reporterUsername).join(', ')}</span>
+                              <span style={{ color: 'var(--text-dark)' }}> — segnalata da {group.length} utenti</span>
                           )}
                         </span>
                                 <span style={{ color: 'var(--text-dark)', fontSize: '12px', flexShrink: 0 }}>{new Date(first.createdAt).toLocaleDateString('it-IT')}</span>
@@ -724,10 +881,10 @@ function AdminPage() {
                                     <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', marginBottom: '16px' }}>
                                       {group.map(r => (
                                           <div key={r.id} style={{ backgroundColor: 'var(--bg-hover)', borderRadius: '8px', padding: '10px 14px' }}>
-                                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: r.reasonText ? '4px' : 0 }}>
+                                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: (r.reasonText && r.reasonCategory !== 'OTHER') ? '4px' : 0 }}>
                                               <span style={{ color: 'var(--text)', fontSize: '13px', fontWeight: '600' }}>{r.reporterUsername}</span>
-                                              <span style={{ padding: '1px 8px', borderRadius: '4px', fontSize: '11px', fontWeight: '600', backgroundColor: '#2d1a1a', color: 'var(--accent)', border: '1px solid #e5091444' }}>
-                                                {r.reasonCategory}
+                                              <span style={{ padding: '1px 8px', borderRadius: '4px', fontSize: '11px', fontWeight: '600', backgroundColor: 'var(--accent-subtle)', color: 'var(--accent)', border: '1px solid #e5091444' }}>
+                                                {r.reasonCategory === 'OTHER' ? (r.reasonText || 'Altro') : r.reasonCategory}
                                               </span>
                                               <span style={{ color: 'var(--text-dark)', fontSize: '11px', marginLeft: 'auto' }}>{new Date(r.createdAt).toLocaleDateString('it-IT')}</span>
                                               {r.status !== 'PENDING' && (
@@ -736,7 +893,11 @@ function AdminPage() {
                                                   </span>
                                               )}
                                             </div>
-                                            {r.reasonText && (
+                                            {/* reasonText già mostrato dentro il badge quando la categoria
+                                                è OTHER (sopra) — qui lo mostriamo solo per le altre
+                                                categorie, dove reasonText è un dettaglio facoltativo
+                                                aggiuntivo scritto dall'utente, non il motivo stesso */}
+                                            {r.reasonText && r.reasonCategory !== 'OTHER' && (
                                                 <div style={{ color: 'var(--text-muted)', fontSize: '12px' }}>{r.reasonText}</div>
                                             )}
                                           </div>
@@ -757,7 +918,12 @@ function AdminPage() {
                                                     onChange={e => setChosenReasonByGroup(prev => ({ ...prev, [groupKey]: e.target.value }))}
                                                     style={{ padding: '6px 10px', backgroundColor: 'var(--bg-hover)', border: '1px solid var(--border-soft)', borderRadius: '6px', color: 'var(--text)', fontSize: '13px' }}
                                                 >
-                                                  {pendingReasons.map(cat => <option key={cat} value={cat}>{cat}</option>)}
+                                                  {pendingReasons.map(cat => {
+                                                    const label = cat === 'OTHER'
+                                                        ? `OTHER: ${group.find(r => r.status === 'PENDING' && r.reasonCategory === 'OTHER' && r.reasonText)?.reasonText || 'Altro'}`
+                                                        : cat
+                                                    return <option key={cat} value={cat}>{label}</option>
+                                                  })}
                                                 </select>
                                               </div>
                                           )}
@@ -787,6 +953,24 @@ function AdminPage() {
                             </div>
                         )
                       })}
+                    </div>
+                )}
+
+                {/* Fix: rimossa la condizione extra "|| reportsPage > 0" che
+                    avevo aggiunto per evitare di restare bloccati su una
+                    pagina vuota — causava però il problema opposto: la
+                    navigazione restava visibile anche con una sola pagina
+                    vera, se reportsPage era rimasto a un valore non-zero
+                    (es. nell'URL, da un test precedente con più dati).
+                    L'auto-recovery in loadReports (torna a pagina 1 se la
+                    pagina richiesta risulta vuota) basta da solo. */}
+                {reportsTotalPages > 1 && (
+                    <div style={{ display: 'flex', justifyContent: 'center', gap: '12px', marginTop: '24px', alignItems: 'center' }}>
+                      <button onClick={() => setReportsPage(p => Math.max(0, p - 1))} disabled={reportsPage === 0}
+                              style={{ padding: '8px 16px', backgroundColor: 'transparent', border: '1px solid var(--border-soft)', borderRadius: '6px', color: reportsPage === 0 ? 'var(--border-soft)' : 'var(--text)', cursor: reportsPage === 0 ? 'default' : 'pointer' }}>←</button>
+                      <span style={{ color: 'var(--text-muted)', fontSize: '14px' }}>Pagina {reportsPage + 1} di {reportsTotalPages}</span>
+                      <button onClick={() => setReportsPage(p => Math.min(reportsTotalPages - 1, p + 1))} disabled={reportsPage >= reportsTotalPages - 1}
+                              style={{ padding: '8px 16px', backgroundColor: 'transparent', border: '1px solid var(--border-soft)', borderRadius: '6px', color: reportsPage >= reportsTotalPages - 1 ? 'var(--border-soft)' : 'var(--text)', cursor: reportsPage >= reportsTotalPages - 1 ? 'default' : 'pointer' }}>→</button>
                     </div>
                 )}
               </div>

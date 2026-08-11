@@ -156,6 +156,15 @@ public class AdminServiceImpl implements AdminService {
         if (target.getStatus() == UserStatus.PERMANENTLY_SUSPENDED) {
             throw new BusinessRuleException("Utente già sospeso permanentemente");
         }
+        // Fix (trovato in revisione): non c'era nessun controllo che impedisse
+        // di sospendere di nuovo un utente già SUSPENDED — un admin poteva
+        // farlo ripetutamente, incrementando ogni volta violationCount fino a
+        // farlo scattare a PERMANENTLY_SUSPENDED senza una vera nuova violazione
+        // di mezzo. Per riabilitarlo o valutare un'escalation reale, passa
+        // prima da reinstateUser oppure da una segnalazione approvata.
+        if (target.getStatus() == UserStatus.SUSPENDED) {
+            throw new BusinessRuleException("Utente già sospeso — riabilitalo prima di poterlo sospendere di nuovo");
+        }
 
         target.setViolationCount(target.getViolationCount() + 1);
         target.setSuspensionReason(reason);

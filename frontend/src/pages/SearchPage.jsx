@@ -44,8 +44,14 @@ function SearchPage() {
       .catch(() => setEmptyTip(''))
   }, [token, loading, q, results.length])
 
+  // Fix (🟡 minimo 2 caratteri non coerente): qui non c'era ALCUN controllo di
+  // lunghezza minima — solo "non vuoto" (q.trim()). Questo è il vero punto
+  // d'ingresso della ricerca (parte ogni volta che "q" nell'URL cambia, sia
+  // arrivando da fuori sia da dentro la pagina), quindi il controllo va qui:
+  // sistemato una volta sola invece che duplicato (e disallineabile di nuovo
+  // in futuro) nei singoli punti che possono cambiare "q".
   useEffect(() => {
-    if (!q.trim()) return
+    if (!q.trim() || q.trim().length < 2) { setResults([]); setLoading(false); return }
     setLoading(true)
     setResults([])
 
@@ -120,7 +126,7 @@ function SearchPage() {
 
   const handleSearch = (e) => {
     e.preventDefault()
-    if (query.trim()) setSearchParams({ q: query.trim(), type })
+    if (query.trim().length >= 2) setSearchParams({ q: query.trim(), type })
   }
 
   return (
