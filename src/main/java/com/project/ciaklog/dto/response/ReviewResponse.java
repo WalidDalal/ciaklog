@@ -25,6 +25,7 @@ public class ReviewResponse {
     // Nascosta perché l'autore è sospeso — flag distinto da hiddenByAuthor,
     // serve al frontend per mostrare un banner diverso all'Admin
     private boolean hiddenBySuspension;
+    private boolean hiddenByDeletion;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
 

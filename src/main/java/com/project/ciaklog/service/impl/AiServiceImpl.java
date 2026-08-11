@@ -160,6 +160,12 @@ public class AiServiceImpl implements AiService {
                     Se il messaggio è solo un saluto, small talk, un ringraziamento o non contiene una
                     richiesta reale, rispondi in modo naturale e amichevole ma lascia "titles" vuoto ([]).
 
+                    Se invece la richiesta attuale è una vera richiesta di consigli o suggerimenti (es.
+                    "consigliami qualcosa di simile a X", "cosa guardo stasera", "un film leggero"),
+                    rispondi in modo naturale e amichevole in italiano (1-2 frasi) e poi suggerisci titoli
+                    pertinenti nel campo "titles" — presta attenzione a richieste situazionali (mood,
+                    durata, quanto è recente) e adatta i suggerimenti al contesto, non solo al genere.
+
                     Per ogni titolo consigliato, aggiungi un motivo brevissimo (max 12 parole).
 
                     Formato risposta — SOLO questo JSON, niente altro:
@@ -170,7 +176,7 @@ public class AiServiceImpl implements AiService {
         }
 
         try {
-            String rawResponse = callGroq(prompt);
+            String rawResponse = callGroq(prompt, true);
 
             String reply;
             List<String> titles;
@@ -387,7 +393,7 @@ public class AiServiceImpl implements AiService {
 
         List<TmdbSearchResultResponse> suggestions;
         try {
-            String rawResponse = callGroq(prompt);
+            String rawResponse = callGroq(prompt, true);
             List<String> titles = new java.util.ArrayList<>();
             Map<String, String> reasons = new java.util.LinkedHashMap<>();
             parseTitlesAndReasons(rawResponse, titles, reasons);
@@ -674,11 +680,11 @@ public class AiServiceImpl implements AiService {
                 rispetto a quello che ha già visto, ma considerando anche i trend della community.
                 Per ogni titolo aggiungi un motivo brevissimo (max 12 parole) del perché lo consigli oggi.
                 Rispondi SOLO con questo JSON, niente altro:
-                [
+                { "titles": [
                   { "title": "Titolo 1", "reason": "motivo breve" },
                   { "title": "Titolo 2", "reason": "motivo breve" },
                   { "title": "Titolo 3", "reason": "motivo breve" }
-                ]
+                ] }
                 """.formatted(libraryProfile, watchingNow, trendingNow);
     }
 
@@ -741,12 +747,31 @@ public class AiServiceImpl implements AiService {
     private static final long RETRY_BACKOFF_MS = 1500L;
 
     private String callGroq(String prompt) throws Exception {
-        String body = mapper.writeValueAsString(Map.of(
-                "model", GROQ_MODEL,
-                "messages", List.of(
-                        Map.of("role", "user", "content", prompt)
-                )
-        ));
+        return callGroq(prompt, false);
+    }
+
+    // Fix (🟡 FIX — Assistente AI, titoli mancanti "a volte"): il body della
+    // richiesta a Groq non specificava mai response_format — per le chiamate
+    // che si aspettano il JSON { reply, titles } (chat utente e getDaily),
+    // il modello poteva occasionalmente restituire testo extra prima/dopo il
+    // JSON o deviare leggermente dal formato. In quel caso il parsing
+    // principale falliva e si cadeva nel fallback parseTitlesFromResponse,
+    // che tratta l'intera risposta come un array — ma sull'oggetto
+    // { reply, titles } questo produce spazzatura (itera i VALORI
+    // dell'oggetto: il testo del "reply" finisce trattato come se fosse un
+    // titolo di film), che poi non si risolve mai su TMDB e fa sparire i
+    // suggerimenti veri. Le chiamate che si aspettano testo semplice
+    // (chatAdmin, structureReview/Comment, movieQuestion, generateNarrative)
+    // continuano a passare jsonMode=false, dato che quel prompt chiede
+    // esplicitamente "NON restituire JSON, solo testo naturale".
+    private String callGroq(String prompt, boolean jsonMode) throws Exception {
+        Map<String, Object> bodyMap = new java.util.LinkedHashMap<>();
+        bodyMap.put("model", GROQ_MODEL);
+        bodyMap.put("messages", List.of(Map.of("role", "user", "content", prompt)));
+        if (jsonMode) {
+            bodyMap.put("response_format", Map.of("type", "json_object"));
+        }
+        String body = mapper.writeValueAsString(bodyMap);
 
         HttpRequest httpRequest = HttpRequest.newBuilder()
                 .uri(URI.create(GROQ_URL))
@@ -793,9 +818,19 @@ public class AiServiceImpl implements AiService {
     private List<String> parseTitlesFromResponse(String rawResponse) {
         try {
             String cleaned = rawResponse.replaceAll("```json|```", "").trim();
-            JsonNode arr = mapper.readTree(cleaned);
+            JsonNode root = mapper.readTree(cleaned);
+            // Fix: questo fallback trattava SEMPRE la risposta come array nudo —
+            // ma lo schema atteso da chat() è { reply, titles }, un oggetto. Se
+            // root è un oggetto, iterare direttamente su di esso itera sui suoi
+            // VALORI (Jackson), quindi il testo di "reply" finiva aggiunto come
+            // se fosse un titolo di film. Ora si legge il campo "titles" quando
+            // presente, come nel parsing principale.
+            JsonNode arr = root.has("titles") ? root.path("titles") : root;
             List<String> titles = new ArrayList<>();
-            arr.forEach(node -> titles.add(node.asText()));
+            arr.forEach(node -> {
+                String title = node.isObject() ? node.path("title").asText() : node.asText();
+                if (title != null && !title.isBlank()) titles.add(title);
+            });
             return titles;
         } catch (Exception e) {
             log.warn("Impossibile fare il parsing della risposta AI come JSON: {}", rawResponse);
@@ -809,7 +844,13 @@ public class AiServiceImpl implements AiService {
     private void parseTitlesAndReasons(String rawResponse, List<String> outTitles, Map<String, String> outReasons) {
         try {
             String cleaned = rawResponse.replaceAll("```json|```", "").trim();
-            JsonNode arr = mapper.readTree(cleaned);
+            JsonNode root = mapper.readTree(cleaned);
+            // Fix: il prompt ora chiede { "titles": [...] } (oggetto, non più
+            // array nudo) per essere compatibile con response_format
+            // json_object di Groq — qui si legge il campo "titles" se
+            // presente, con fallback al vecchio formato ad array puro per
+            // compatibilità con risposte già in cache/salvate.
+            JsonNode arr = root.has("titles") ? root.path("titles") : root;
             arr.forEach(node -> {
                 String title = node.isObject() ? node.path("title").asText() : node.asText();
                 String reason = node.isObject() ? node.path("reason").asText(null) : null;

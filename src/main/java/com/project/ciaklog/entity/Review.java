@@ -71,6 +71,19 @@ public class Review {
     @Builder.Default
     private boolean hiddenBySuspension = false;
 
+    // Fix (dashboard admin — recensioni di utenti eliminati): stesso
+    // principio di hiddenBySuspension, flag indipendente e separato — un
+    // utente che elimina l'account (soft-delete, dati anonimizzati) non
+    // deve restare visibile al pubblico con le sue recensioni/risposte, ma
+    // l'Admin deve poterle ancora vedere (già mostrate con l'username
+    // anonimizzato "deleted_xxxxx", impostato in deleteAccount()).
+    // A differenza di hiddenBySuspension, qui non esiste un "reinstate":
+    // l'eliminazione dell'account è irreversibile, quindi questo flag non
+    // viene mai riportato a false una volta impostato.
+    @Column(name = "hidden_by_deletion", nullable = false)
+    @Builder.Default
+    private boolean hiddenByDeletion = false;
+
     @CreationTimestamp
     @Column(name = "created_at", nullable = false, updatable = false)
     private LocalDateTime createdAt;

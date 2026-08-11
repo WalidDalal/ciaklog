@@ -41,6 +41,7 @@ public interface ReviewRepository extends JpaRepository<Review, UUID> {
               AND (r.status = :status OR (:isAdmin = true AND r.status = com.project.ciaklog.entity.ReviewStatus.HIDDEN))
               AND (r.hiddenByAuthor = false OR r.user.username = :viewerUsername OR :isAdmin = true)
               AND (r.hiddenBySuspension = false OR :isAdmin = true)
+              AND (r.hiddenByDeletion = false OR :isAdmin = true)
             """)
     Page<Review> findByTmdbIdAndContentTypeAndStatus(
             @Param("tmdbId") Long tmdbId,
@@ -67,6 +68,7 @@ public interface ReviewRepository extends JpaRepository<Review, UUID> {
               AND (r.status = :status OR (:isAdmin = true AND r.status = com.project.ciaklog.entity.ReviewStatus.HIDDEN))
               AND (r.hiddenByAuthor = false OR r.user.username = :viewerUsername OR :isAdmin = true)
               AND (r.hiddenBySuspension = false OR :isAdmin = true)
+              AND (r.hiddenByDeletion = false OR :isAdmin = true)
             """)
     Page<Review> findByUser(
             @Param("user") User user,
@@ -114,7 +116,7 @@ public interface ReviewRepository extends JpaRepository<Review, UUID> {
     // Usata per calcoli statistici (media voti),
     // qui l'eccezione per il proprietario non serve — una recensione auto-nascosta
     // non deve influenzare la media mostrata a tutti, punto, indipendentemente da chi guarda
-    @Query("SELECT r FROM Review r WHERE r.tmdbId = :tmdbId AND r.contentType = :contentType AND r.status = 'VISIBLE' AND r.hiddenByAuthor = false AND r.hiddenBySuspension = false")
+    @Query("SELECT r FROM Review r WHERE r.tmdbId = :tmdbId AND r.contentType = :contentType AND r.status = 'VISIBLE' AND r.hiddenByAuthor = false AND r.hiddenBySuspension = false AND r.hiddenByDeletion = false")
     List<Review> findVisibleByTmdbIdAndContentType(@Param("tmdbId") Long tmdbId, @Param("contentType") ContentType contentType);
 
     @Query("""
@@ -123,6 +125,7 @@ public interface ReviewRepository extends JpaRepository<Review, UUID> {
             WHERE r.status = com.project.ciaklog.entity.ReviewStatus.VISIBLE
               AND r.hiddenByAuthor = false
               AND r.hiddenBySuspension = false
+              AND r.hiddenByDeletion = false
               AND r.contentType = :contentType
             GROUP BY r.tmdbId, r.contentType
             HAVING COUNT(r) >= :minVotes
@@ -137,6 +140,7 @@ public interface ReviewRepository extends JpaRepository<Review, UUID> {
             WHERE r.status = com.project.ciaklog.entity.ReviewStatus.VISIBLE
               AND r.hiddenByAuthor = false
               AND r.hiddenBySuspension = false
+              AND r.hiddenByDeletion = false
               AND (r.createdAt >= :since OR r.updatedAt >= :since)
             GROUP BY r.tmdbId, r.contentType
             ORDER BY COUNT(r) DESC

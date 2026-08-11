@@ -43,14 +43,22 @@ public class ReviewServiceImpl implements ReviewService {
 
         ContentType contentType = dto.getContentType();
 
-        // Fix (🔴 trovato nei test funzionali): deleteReview fa un soft delete
-        // (status → REMOVED, la riga resta nel DB), ma questo controllo usava
-        // existsByUserAndTmdbIdAndContentType (senza filtro sullo status) —
-        // quindi chi eliminava la propria recensione e provava a riscriverne
-        // una nuova sullo stesso titolo restava bloccato per sempre con
-        // "Hai già recensito questo contenuto", anche se per lui/lei risultava
-        // cancellata. Stessa variante AndStatusNot già usata altrove nel
-        // codice (es. WatchEntryServiceImpl) per lo stesso tipo di controllo.
+        // Fix (🔴 FIX — segnalato dall'utente, verifica precedente sbagliata:
+        // avevo controllato solo questo check Java, non il vincolo DB):
+        // deleteReview fa un soft delete (status → REMOVED, la RIGA RESTA
+        // nel DB). Il vincolo unique su reviews è (user_id, tmdb_id,
+        // content_type) — SENZA lo status. Quindi anche se questo controllo
+        // permette correttamente di ricreare la recensione (esclude REMOVED),
+        // il successivo Review.builder()... + save() sotto costruiva sempre
+        // una riga NUOVA con un ID nuovo, che va in conflitto con la vecchia
+        // riga REMOVED ancora presente sulla stessa tripla (user, tmdb,
+        // content_type) → 500 per violazione del vincolo unique a livello DB
+        // (MySQL/InnoDB non supporta indici unique parziali/condizionali
+        // come Postgres, quindi non si può escludere REMOVED dal vincolo).
+        // Fix corretto: se esiste già una riga (necessariamente REMOVED, dato
+        // il controllo sopra), la si RESUSCITA aggiornandola invece di
+        // inserirne una nuova — stessa riga/ID, stesso vincolo, nessun
+        // conflitto.
         if (reviewRepository.existsByUserAndTmdbIdAndContentTypeAndStatusNot(user, dto.getTmdbId(), contentType, ReviewStatus.REMOVED)) {
             throw new DuplicateResourceException("Hai già recensito questo contenuto");
         }
@@ -87,13 +95,21 @@ public class ReviewServiceImpl implements ReviewService {
             watchEntryRepository.save(entry);
         }
 
-        Review review = Review.builder()
-                .user(user)
-                .tmdbId(dto.getTmdbId())
-                .contentType(contentType)
-                .rating(dto.getRating())
-                .text(dto.getText())
-                .build();
+        Review review = reviewRepository.findByUserAndTmdbIdAndContentType(user, dto.getTmdbId(), contentType)
+                .orElseGet(() -> Review.builder()
+                        .user(user)
+                        .tmdbId(dto.getTmdbId())
+                        .contentType(contentType)
+                        .build());
+        review.setRating(dto.getRating());
+        review.setText(dto.getText());
+        review.setStatus(ReviewStatus.VISIBLE);
+        // Riga resuscitata da una vecchia eliminazione: azzera anche gli
+        // altri flag di visibilità, altrimenti la nuova recensione
+        // resterebbe nascosta per un motivo ormai non più valido
+        review.setHiddenByAuthor(false);
+        review.setHiddenBySuspension(false);
+        review.setHiddenByDeletion(false);
 
         reviewRepository.save(review);
 
@@ -222,6 +238,7 @@ public class ReviewServiceImpl implements ReviewService {
                 .status(r.getStatus())
                 .hiddenByAuthor(r.isHiddenByAuthor())
                 .hiddenBySuspension(r.isHiddenBySuspension())
+                .hiddenByDeletion(r.isHiddenByDeletion())
                 .createdAt(r.getCreatedAt())
                 .updatedAt(r.getUpdatedAt())
                 .title(entry != null ? entry.getTitle() : null)
@@ -251,6 +268,7 @@ public class ReviewServiceImpl implements ReviewService {
                 .status(r.getStatus())
                 .hiddenByAuthor(r.isHiddenByAuthor())
                 .hiddenBySuspension(r.isHiddenBySuspension())
+                .hiddenByDeletion(r.isHiddenByDeletion())
                 .createdAt(r.getCreatedAt())
                 .updatedAt(r.getUpdatedAt())
                 .title(title)

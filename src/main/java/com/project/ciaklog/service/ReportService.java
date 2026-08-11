@@ -12,6 +12,10 @@ import java.util.UUID;
 public interface ReportService {
     ReportResponse createReport(String username, ReportRequest dto);
     Page<ReportResponse> getReports(ReportStatus status, ReportTargetType targetType, Pageable pageable);
+
+    // Card admin — totale segnalazioni (righe) + totale bersagli distinti
+    // (gruppi) per lo status/tipo filtrato, indipendente dalla paginazione
+    com.project.ciaklog.dto.response.ReportSummaryResponse getReportsSummary(ReportStatus status, ReportTargetType targetType);
     ReportResponse resolveReport(UUID reportId, ReportStatus newStatus, String adminUsername, com.project.ciaklog.entity.ReportReasonCategory finalReasonCategory);
 
     // "Nascondi direttamente" — l'admin rimuove una recensione/risposta senza
