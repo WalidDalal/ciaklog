@@ -4,6 +4,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageNotReadableException;
+import org.springframework.security.authorization.AuthorizationDeniedException;
 import org.springframework.validation.FieldError;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.MissingServletRequestParameterException;
@@ -69,6 +70,18 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(TooManyRequestsException.class)
     public ResponseEntity<Map<String, Object>> handleTooManyRequests(TooManyRequestsException ex) {
         return buildResponse(HttpStatus.TOO_MANY_REQUESTS, ex.getMessage());
+    }
+
+    // 403 — accesso negato da Spring Security (es. @PreAuthorize che fallisce).
+    // Fix (🔴 dal FIX post-revisione, sezione Login): senza questo handler,
+    // AuthorizationDeniedException cadeva nel catch-all generico sotto e
+    // tornava 500 invece di 403. Riguardava tutti gli endpoint protetti da
+    // @PreAuthorize (es. POST /api/ai/chat, GET /api/ai/daily, e
+    // potenzialmente AdminController/ReportController protetti a livello di
+    // classe con @PreAuthorize("hasRole('ADMIN')")).
+    @ExceptionHandler(AuthorizationDeniedException.class)
+    public ResponseEntity<Map<String, Object>> handleAuthorizationDenied(AuthorizationDeniedException ex) {
+        return buildResponse(HttpStatus.FORBIDDEN, "Accesso negato: non hai i permessi necessari.");
     }
 
     // 400 — validazione Bean Validation (@Valid sui DTO)

@@ -52,6 +52,16 @@ public class ReportController {
         return ResponseEntity.ok(reportService.getReports(status, targetType, pageable));
     }
 
+    // Solo Admin — totale segnalazioni + totale bersagli distinti per lo
+    // status/tipo filtrato in dashboard, indipendente dalla paginazione
+    @GetMapping("/summary")
+    @PreAuthorize("hasRole('ADMIN')")
+    public ResponseEntity<com.project.ciaklog.dto.response.ReportSummaryResponse> getReportsSummary(
+            @RequestParam(required = false) ReportStatus status,
+            @RequestParam(required = false) ReportTargetType targetType) {
+        return ResponseEntity.ok(reportService.getReportsSummary(status, targetType));
+    }
+
     // Solo Admin — risolve una segnalazione (APPROVED/REJECTED)
     @PutMapping("/{id}")
     @PreAuthorize("hasRole('ADMIN')")

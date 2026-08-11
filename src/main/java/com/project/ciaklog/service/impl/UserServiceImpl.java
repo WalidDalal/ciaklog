@@ -10,9 +10,13 @@ import com.project.ciaklog.exception.BusinessRuleException;
 import com.project.ciaklog.exception.DuplicateResourceException;
 import com.project.ciaklog.exception.ResourceNotFoundException;
 import com.project.ciaklog.repository.ReviewRepository;
+import com.project.ciaklog.repository.ReviewCommentRepository;
 import com.project.ciaklog.repository.UserRepository;
 import com.project.ciaklog.repository.WatchEntryRepository;
+import com.project.ciaklog.entity.Review;
+import com.project.ciaklog.entity.ReviewComment;
 import com.project.ciaklog.entity.ReviewStatus;
+import com.project.ciaklog.entity.UserStatus;
 import com.project.ciaklog.security.JwtService;
 import com.project.ciaklog.service.UserService;
 import lombok.RequiredArgsConstructor;
@@ -36,6 +40,7 @@ public class UserServiceImpl implements UserService {
     private final UserRepository userRepository;
     private final WatchEntryRepository watchEntryRepository;
     private final ReviewRepository reviewRepository;
+    private final ReviewCommentRepository reviewCommentRepository;
     private final PasswordEncoder passwordEncoder;
     private final JwtService jwtService;
 
@@ -47,9 +52,21 @@ public class UserServiceImpl implements UserService {
     );
 
     @Override
-    public UserProfileResponse getPublicProfile(String username) {
+    public UserProfileResponse getPublicProfile(String username, boolean canViewHidden) {
         User user = userRepository.findByUsername(username)
                 .orElseThrow(() -> new ResourceNotFoundException("Utente non trovato"));
+
+        // Fix (dashboard admin — profilo di utenti sospesi/eliminati ancora
+        // visionabile a chiunque): un profilo di un utente non ACTIVE non è
+        // "non trovato" per un admin (deve poterlo aprire per il contesto di
+        // moderazione, es. dal link nella dashboard segnalazioni) né per il
+        // diretto interessato (se ha ancora un token valido durante una
+        // sospensione temporanea) — ma per chiunque altro sì, stesso
+        // trattamento riservato a un utente inesistente, per non rivelare
+        // nemmeno che l'account esiste/è sospeso.
+        if (user.getStatus() != UserStatus.ACTIVE && !canViewHidden) {
+            throw new ResourceNotFoundException("Utente non trovato");
+        }
 
         List<WatchEntry> allEntries = watchEntryRepository.findAllByUser(user);
 
@@ -180,6 +197,30 @@ public class UserServiceImpl implements UserService {
         user.setEmail("deleted_" + user.getId() + "@deleted.com");
         user.setPasswordHash("[DELETED]");
         user.setBio(null);
+        // Fix (dashboard admin — recensioni di utenti eliminati visibili a
+        // chiunque): lo status restava ACTIVE dopo l'eliminazione, e le
+        // recensioni/risposte non venivano toccate — restavano VISIBLE e
+        // interamente pubbliche, con solo l'username anonimizzato a fare da
+        // indizio. Stesso meccanismo già usato per la sospensione
+        // (hiddenBySuspension): qui è irreversibile, quindi non serve nessun
+        // "reinstate" — hiddenByDeletion resta true per sempre.
+        user.setStatus(UserStatus.DELETED);
         userRepository.save(user);
+
+        List<Review> ownReviews = reviewRepository.findAllByUser(user);
+        for (Review r : ownReviews) {
+            if (r.getStatus() == ReviewStatus.VISIBLE) {
+                r.setHiddenByDeletion(true);
+            }
+        }
+        reviewRepository.saveAll(ownReviews);
+
+        List<ReviewComment> ownComments = reviewCommentRepository.findAllByAuthor(user);
+        for (ReviewComment c : ownComments) {
+            if (c.getStatus() == ReviewStatus.VISIBLE) {
+                c.setHiddenByDeletion(true);
+            }
+        }
+        reviewCommentRepository.saveAll(ownComments);
     }
 }

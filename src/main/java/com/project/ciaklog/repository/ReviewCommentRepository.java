@@ -39,6 +39,7 @@ public interface ReviewCommentRepository extends JpaRepository<ReviewComment, UU
               AND (c.status = :status OR (:isAdmin = true AND c.status = com.project.ciaklog.entity.ReviewStatus.HIDDEN))
               AND (c.hiddenByAuthor = false OR c.author.username = :viewerUsername OR :isAdmin = true)
               AND (c.hiddenBySuspension = false OR :isAdmin = true)
+              AND (c.hiddenByDeletion = false OR :isAdmin = true)
             """)
     Page<ReviewComment> findByReviewAndStatus(
             @Param("review") Review review,

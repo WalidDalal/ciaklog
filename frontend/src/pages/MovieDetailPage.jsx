@@ -228,7 +228,7 @@ function ReplyThread({ reviewId, reviewText, reviewOwnerUsername, token, current
           {loading && <p style={{ color: 'var(--text-dark)', fontSize: '12px' }}>Caricamento...</p>}
 
           {!loading && sortedComments.map(c => (
-            <div key={c.id} id={`comment-${c.id}`} style={{ backgroundColor: 'var(--bg-hover)', borderRadius: '8px', padding: '10px 14px', marginLeft: '16px', border: highlightCommentId === c.id ? '2px solid #3b82f6' : (c.hiddenBySuspension ? '2px solid #ef4444' : (c.status === 'HIDDEN' ? '2px solid #f59e0b' : '2px solid transparent')), boxShadow: highlightCommentId === c.id ? '0 0 0 4px rgba(59,130,246,0.15)' : 'none' }}>
+            <div key={c.id} id={`comment-${c.id}`} style={{ backgroundColor: 'var(--bg-hover)', borderRadius: '8px', padding: '10px 14px', marginLeft: '16px', border: highlightCommentId === c.id ? '2px solid #3b82f6' : (c.hiddenBySuspension ? '2px solid #ef4444' : (c.hiddenByDeletion ? '2px solid #6b7280' : (c.status === 'HIDDEN' ? '2px solid #f59e0b' : '2px solid transparent'))), boxShadow: highlightCommentId === c.id ? '0 0 0 4px rgba(59,130,246,0.15)' : 'none' }}>
               {/* Fix (Dettaglio — banner moderazione, stessa logica delle recensioni):
                   visibile qui solo se sei Admin, il backend la esclude per chiunque altro */}
               {c.status === 'HIDDEN' && (
@@ -243,6 +243,14 @@ function ReplyThread({ reviewId, reviewText, reviewOwnerUsername, token, current
               {c.hiddenBySuspension && (
                   <div style={{ display: 'flex', alignItems: 'center', gap: '6px', backgroundColor: 'rgba(239,68,68,0.1)', border: '1px solid #ef444444', borderRadius: '5px', padding: '5px 10px', marginBottom: '8px', color: '#ef4444', fontSize: '11px', fontWeight: '600' }}>
                     🔒 Nascosta — l'autore è sospeso
+                  </div>
+              )}
+              {/* Fix (dashboard admin — recensioni/risposte di utenti eliminati):
+                  stesso principio del banner sospensione, distinto perché qui è
+                  irreversibile (nessuna riabilitazione possibile) */}
+              {c.hiddenByDeletion && (
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px', backgroundColor: 'rgba(107,114,128,0.15)', border: '1px solid #6b728044', borderRadius: '5px', padding: '5px 10px', marginBottom: '8px', color: '#9ca3af', fontSize: '11px', fontWeight: '600' }}>
+                    🗑️ Nascosta — l'autore ha eliminato l'account
                   </div>
               )}
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
@@ -1343,7 +1351,7 @@ function MovieDetailPage() {
         ) : (
           <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
             {otherReviews.map(r => (
-              <div key={r.id} id={`review-${r.id}`} style={{ backgroundColor: 'var(--bg-card)', border: highlightReviewId === r.id ? '2px solid #3b82f6' : (r.hiddenBySuspension ? '1px solid #ef4444' : (r.status === 'HIDDEN' ? '1px solid #f59e0b' : '1px solid var(--border)')), borderRadius: '10px', padding: '20px', boxShadow: highlightReviewId === r.id ? '0 0 0 4px rgba(59,130,246,0.15)' : 'none' }}>
+              <div key={r.id} id={`review-${r.id}`} style={{ backgroundColor: 'var(--bg-card)', border: highlightReviewId === r.id ? '2px solid #3b82f6' : (r.hiddenBySuspension ? '1px solid #ef4444' : (r.hiddenByDeletion ? '1px solid #6b7280' : (r.status === 'HIDDEN' ? '1px solid #f59e0b' : '1px solid var(--border)'))), borderRadius: '10px', padding: '20px', boxShadow: highlightReviewId === r.id ? '0 0 0 4px rgba(59,130,246,0.15)' : 'none' }}>
                 {/* Fix (Dettaglio — banner moderazione): questa recensione arriva qui
                     solo se sei Admin (il backend la esclude per chiunque altro) — un
                     bordo ambra e un banner esplicito evitano che sembri una recensione
@@ -1359,6 +1367,12 @@ function MovieDetailPage() {
                 {r.hiddenBySuspension && (
                     <div style={{ display: 'flex', alignItems: 'center', gap: '8px', backgroundColor: 'rgba(239,68,68,0.1)', border: '1px solid #ef444444', borderRadius: '6px', padding: '8px 12px', marginBottom: '12px', color: '#ef4444', fontSize: '12px', fontWeight: '600' }}>
                       🔒 Nascosta — l'autore è sospeso. Visibile solo a te come Admin.
+                    </div>
+                )}
+                {/* Fix (dashboard admin — recensioni di utenti eliminati) */}
+                {r.hiddenByDeletion && (
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', backgroundColor: 'rgba(107,114,128,0.15)', border: '1px solid #6b728044', borderRadius: '6px', padding: '8px 12px', marginBottom: '12px', color: '#9ca3af', fontSize: '12px', fontWeight: '600' }}>
+                      🗑️ Nascosta — l'autore ha eliminato l'account. Visibile solo a te come Admin.
                     </div>
                 )}
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>

@@ -144,6 +144,7 @@ public class ReviewCommentServiceImpl implements ReviewCommentService {
                 .status(c.getStatus())
                 .hiddenByAuthor(c.isHiddenByAuthor())
                 .hiddenBySuspension(c.isHiddenBySuspension())
+                .hiddenByDeletion(c.isHiddenByDeletion())
                 .createdAt(c.getCreatedAt())
                 .updatedAt(c.getUpdatedAt())
                 .build();

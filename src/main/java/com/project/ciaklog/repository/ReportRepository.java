@@ -37,11 +37,26 @@ public interface ReportRepository extends JpaRepository<Report, UUID> {
     // mostrando conteggi incoerenti. Queste varianti List (non paginate) sono
     // usate per raggruppare per bersaglio in Java e paginare i GRUPPI, non le
     // righe — vedi ReportServiceImpl.getReports().
-    List<Report> findByStatusAndReviewIsNotNull(ReportStatus status);
-    List<Report> findByStatusAndReviewCommentIsNotNull(ReportStatus status);
-    List<Report> findByReviewIsNotNull();
-    List<Report> findByReviewCommentIsNotNull();
-    List<Report> findByStatus(ReportStatus status);
+    // Fix (🔴 FIX — Segnalazioni Approvate: pagine incoerenti, es. "2 pagine
+    // ma la prima ne mostra solo 5 e la seconda è vuota"): queste query non
+    // avevano un ORDER BY esplicito. Senza di esso il DB NON garantisce lo
+    // stesso ordine tra due chiamate identiche — e qui la lista viene
+    // ricaricata e riordinata DA ZERO a ogni singola richiesta (pagina 1 e
+    // pagina 2 sono due chiamate HTTP separate). Se l'ordine restituito dal
+    // DB cambia anche solo leggermente tra le due (es. per timestamp con
+    // valori identici tra più segnalazioni, molto comune con dati di test
+    // creati in blocco), alcuni gruppi finiscono ordinati diversamente nelle
+    // due chiamate: il totale (usato per calcolare il numero di pagine)
+    // resta corretto, ma il CONTENUTO delle singole pagine no — alcuni
+    // gruppi possono non comparire in nessuna pagina, altri comparire due
+    // volte. Aggiunto un ORDER BY deterministico (data + id come tie-break
+    // stabile) così lo stesso identico ordine viene restituito ad ogni
+    // chiamata, indipendentemente da eventuali timestamp coincidenti.
+    List<Report> findByStatusAndReviewIsNotNullOrderByCreatedAtDescIdAsc(ReportStatus status);
+    List<Report> findByStatusAndReviewCommentIsNotNullOrderByCreatedAtDescIdAsc(ReportStatus status);
+    List<Report> findByReviewIsNotNullOrderByCreatedAtDescIdAsc();
+    List<Report> findByReviewCommentIsNotNullOrderByCreatedAtDescIdAsc();
+    List<Report> findByStatusOrderByCreatedAtDescIdAsc(ReportStatus status);
 
     // Per verificare segnalazione duplicata
     boolean existsByReporterAndReview(User reporter, Review review);

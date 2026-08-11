@@ -145,41 +145,7 @@ public class ReportServiceImpl implements ReportService {
         // gruppo per la segnalazione più recente al suo interno, e SOLO A
         // QUESTO PUNTO si pagina — sui gruppi, non sulle righe. Un gruppo
         // finisce quindi sempre intero in una sola pagina.
-        List<Report> all;
-        if (targetType == ReportTargetType.REVIEW) {
-            all = (status != null)
-                    ? reportRepository.findByStatusAndReviewIsNotNull(status)
-                    : reportRepository.findByReviewIsNotNull();
-        } else if (targetType == ReportTargetType.COMMENT) {
-            all = (status != null)
-                    ? reportRepository.findByStatusAndReviewCommentIsNotNull(status)
-                    : reportRepository.findByReviewCommentIsNotNull();
-        } else {
-            all = (status != null)
-                    ? reportRepository.findByStatus(status)
-                    : reportRepository.findAll();
-        }
-
-        // Raggruppa per bersaglio, mantenendo l'ordine di inserimento del
-        // primo incontro (poi riordinato sotto per data più recente del gruppo)
-        LinkedHashMap<String, List<Report>> grouped = new LinkedHashMap<>();
-        for (Report r : all) {
-            String key = r.getReviewComment() != null
-                    ? "comment_" + r.getReviewComment().getId()
-                    : "review_" + r.getReview().getId();
-            grouped.computeIfAbsent(key, k -> new ArrayList<>()).add(r);
-        }
-
-        // Ogni gruppo ordinato internamente per data desc (coerente con l'ordinamento
-        // richiesto dal controller per le righe), poi i gruppi tra loro ordinati
-        // per la segnalazione più recente al loro interno — così un bersaglio
-        // appena segnalato di nuovo torna in cima, come ci si aspetta.
-        List<List<Report>> groups = new ArrayList<>(grouped.values());
-        for (List<Report> g : groups) {
-            g.sort(Comparator.comparing(Report::getCreatedAt).reversed());
-        }
-        groups.sort((a, b) -> b.get(0).getCreatedAt().compareTo(a.get(0).getCreatedAt()));
-
+        List<List<Report>> groups = fetchGroupedReports(status, targetType);
         int totalGroups = groups.size();
         int page = pageable.getPageNumber();
         int size = pageable.getPageSize();
@@ -192,7 +158,73 @@ public class ReportServiceImpl implements ReportService {
         }
 
         List<ReportResponse> dtos = pageContent.stream().map(this::toDTO).collect(Collectors.toList());
-        return new PageImpl<>(dtos, pageable, totalGroups);
+        // Fix (🔴 FIX — "6 recensioni, pagina 1 di 2"): PageImpl standard
+        // ricalcola DA SOLO il totale nel costruttore se rileva
+        // offset+pageSize > total (qui: 0+10 > 6, essendo 6 il numero di
+        // GRUPPI) — assume che total fosse sbagliato e lo sovrascrive con
+        // offset + content.size(). Ma "content" qui è la lista delle RIGHE
+        // di segnalazione appiattite dai gruppi di questa pagina (es. 12
+        // righe per 6 gruppi, se alcune recensioni hanno più di una
+        // segnalazione approvata) — non una riga per gruppo. Quell'euristica
+        // di PageImpl assume invece content.size() <= pageSize, quindi
+        // "corregge" il nostro totale corretto (6 gruppi) con uno sbagliato
+        // (12, il numero di righe), dando ceil(12/10)=2 pagine invece di 1.
+        // GroupedReportPage ignora quel ricalcolo e riespone sempre il vero
+        // totale di gruppi passato esplicitamente.
+        return new GroupedReportPage<>(dtos, pageable, totalGroups);
+    }
+
+    // Estratto da getReports() — stessa identica logica di fetch + raggruppamento
+    // per bersaglio, riusata anche da getReportsSummary() per non duplicarla
+    private List<List<Report>> fetchGroupedReports(ReportStatus status, ReportTargetType targetType) {
+        List<Report> all;
+        if (targetType == ReportTargetType.REVIEW) {
+            all = (status != null)
+                    ? reportRepository.findByStatusAndReviewIsNotNullOrderByCreatedAtDescIdAsc(status)
+                    : reportRepository.findByReviewIsNotNullOrderByCreatedAtDescIdAsc();
+        } else if (targetType == ReportTargetType.COMMENT) {
+            all = (status != null)
+                    ? reportRepository.findByStatusAndReviewCommentIsNotNullOrderByCreatedAtDescIdAsc(status)
+                    : reportRepository.findByReviewCommentIsNotNullOrderByCreatedAtDescIdAsc();
+        } else {
+            all = (status != null)
+                    ? reportRepository.findByStatusOrderByCreatedAtDescIdAsc(status)
+                    : reportRepository.findAll();
+        }
+
+        LinkedHashMap<String, List<Report>> grouped = new LinkedHashMap<>();
+        for (Report r : all) {
+            String key = r.getReviewComment() != null
+                    ? "comment_" + r.getReviewComment().getId()
+                    : "review_" + r.getReview().getId();
+            grouped.computeIfAbsent(key, k -> new ArrayList<>()).add(r);
+        }
+
+        List<List<Report>> groups = new ArrayList<>(grouped.values());
+        for (List<Report> g : groups) {
+            g.sort(Comparator.comparing(Report::getCreatedAt).reversed());
+        }
+        groups.sort((a, b) -> {
+            int cmp = b.get(0).getCreatedAt().compareTo(a.get(0).getCreatedAt());
+            return cmp != 0 ? cmp : a.get(0).getId().compareTo(b.get(0).getId());
+        });
+        return groups;
+    }
+
+    // Card admin — totale segnalazioni (righe) + totale bersagli distinti
+    // (gruppi), per lo status/tipo filtrato in dashboard, indipendente dalla
+    // paginazione — così la card può mostrare "N segnalazioni totali di X
+    // elementi" invece del solo numero di pagina, per qualunque filtro attivo
+    // (non solo PENDING, come faceva prima la card operativa)
+    @Override
+    @Transactional(readOnly = true)
+    public com.project.ciaklog.dto.response.ReportSummaryResponse getReportsSummary(ReportStatus status, ReportTargetType targetType) {
+        List<List<Report>> groups = fetchGroupedReports(status, targetType);
+        long totalReports = groups.stream().mapToLong(List::size).sum();
+        return com.project.ciaklog.dto.response.ReportSummaryResponse.builder()
+                .totalReports(totalReports)
+                .totalTargets(groups.size())
+                .build();
     }
 
     @Override
@@ -455,5 +487,33 @@ public class ReportServiceImpl implements ReportService {
         }
 
         return builder.build();
+    }
+
+    // Fix (🔴 FIX — "6 recensioni, pagina 1 di 2"): sottoclasse di PageImpl
+    // che ignora il ricalcolo automatico del totale fatto dal costruttore di
+    // PageImpl (vedi commento sopra, nel punto in cui viene istanziata) e
+    // riespone sempre il vero numero di gruppi passato esplicitamente, sia
+    // in getTotalElements() sia in getTotalPages() (quest'ultimo ricalcolato
+    // qui con la dimensione pagina RICHIESTA — pageable.getPageSize() — e
+    // non con getSize()/content.size() come farebbe l'implementazione
+    // originale ereditata).
+    private static class GroupedReportPage<T> extends PageImpl<T> {
+        private final long realTotal;
+
+        GroupedReportPage(List<T> content, Pageable pageable, long realTotal) {
+            super(content, pageable, realTotal);
+            this.realTotal = realTotal;
+        }
+
+        @Override
+        public long getTotalElements() {
+            return realTotal;
+        }
+
+        @Override
+        public int getTotalPages() {
+            int size = getPageable().getPageSize();
+            return size == 0 ? 1 : (int) Math.ceil((double) realTotal / (double) size);
+        }
     }
 }
