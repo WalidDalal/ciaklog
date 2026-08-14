@@ -77,6 +77,13 @@ public interface ReportRepository extends JpaRepository<Report, UUID> {
     // Fix N+1: carica tutti i report per una lista di review in una sola query
     List<Report> findAllByReviewIn(List<Review> reviews);
 
+    // Fix (dashboard admin — archiviazione automatica quando l'autore del
+    // contenuto sparisce): serve trovare TUTTE le segnalazioni PENDING sui
+    // contenuti (recensioni + risposte) di un utente, per archiviarle in
+    // blocco quando il suo account diventa DELETED/PERMANENTLY_SUSPENDED.
+    List<Report> findAllByReviewInAndStatus(List<Review> reviews, ReportStatus status);
+    List<Report> findAllByReviewCommentInAndStatus(List<ReviewComment> comments, ReportStatus status);
+
     // Stessi metodi di sopra ma per ReviewComment
     boolean existsByReporterAndReviewComment(User reporter, ReviewComment reviewComment);
 

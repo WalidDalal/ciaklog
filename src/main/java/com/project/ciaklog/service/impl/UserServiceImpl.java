@@ -18,6 +18,7 @@ import com.project.ciaklog.entity.ReviewComment;
 import com.project.ciaklog.entity.ReviewStatus;
 import com.project.ciaklog.entity.UserStatus;
 import com.project.ciaklog.security.JwtService;
+import com.project.ciaklog.service.ReportService;
 import com.project.ciaklog.service.UserService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -41,6 +42,7 @@ public class UserServiceImpl implements UserService {
     private final WatchEntryRepository watchEntryRepository;
     private final ReviewRepository reviewRepository;
     private final ReviewCommentRepository reviewCommentRepository;
+    private final ReportService reportService;
     private final PasswordEncoder passwordEncoder;
     private final JwtService jwtService;
 
@@ -222,5 +224,10 @@ public class UserServiceImpl implements UserService {
             }
         }
         reviewCommentRepository.saveAll(ownComments);
+
+        // Fix (dashboard admin — segnalazioni "orfane" su contenuti spariti):
+        // archivia le eventuali segnalazioni PENDING rimaste sui contenuti
+        // appena nascosti sopra — vedi ReportServiceImpl per il dettaglio
+        reportService.archivePendingReportsForUnavailableAuthor(user);
     }
 }

@@ -324,6 +324,12 @@ public class ReportServiceImpl implements ReportService {
             offender.setScore(0);
             userRepository.save(offender);
             hideAllContentForSuspendedUser(offender);
+            // Solo qui (sospensione PERMANENTE, irreversibile) archiviamo le
+            // segnalazioni PENDING rimaste sui suoi contenuti — vedi
+            // AdminServiceImpl.suspendUser per la stessa logica sul percorso
+            // di sospensione manuale. NON alla sospensione temporanea
+            // (ramo violationCount==2 sotto), che è reversibile.
+            archivePendingReportsForUnavailableAuthor(offender);
         } else if (offender.getViolationCount() == 2) {
             offender.setStatus(UserStatus.SUSPENDED);
             offender.setScore(Math.max(0, offender.getScore() - 20));
@@ -440,6 +446,32 @@ public class ReportServiceImpl implements ReportService {
         return saved;
     }
 
+    @Override
+    @Transactional
+    public void archivePendingReportsForUnavailableAuthor(User author) {
+        List<Review> reviews = reviewRepository.findAllByUser(author);
+        if (!reviews.isEmpty()) {
+            List<Report> pending = reportRepository.findAllByReviewInAndStatus(reviews, ReportStatus.PENDING);
+            pending.forEach(r -> {
+                r.setStatus(ReportStatus.ARCHIVED);
+                r.setResolvedAt(LocalDateTime.now());
+                // resolvedBy resta null: non è una decisione di un admin,
+                // è una conseguenza automatica della sparizione dell'account
+            });
+            reportRepository.saveAll(pending);
+        }
+
+        List<ReviewComment> comments = reviewCommentRepository.findAllByAuthor(author);
+        if (!comments.isEmpty()) {
+            List<Report> pending = reportRepository.findAllByReviewCommentInAndStatus(comments, ReportStatus.PENDING);
+            pending.forEach(r -> {
+                r.setStatus(ReportStatus.ARCHIVED);
+                r.setResolvedAt(LocalDateTime.now());
+            });
+            reportRepository.saveAll(pending);
+        }
+    }
+
     private User getUser(String username) {
         return userRepository.findByUsername(username)
                 .orElseThrow(() -> new ResourceNotFoundException("Utente non trovato"));
@@ -454,7 +486,11 @@ public class ReportServiceImpl implements ReportService {
                 .status(r.getStatus())
                 .createdAt(r.getCreatedAt())
                 .resolvedAt(r.getResolvedAt())
-                .resolvedByUsername(r.getResolvedBy() != null ? r.getResolvedBy().getUsername() : null);
+                .resolvedByUsername(r.getResolvedBy() != null ? r.getResolvedBy().getUsername() : null)
+                // Un utente eliminato/sospeso permanentemente resta comunque
+                // legato a segnalazioni passate come segnalante — non
+                // tocchiamo la segnalazione, ma diamo il contesto all'Admin
+                .reporterAccountUnavailable(r.getReporter().getStatus() != UserStatus.ACTIVE);
 
         if (r.getReview() != null) {
             Review review = r.getReview();
@@ -467,6 +503,14 @@ public class ReportServiceImpl implements ReportService {
                     .reviewRating(review.getRating())
                     .targetRemoved(review.getStatus() == ReviewStatus.REMOVED)
                     .targetHidden(review.getStatus() == ReviewStatus.HIDDEN)
+                    // Se l'autore della recensione è eliminato o sospeso
+                    // permanentemente, il contenuto è già nascosto per
+                    // sempre (hiddenByDeletion/hiddenBySuspension, senza
+                    // possibilità di riabilitazione) — approvare/rifiutare
+                    // qui non cambia nulla nella pratica, ma lasciamo
+                    // comunque la decisione all'Admin invece di risolvere
+                    // in automatico (un contenuto può avere più motivi)
+                    .targetAuthorAccountUnavailable(review.getUser().getStatus() != UserStatus.ACTIVE)
                     .reportedText(r.getReportedText())
                     .targetEdited(r.getReportedText() != null && !r.getReportedText().equals(review.getText()));
         } else {
@@ -482,6 +526,7 @@ public class ReportServiceImpl implements ReportService {
                     .commentText(comment.getText())
                     .targetRemoved(comment.getStatus() == ReviewStatus.REMOVED)
                     .targetHidden(comment.getStatus() == ReviewStatus.HIDDEN)
+                    .targetAuthorAccountUnavailable(comment.getAuthor().getStatus() != UserStatus.ACTIVE)
                     .reportedText(r.getReportedText())
                     .targetEdited(r.getReportedText() != null && !r.getReportedText().equals(comment.getText()));
         }

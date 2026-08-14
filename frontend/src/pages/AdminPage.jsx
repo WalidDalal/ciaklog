@@ -524,6 +524,12 @@ function AdminPage() {
                         { label: '⏳ In attesa', value: 'PENDING' },
                         { label: '✅ Approvate', value: 'APPROVED' },
                         { label: '❌ Rifiutate', value: 'REJECTED' },
+                        // Fix: segnalazioni PENDING i cui contenuti sono già
+                        // nascosti per sempre perché l'autore è stato eliminato
+                        // o sospeso permanentemente — nessuna decisione
+                        // dell'Admin cambierebbe qualcosa, quindi finiscono
+                        // qui invece che restare a fare rumore in "In attesa"
+                        { label: '🗄️ Archiviate', value: 'ARCHIVED' },
                       ].map(f => (
                           <button key={f.value} onClick={() => setReportFilter(f.value)} style={{
                             padding: '6px 16px', borderRadius: '20px', fontSize: '13px',
@@ -805,6 +811,16 @@ function AdminPage() {
                                         </div>
                                     )}
 
+                                    {/* Fix: banner sostituito dal nuovo status ARCHIVED — quando
+                                        l'autore diventa DELETED/PERMANENTLY_SUSPENDED, queste
+                                        segnalazioni si spostano da sole nel tab "🗄️ Archiviate"
+                                        invece di restare in "In attesa" con un avviso */}
+                                    {reportFilter === 'ARCHIVED' && (
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', backgroundColor: 'rgba(107,114,128,0.15)', border: '1px solid #6b728044', borderRadius: '6px', padding: '8px 12px', margin: '16px 0 0', color: '#9ca3af', fontSize: '12px', fontWeight: '600' }}>
+                                          🗄️ Archiviata automaticamente — l'autore di {isComment ? 'questa risposta' : 'questa recensione'} non è più un account attivo (eliminato o sospeso permanentemente), il contenuto è già nascosto per sempre.
+                                        </div>
+                                    )}
+
                                     {/* Fix (dashboard admin — versione segnalata): l'etichetta "versione
                                         al momento della segnalazione" ha senso SOLO se il testo è stato
                                         davvero modificato dopo — altrimenti è solo rumore che fa sembrare
@@ -883,6 +899,12 @@ function AdminPage() {
                                           <div key={r.id} style={{ backgroundColor: 'var(--bg-hover)', borderRadius: '8px', padding: '10px 14px' }}>
                                             <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: (r.reasonText && r.reasonCategory !== 'OTHER') ? '4px' : 0 }}>
                                               <span style={{ color: 'var(--text)', fontSize: '13px', fontWeight: '600' }}>{r.reporterUsername}</span>
+                                              {/* Non blocca né altera la segnalazione — solo contesto:
+                                                  chi ha segnalato non è più un account attivo, il motivo
+                                                  potrebbe comunque essere valido, valuta tu */}
+                                              {r.reporterAccountUnavailable && (
+                                                  <span title="Account eliminato o sospeso permanentemente" style={{ fontSize: '12px', cursor: 'help' }}>⚠️</span>
+                                              )}
                                               <span style={{ padding: '1px 8px', borderRadius: '4px', fontSize: '11px', fontWeight: '600', backgroundColor: 'var(--accent-subtle)', color: 'var(--accent)', border: '1px solid #e5091444' }}>
                                                 {r.reasonCategory === 'OTHER' ? (r.reasonText || 'Altro') : r.reasonCategory}
                                               </span>
