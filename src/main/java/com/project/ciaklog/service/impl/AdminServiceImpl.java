@@ -10,6 +10,7 @@ import com.project.ciaklog.repository.ReportRepository;
 import com.project.ciaklog.repository.ReviewRepository;
 import com.project.ciaklog.repository.UserRepository;
 import com.project.ciaklog.service.AdminService;
+import com.project.ciaklog.service.ReportService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -31,6 +32,7 @@ public class AdminServiceImpl implements AdminService {
     private final ReportRepository reportRepository;
     private final com.project.ciaklog.repository.ReviewCommentRepository reviewCommentRepository;
     private final com.project.ciaklog.repository.ManualSuspensionLogRepository manualSuspensionLogRepository;
+    private final ReportService reportService;
 
     @Override
     public Page<AdminUserResponse> listUsers(Pageable pageable, String search) {
@@ -213,6 +215,16 @@ public class AdminServiceImpl implements AdminService {
             }
         }
         reviewCommentRepository.saveAll(ownComments);
+
+        // Fix (dashboard admin — segnalazioni "orfane"): solo per la
+        // sospensione PERMANENTE archiviamo le segnalazioni PENDING rimaste
+        // sui suoi contenuti — è irreversibile, quindi non c'è più nulla da
+        // decidere. Una sospensione TEMPORANEA invece è reversibile (può
+        // essere riabilitato), quindi le segnalazioni sui suoi contenuti
+        // restano PENDING e attivamente lavorabili dall'Admin.
+        if (target.getStatus() == UserStatus.PERMANENTLY_SUSPENDED) {
+            reportService.archivePendingReportsForUnavailableAuthor(target);
+        }
     }
 
     @Override
