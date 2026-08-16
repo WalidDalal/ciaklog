@@ -63,12 +63,9 @@ public class ReportResponse {
     private String reportedText;
     private boolean targetEdited;
 
-    // Un utente eliminato o sospeso permanentemente resta comunque legato a
-    // segnalazioni passate — sia come autore del contenuto segnalato, sia
-    // come chi ha segnalato. Non risolviamo automaticamente queste
-    // segnalazioni (un contenuto può avere più motivi/più segnalanti, non è
-    // detto siano tutti "invalidati" solo perché un account è sparito): li
-    // segnaliamo qui, il frontend mostra un avviso ⚠️ e l'Admin decide.
+    // Un utente eliminato o sospeso permanentemente resta legato a
+    // segnalazioni passate — non risolte automaticamente (un contenuto può
+    // avere più motivi/segnalanti), il frontend mostra un avviso all'Admin
     private boolean reporterAccountUnavailable;
     private boolean targetAuthorAccountUnavailable;
 }
