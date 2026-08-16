@@ -409,6 +409,22 @@ public class AiServiceImpl implements AiService {
                     .build();
         }
 
+        // Fix (🔴 FIX — "Consiglio del giorno" che sparisce dopo il primo
+        // giro): se la rigenerazione (per cache scaduta) va a buon fine
+        // SENZA eccezioni ma produce zero suggerimenti (l'LLM non ne
+        // propone, o nessuno si risolve su TMDB — capita, non è raro con
+        // un LLM esterno), il codice sovrascriveva comunque la cache
+        // buona precedente con questo risultato vuoto, perdendola per le
+        // successive 24h. Se c'era già una cache valida (anche solo
+        // scaduta per l'orario, non invalida di per sé), meglio tenere
+        // quella piuttosto che buttarla per un tentativo fallito — si
+        // riproverà a rigenerare al prossimo giro comunque, dato che
+        // generatedAt non viene toccato in questo caso.
+        if (suggestions.isEmpty() && existingCache != null) {
+            log.warn("Rigenerazione raccomandazione giornaliera per {} ha prodotto 0 suggerimenti — mantengo la cache precedente invece di sovrascriverla", username);
+            return toDailyDTO(existingCache);
+        }
+
         String suggestionsJson;
         try {
             suggestionsJson = mapper.writeValueAsString(suggestions);

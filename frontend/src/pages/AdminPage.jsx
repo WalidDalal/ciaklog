@@ -987,12 +987,53 @@ function AdminPage() {
                     L'auto-recovery in loadReports (torna a pagina 1 se la
                     pagina richiesta risulta vuota) basta da solo. */}
                 {reportsTotalPages > 1 && (
-                    <div style={{ display: 'flex', justifyContent: 'center', gap: '12px', marginTop: '24px', alignItems: 'center' }}>
+                    <div style={{ display: 'flex', justifyContent: 'center', gap: '6px', marginTop: '24px', alignItems: 'center', flexWrap: 'wrap' }}>
                       <button onClick={() => setReportsPage(p => Math.max(0, p - 1))} disabled={reportsPage === 0}
-                              style={{ padding: '8px 16px', backgroundColor: 'transparent', border: '1px solid var(--border-soft)', borderRadius: '6px', color: reportsPage === 0 ? 'var(--border-soft)' : 'var(--text)', cursor: reportsPage === 0 ? 'default' : 'pointer' }}>←</button>
-                      <span style={{ color: 'var(--text-muted)', fontSize: '14px' }}>Pagina {reportsPage + 1} di {reportsTotalPages}</span>
+                              style={{ padding: '8px 12px', backgroundColor: 'transparent', border: '1px solid var(--border-soft)', borderRadius: '6px', color: reportsPage === 0 ? 'var(--border-soft)' : 'var(--text)', cursor: reportsPage === 0 ? 'default' : 'pointer' }}>←</button>
+
+                      {/* Fix: prima c'erano solo le frecce avanti/indietro —
+                          per saltare tra pagine distanti bisognava cliccare
+                          una alla volta. Ora numeri di pagina cliccabili
+                          direttamente, con "…" quando sono troppe per stare
+                          tutte a schermo (mostra sempre prima, ultima, e le
+                          pagine vicine a quella corrente). */}
+                      {(() => {
+                        const pages = []
+                        const cur = reportsPage // 0-based
+                        const last = reportsTotalPages - 1
+                        const addPage = p => pages.push(p)
+                        const addEllipsis = key => pages.push(`ellipsis-${key}`)
+
+                        addPage(0)
+                        if (cur - 1 > 1) addEllipsis('start')
+                        for (let p = Math.max(1, cur - 1); p <= Math.min(last - 1, cur + 1); p++) addPage(p)
+                        if (cur + 1 < last - 1) addEllipsis('end')
+                        if (last > 0) addPage(last)
+
+                        return pages.map(p => {
+                          if (typeof p === 'string') {
+                            return <span key={p} style={{ color: 'var(--text-dark)', fontSize: '14px', padding: '0 4px' }}>…</span>
+                          }
+                          const isCurrent = p === cur
+                          return (
+                              <button key={p} onClick={() => setReportsPage(p)} disabled={isCurrent}
+                                      style={{
+                                        minWidth: '34px', padding: '8px 10px',
+                                        backgroundColor: isCurrent ? 'var(--accent)' : 'transparent',
+                                        border: `1px solid ${isCurrent ? 'var(--accent)' : 'var(--border-soft)'}`,
+                                        borderRadius: '6px',
+                                        color: isCurrent ? '#fff' : 'var(--text)',
+                                        fontWeight: isCurrent ? '700' : '400',
+                                        cursor: isCurrent ? 'default' : 'pointer',
+                                      }}>
+                                {p + 1}
+                              </button>
+                          )
+                        })
+                      })()}
+
                       <button onClick={() => setReportsPage(p => Math.min(reportsTotalPages - 1, p + 1))} disabled={reportsPage >= reportsTotalPages - 1}
-                              style={{ padding: '8px 16px', backgroundColor: 'transparent', border: '1px solid var(--border-soft)', borderRadius: '6px', color: reportsPage >= reportsTotalPages - 1 ? 'var(--border-soft)' : 'var(--text)', cursor: reportsPage >= reportsTotalPages - 1 ? 'default' : 'pointer' }}>→</button>
+                              style={{ padding: '8px 12px', backgroundColor: 'transparent', border: '1px solid var(--border-soft)', borderRadius: '6px', color: reportsPage >= reportsTotalPages - 1 ? 'var(--border-soft)' : 'var(--text)', cursor: reportsPage >= reportsTotalPages - 1 ? 'default' : 'pointer' }}>→</button>
                     </div>
                 )}
               </div>

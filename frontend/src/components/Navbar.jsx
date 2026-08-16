@@ -1,8 +1,9 @@
 import { Link, useNavigate } from 'react-router-dom'
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import useAuthStore from '../store/authStore'
 import useThemeStore from '../store/themeStore'
 import { useLocation } from 'react-router-dom'
+import api from '../services/api'
 
 
 // Floating Chat AI button — esportato separatamente per essere usato in App.jsx
@@ -15,10 +16,44 @@ function Navbar() {
   const { theme, toggle: toggleTheme } = useThemeStore()
   const logged = !!token
 
+  // Fix (Home — "Consiglio del giorno" ridisegnato, v2): niente più popover
+  // ("nuvoletta") staccato dal resto — ispirato a "Mi sento fortunato" di
+  // Google, ma adattato: qui abbiamo 3 consigli non 1, quindi l'icona ✨
+  // dentro la barra di ricerca porta DIRETTAMENTE a uno di essi (un click,
+  // una destinazione), e cliccandola di nuovo scorre al successivo dei 3
+  // invece di ripetere sempre lo stesso.
+  const [dailyPick, setDailyPick] = useState(null)
+  const [dailyPickIndex, setDailyPickIndex] = useState(0)
+
+  useEffect(() => {
+    if (!token || user?.role === 'ADMIN') { setDailyPick(null); return }
+    const controller = new AbortController()
+    api.get('/ai/daily', { signal: controller.signal })
+        .then(r => setDailyPick(r.data))
+        .catch(() => {})
+    return () => controller.abort()
+  }, [token, user?.role])
+
+  const goToDailyPick = () => {
+    if (!dailyPick?.suggestions?.length) return
+    const item = dailyPick.suggestions[dailyPickIndex % dailyPick.suggestions.length]
+    setDailyPickIndex(i => i + 1)
+    navigate(`/movie/${item.tmdbId}?type=${item.contentType}`)
+  }
+
   const handleSearch = (e) => {
     // Fix (🟡 minimo 2 caratteri non coerente): allineato allo stesso
     // controllo di SearchPage.jsx — prima qui bastava "non vuoto".
     if (e.key === 'Enter' && search.trim().length >= 2) {
+      navigate(`/search?q=${encodeURIComponent(search.trim())}`)
+      setSearch('')
+    }
+  }
+
+  // Estratta per essere riusata sia dal tasto Invio (sopra) sia dal click
+  // sulla lente (ora spostata a destra, cliccabile — vedi sotto)
+  const submitSearch = () => {
+    if (search.trim().length >= 2) {
       navigate(`/search?q=${encodeURIComponent(search.trim())}`)
       setSearch('')
     }
@@ -62,27 +97,58 @@ function Navbar() {
           </span>
         </Link>
 
-        {/* Barra ricerca */}
-        <div style={{ flex: 1, maxWidth: '480px', margin: '0 32px', position: 'relative' }}>
-          <span style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-dark)', pointerEvents: 'none' }}>🔍</span>
-          <input
-            type="text"
-            placeholder="Cerca un film o una serie..."
-            value={search}
-            onChange={e => setSearch(e.target.value)}
-            onKeyDown={handleSearch}
-            style={{
-              width: '100%',
-              padding: '10px 16px 10px 40px',
-              backgroundColor: 'var(--bg-hover)',
-              border: '1px solid var(--border-soft)',
-              borderRadius: '24px',
-              color: 'var(--text)',
-              fontSize: '14px',
-              outline: 'none',
-              boxSizing: 'border-box',
-            }}
-          />
+        {/* Fix: barra ricerca + pulsante AI raggruppati in un unico
+            contenitore flex — così il nav (che usa justify-content:
+            space-between tra i suoi figli diretti) li tratta come UN blocco
+            solo, e il pulsante resta sempre attaccato alla barra invece di
+            allontanarsi quando c'è spazio extra a disposizione */}
+        <div style={{ flex: 1, maxWidth: '540px', margin: '0 32px', display: 'flex', alignItems: 'center', gap: '10px' }}>
+          {/* Barra ricerca */}
+          <div style={{ flex: 1, position: 'relative' }}>
+            <input
+              type="text"
+              placeholder="Cerca un film o una serie..."
+              value={search}
+              onChange={e => setSearch(e.target.value)}
+              onKeyDown={handleSearch}
+              style={{
+                width: '100%',
+                padding: '10px 44px 10px 16px',
+                backgroundColor: 'var(--bg-hover)',
+                border: '1px solid var(--border-soft)',
+                borderRadius: '24px',
+                color: 'var(--text)',
+                fontSize: '14px',
+                outline: 'none',
+                boxSizing: 'border-box',
+              }}
+            />
+            {/* Fix: lente spostata a destra e resa cliccabile (equivale a
+                Invio) — è la posizione/comportamento che ci si aspetta di
+                solito per il tasto di ricerca, prima era solo decorativa a
+                sinistra */}
+            <button onClick={submitSearch} title="Cerca" aria-label="Cerca"
+                    style={{ position: 'absolute', right: '6px', top: '50%', transform: 'translateY(-50%)', width: '30px', height: '30px', display: 'flex', alignItems: 'center', justifyContent: 'center', backgroundColor: 'transparent', border: 'none', borderRadius: '50%', cursor: 'pointer', color: 'var(--text-dark)', fontSize: '14px' }}
+                    onMouseEnter={e => e.currentTarget.style.backgroundColor = 'var(--accent-subtle)'}
+                    onMouseLeave={e => e.currentTarget.style.backgroundColor = 'transparent'}>
+              🔍
+            </button>
+          </div>
+
+          {/* Fix: pulsante "consiglio del giorno" — fuori dalla pillola di
+              ricerca (per non confondersi con l'icona di invio, che è la
+              lente a destra), ma dentro lo stesso contenitore così resta
+              vicino invece di allontanarsi. Un click porta direttamente a
+              uno dei 3 consigli del giorno, scorrendo tra i tre a ogni
+              click successivo. */}
+          {dailyPick?.suggestions?.length > 0 && (
+              <button onClick={goToDailyPick} title="Fatti consigliare dall'AI" aria-label="Fatti consigliare dall'AI"
+                      style={{ flexShrink: 0, width: '36px', height: '36px', display: 'flex', alignItems: 'center', justifyContent: 'center', backgroundColor: 'var(--bg-hover)', border: '1px solid var(--border-soft)', borderRadius: '50%', cursor: 'pointer', fontSize: '16px' }}
+                      onMouseEnter={e => { e.currentTarget.style.backgroundColor = 'var(--accent-subtle)'; e.currentTarget.style.borderColor = 'var(--border-cta)' }}
+                      onMouseLeave={e => { e.currentTarget.style.backgroundColor = 'var(--bg-hover)'; e.currentTarget.style.borderColor = 'var(--border-soft)' }}>
+                ✨
+              </button>
+          )}
         </div>
 
         {/* Destra */}

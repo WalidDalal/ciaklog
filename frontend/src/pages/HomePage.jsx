@@ -270,11 +270,9 @@ function HomePage() {
     const [recentFilms, setRecentFilms] = useState([])
     const [watching, setWatching] = useState([])
     const [toWatch, setToWatch] = useState([])
-    // Fix (🔴 FIX — Homepage loggato/guest): GET /api/ai/daily esisteva nel
-    // backend (AiController, riga 51) ma non era collegato da nessuna parte
-    // in Home — nessuna card lo consumava. Stesso pattern del bug DELETE
-    // /reviews già visto altrove. Aggiunta qui la card "Consiglio del giorno".
-    const [dailyPick, setDailyPick] = useState(null)
+    // Fix: "Consiglio del giorno" spostato nel Navbar (stessa riga della
+    // barra di ricerca, visibile ovunque) — fetch/stato ora vivono lì
+    // invece che qui in Home.
     // Conteggio segnalazioni in attesa, mostrato nell'hero
     // al posto del badge "sei #X in classifica" che per l'Admin non ha senso
     const [pendingReportsCount, setPendingReportsCount] = useState(0)
@@ -308,25 +306,21 @@ function HomePage() {
                 .catch(() => {})
         }
 
-        // Conteggio segnalazioni PENDING per la card operativa
-        // nell'hero — solo per Admin, size:1 perché ci serve solo totalElements.
-        // PageSerializationMode.VIA_DTO annida totalElements sotto `.page.`,
-        // non in cima — stesso bug già trovato in AdminPage.jsx/ProfilePage.jsx
+        // Conteggio segnalazioni PENDING per la card operativa nell'hero —
+        // solo per Admin.
+        // Fix: usava GET /reports?status=PENDING&size=1 leggendo
+        // page.totalElements — che con GroupedReportPage ora rappresenta
+        // correttamente il conteggio dei GRUPPI (bersagli distinti), non
+        // delle segnalazioni grezze. La label qui sotto dice "segnalazioni",
+        // quindi ora usa /reports/summary → totalReports, coerente con la
+        // stessa distinzione già introdotta in AdminPage.jsx.
         if (token && user?.role === 'ADMIN') {
-            api.get('/reports', { params: { status: 'PENDING', size: 1 }, signal })
-                .then(r => setPendingReportsCount(r.data?.page?.totalElements ?? 0))
+            api.get('/reports/summary', { params: { status: 'PENDING' }, signal })
+                .then(r => setPendingReportsCount(r.data?.totalReports ?? 0))
                 .catch(() => {})
 
             api.get('/admin/operational-stats', { signal })
                 .then(r => setOpStats(r.data))
-                .catch(() => {})
-        }
-
-        // Consiglio del giorno — solo utenti normali loggati (endpoint
-        // protetto con hasRole('USER'), un admin riceverebbe 403)
-        if (token && user?.role !== 'ADMIN') {
-            api.get('/ai/daily', { signal })
-                .then(r => setDailyPick(r.data))
                 .catch(() => {})
         }
 
@@ -564,36 +558,9 @@ function HomePage() {
                 </section>
             )}
 
-            {/* ── CONSIGLIO DEL GIORNO (AI) — loggato, solo utenti normali ── */}
-            {logged && user?.role !== 'ADMIN' && dailyPick?.suggestions?.length > 0 && (
-                <section style={{ padding: '0 64px 48px' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '16px' }}>
-                        <h2 style={{ fontSize: '18px', fontWeight: '700' }}>🤖 Consiglio del giorno</h2>
-                        <Link to="/chat" style={{ color: 'var(--accent)', fontSize: '13px', fontWeight: '600' }}>Chiedi altro all'AI →</Link>
-                    </div>
-                    <div style={{ display: 'flex', gap: '12px', overflowX: 'auto', paddingBottom: '4px' }}>
-                        {dailyPick.suggestions.slice(0, 6).map(item => (
-                            <Link to={`/movie/${item.tmdbId}?type=${item.contentType}`} key={`${item.tmdbId}_${item.contentType}`} style={{ flexShrink: 0 }}>
-                                <div style={{ width: '140px', backgroundColor: 'var(--bg-card)', borderRadius: '8px', overflow: 'hidden', border: '1px solid var(--border)' }}
-                                     onMouseEnter={e => e.currentTarget.style.borderColor = 'var(--accent)'}
-                                     onMouseLeave={e => e.currentTarget.style.borderColor = 'var(--border)'}
-                                >
-                                    {item.posterPath
-                                        ? <img src={`https://image.tmdb.org/t/p/w200${item.posterPath}`} alt={item.title} style={{ width: '100%', height: '198px', objectFit: 'cover' }} />
-                                        : <div style={{ width: '100%', height: '198px', backgroundColor: 'var(--border)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '32px' }}>🎬</div>
-                                    }
-                                    <div style={{ padding: '8px' }}>
-                                        <div style={{ color: 'var(--text)', fontSize: '12px', fontWeight: '600', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{item.title}</div>
-                                        {item.reason && (
-                                            <div style={{ color: 'var(--text-muted)', fontSize: '10px', marginTop: '4px', lineHeight: 1.3 }}>{item.reason}</div>
-                                        )}
-                                    </div>
-                                </div>
-                            </Link>
-                        ))}
-                    </div>
-                </section>
-            )}
+            {/* Fix: sezione "Consiglio del giorno" spostata sopra, nell'hero,
+                come pulsante compatto con popover invece di un blocco fisso
+                qui in mezzo alla pagina */}
 
             {/* Fix (Home Admin): toggle visibile solo per l'Admin — le sezioni
                 community restano disponibili ma collassate di default */}
