@@ -1,12 +1,19 @@
-# 🎬 CiakLog
+<div align="center">
 
-![Tests](https://github.com/WalidDalal/ciaklog/actions/workflows/tests.yml/badge.svg)
+# 🎬 CiakLog
 
 **Diario cinematografico personale con AI integrata**
 
+[![Spring Boot](https://img.shields.io/badge/Spring%20Boot-3.x-6DB33F?style=flat&logo=springboot&logoColor=white)](https://spring.io/projects/spring-boot)
+[![React](https://img.shields.io/badge/React-19-61DAFB?style=flat&logo=react&logoColor=black)](https://react.dev)
+[![MySQL](https://img.shields.io/badge/MySQL-8.0-4479A1?style=flat&logo=mysql&logoColor=white)](https://www.mysql.com)
+[![JWT](https://img.shields.io/badge/JWT-Auth-000000?style=flat&logo=jsonwebtokens)](https://jwt.io)
+
+</div>
+
 ---
 
-## Cos'è CiakLog
+## 📖 Cos'è CiakLog
 
 CiakLog è un'applicazione web full-stack che combina tre anime:
 
@@ -14,228 +21,144 @@ CiakLog è un'applicazione web full-stack che combina tre anime:
 - 🌐 **Piattaforma social leggera** — recensioni pubbliche, classifiche, profili e trending visibili anche ai visitatori
 - 🤖 **Assistente AI conversazionale** — conosce la tua libreria e suggerisce contenuti reali verificati su TMDB
 
-Vantaggio rispetto ai competitor (Letterboxd, Trakt, Simkl): nessuno offre un assistente AI conversazionale integrato con libreria personale e recensioni pubbliche.
+> **Vantaggio rispetto ai competitor** (Letterboxd, Trakt, Simkl): nessuno offre un assistente AI conversazionale integrato con libreria personale e recensioni pubbliche.
 
 ---
 
-## Funzionalità principali
+## 📸 Screenshot
+
+<!-- TODO: sostituire con screenshot/GIF reali dell'app prima di pubblicare.
+     Consigliati almeno: Home, pagina dettaglio film, Chat AI, Wrapped. -->
+
+| Home | Chat AI |
+|---|---|
+| _screenshot qui_ | _screenshot qui_ |
+
+---
+
+## ✨ Funzionalità principali
 
 | Area | Funzionalità |
 |---|---|
-| 🔐 Auth | Registrazione, login JWT (8h), modifica profilo/bio inline |
+| 🔐 Auth | Registrazione, login JWT, modifica profilo/bio |
 | 🎬 Catalogo | Ricerca TMDB, pagina dettaglio con voto medio CiakLog |
-| 📚 Libreria | 3 stati (TO_WATCH / WATCHING / WATCHED), limite 3 WATCHING |
-| ⭐ Recensioni | Voto + testo obbligatori per WATCHED, paginazione, modifica |
-| 🏆 Classifiche | Top Film, Top Serie, Top Critici con weighted average |
-| 🔥 Trending | Contenuti più discussi negli ultimi 7 giorni |
-| 🤖 Chat AI | Floating widget + pagina intera, memoria di sessione, card risultati |
-| 🚩 Moderazione | Segnalazioni (recensioni e risposte) con categorie, auto-hide a 2 report, nascondi diretto admin, sistema sanzioni, pannello admin con card statistiche operative |
-| 💬 Risposte | Rispondi a una recensione, moderabili come le recensioni, con cascata se la recensione madre sparisce |
-| 😀 Reazioni | Emoji su recensioni e risposte (👍❤️😂😮), +1 punto per reazione ricevuta |
-| 🙈 Auto-nascondimento | L'autore può nascondere una propria recensione/risposta senza sanzioni, resta visibile solo all'admin |
-| 🎁 CiakLog Wrapped | Recap personale annuale con statistiche + commento narrativo AI |
-| ✨ AI estesa | Recensione "a botta calda" (appunti → AI struttura), "Chiedi su questo film" (Q&A con gestione spoiler), parere AI su recensioni negative, suggerimento contestuale negli stati vuoti |
-| 🌗 Tema | Dark / Light mode con persistenza |
+| 📚 Libreria | Da vedere / In visione / Visto, tracking stagione per le serie TV |
+| ⭐ Recensioni | Voto + testo, modifica, paginazione |
+| 💬 Community | Commenti e reazioni rapide (👍❤️😂😮) alle recensioni |
+| 🏆 Classifiche | Top film, top serie, top critici |
+| 🔥 Trending | Contenuti più discussi della settimana |
+| 🤖 Chat AI | Assistente conversazionale che conosce la tua libreria, consiglio del giorno, aiuto nella scrittura delle recensioni |
+| 🎁 Wrapped | Riepilogo annuale personale in stile "Spotify Wrapped" |
+| 🚩 Moderazione | Segnalazioni e pannello admin dedicato |
+| 🌗 Tema | Dark / Light mode |
+
+Per l'elenco completo degli endpoint, delle regole di business e delle scelte architetturali → **[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)**
 
 ---
 
-## Tech Stack
+## 🛠️ Tech Stack
 
-**Backend**
-- Java 17 + Spring Boot 3
-- Spring Security + JWT
-- Spring Data JPA + MySQL 8
-- TMDB API per il catalogo
-- Groq API (LLaMA 3.3 70B Versatile) per l'AI
+**Backend:** Java 17 · Spring Boot 3 · Spring Security + JWT · Spring Data JPA · MySQL 8 · TMDB API · Groq API (LLaMA 3.3 70B)
 
-**Frontend**
-- React 19 + Vite
-- React Router v6
-- Zustand (authStore, chatStore, themeStore, toastStore)
-- Axios con interceptors JWT
-- jwt-decode per lettura token lato client
+**Frontend:** React 19 · Vite · React Router v6 · Zustand · Axios
 
 ---
 
-## Struttura del progetto
+## 🚀 Setup locale
 
-```
-ciaklog/
-├── src/main/java/com/project/ciaklog/
-│   ├── controller/
-│   ├── service/impl/
-│   ├── repository/
-│   ├── entity/
-│   ├── dto/request/ e dto/response/
-│   ├── security/
-│   ├── exception/
-│   └── config/
-├── src/test/java/com/project/ciaklog/     # test di regressione (vedi sezione Testing)
-├── pom.xml
-│
-└── frontend/
-    └── src/
-        ├── pages/
-        ├── components/
-        ├── store/
-        ├── services/
-        └── hooks/
-```
+### Prerequisiti
+- Java 17+
+- Node.js 18+
+- MySQL 8
 
----
+### 1. Clona il repository
 
-## Setup locale
-
-**Prerequisiti**: Java 17+, Node.js 18+, MySQL 8
-
-**1. Clona il repository**
 ```bash
 git clone https://github.com/WalidDalal/ciaklog.git
 cd ciaklog
 ```
 
-**2. Crea il database**
+### 2. Backend
+
+```bash
+cd backend
+```
+
+Crea il database:
 ```sql
 CREATE DATABASE ciaklog_db CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 ```
 
-**3. Configura il backend**
+Copia e configura le variabili d'ambiente:
 ```bash
 cp src/main/resources/application.properties.example src/main/resources/application.properties
 ```
-Modifica `application.properties` con le tue chiavi (MySQL, TMDB, Groq).
 
-**4. Avvia il backend**
+Modifica `application.properties` con le tue chiavi:
+```properties
+spring.datasource.password=LA_TUA_PASSWORD_MYSQL
+jwt.secret=UNA_STRINGA_CASUALE_DI_ALMENO_32_CARATTERI
+tmdb.api.key=LA_TUA_TMDB_API_KEY
+groq.api.key=LA_TUA_GROQ_API_KEY
+```
+
+Avvia:
 ```bash
 ./mvnw spring-boot:run
 ```
-Parte su [http://localhost:8080](http://localhost:8080)
 
-**5. Avvia il frontend**
-```bash
-cd frontend && npm install && npm run dev
-```
-Parte su [http://localhost:5173](http://localhost:5173)
+Il backend parte su `http://localhost:8080`.
 
----
-
-## Come ottenere le API key
-
-- **TMDB**: [themoviedb.org/settings/api](https://themoviedb.org/settings/api) — gratuito
-- **Groq**: [console.groq.com](https://console.groq.com) — gratuito con rate limit
-
----
-
-## Testing
-
-Il progetto ha una suite di test di regressione (JUnit 5 + Mockito, con H2 in memoria per i test sulla persistenza) e una pipeline CI su GitHub Actions che li esegue automaticamente ad ogni push su `dev/*`, `develop` e `main`.
+### 3. Frontend
 
 ```bash
-mvn test
+cd frontend
+npm install
+npm run dev
 ```
 
-I test coprono in particolare i punti più delicati emersi durante una revisione approfondita del codice:
-- Visibilità delle recensioni nel profilo pubblico (nessuna recensione rimossa o nascosta dall'autore deve trapelare a un visitatore, salvo il caso admin)
-- Coerenza tra libreria e recensioni (niente recensioni orfane rimuovendo un titolo dalla libreria)
-- Soglia di auto-nascondimento delle segnalazioni (non deve contare segnalazioni già respinte in passato)
-- Gestione dei token JWT non più validi (risposta 401 pulita, non un errore generico)
-- Rate limiting sul login
-- Blocco della modifica su commenti/recensioni già rimossi
+Il frontend parte su `http://localhost:5173`.
 
 ---
 
-## Architettura
+## 🔑 Come ottenere le API key
 
-**Ruoli utente**:
-- `GUEST` — esplora, cerca, legge recensioni e classifiche
-- `USER` — tutto il guest + libreria, recensioni, risposte, reazioni, chat AI, segnalazioni, Wrapped
-- `ADMIN` — **solo** gestione segnalazioni, sospensione utenti, pannello dedicato con statistiche operative. Non ha libreria, non recensisce, non usa la chat di raccomandazione (403 esplicito lato backend) — ha una chat gestionale separata (`/api/ai/chat/admin`)
-
-**Sistema a punti**: +10 per recensione creata (le risposte non danno punti alla creazione); +1 per ogni reazione ricevuta (su recensioni e risposte); −15 per rimozione da moderazione (segnalazione approvata o nascondi diretto, sottrae anche i punti delle reazioni ricevute); −20 per sospensione; azzeramento se sospensione permanente. Score non scende sotto 0. L'auto-nascondimento dall'autore non ha alcun impatto sul punteggio (non è una sanzione).
-
-**Chat AI**: floating widget in basso a destra (nascosto su /chat) + pagina intera. Memoria di sessione via Zustand, rate limiting 20 req/ora in-memory con sliding window. Guardrail di contesto: risponde solo a domande su film/serie/piattaforma.
+| Servizio | Link | Note |
+|---|---|---|
+| TMDB | [themoviedb.org/settings/api](https://www.themoviedb.org/settings/api) | Gratuito |
+| Groq | [console.groq.com](https://console.groq.com) | Gratuito con rate limit |
 
 ---
 
-## API principali
+## 🏗️ Architettura (in breve)
 
 ```
-POST   /api/auth/register
-POST   /api/auth/login
-
-GET    /api/users/{username}
-PUT    /api/users/me
-DELETE /api/users/me                        // elimina account (anonimizza)
-
-GET    /api/tmdb/search?q={query}&type={type}&page={n}   // paginazione reale, conteggio da TMDB
-GET    /api/tmdb/{contentType}/{tmdbId}
-
-GET    /api/library
-POST   /api/library
-PUT    /api/library/{id}
-PATCH  /api/library/{id}/season
-DELETE /api/library/{id}
-
-GET    /api/reviews/media/{contentType}/{tmdbId}
-GET    /api/reviews/user/{username}
-POST   /api/reviews
-PUT    /api/reviews/{id}
-DELETE /api/reviews/{id}
-PATCH  /api/reviews/{id}/visibility          // auto-nascondimento autore
-
-GET    /api/reviews/{reviewId}/comments      // risposte
-POST   /api/reviews/{reviewId}/comments
-PUT    /api/comments/{id}
-DELETE /api/comments/{id}
-PATCH  /api/comments/{id}/visibility
-
-GET    /api/reviews/{reviewId}/reaction      // reazioni emoji
-PUT    /api/reviews/{reviewId}/reaction
-DELETE /api/reviews/{reviewId}/reaction
-GET    /api/comments/{commentId}/reaction
-PUT    /api/comments/{commentId}/reaction
-DELETE /api/comments/{commentId}/reaction
-
-GET    /api/charts/films
-GET    /api/charts/series
-GET    /api/charts/users
-GET    /api/charts/trending
-
-GET    /api/wrapped                          // CiakLog Wrapped
-
-POST   /api/ai/chat
-POST   /api/ai/chat/admin
-GET    /api/ai/daily
-POST   /api/ai/structure-review              // recensione "a botta calda"
-POST   /api/ai/structure-comment             // stesso, per le risposte
-POST   /api/ai/movie-question                // "Chiedi su questo film"
-POST   /api/ai/reviews/{reviewId}/opinion    // parere su recensione negativa
-GET    /api/ai/empty-state-tip               // suggerimento contestuale
-
-POST   /api/reports
-GET    /api/reports
-PUT    /api/reports/{id}
-POST   /api/reports/admin-hide               // nascondi direttamente
-
-GET    /api/admin/operational-stats
-GET    /api/admin/users
-GET    /api/admin/users/{id}
-PUT    /api/admin/users/{id}/suspend
-PUT    /api/admin/users/{id}/reinstate
+Browser (React)
+    │  HTTP/JSON
+    ▼
+Spring Boot REST API
+    ├── Spring Security (JWT filter)
+    ├── Controller → Service → Repository
+    ├── MySQL (JPA/Hibernate)
+    ├── TMDB API (catalogo)
+    └── Groq API (LLM)
 ```
 
----
+**Ruoli utente:** `GUEST` (esplora e legge) · `USER` (libreria, recensioni, chat AI) · `ADMIN` (moderazione, pannello dedicato)
 
-## Note di sviluppo
-
-- `ddl-auto=validate` in produzione — gli indici DB vanno creati manualmente
-- Rate limiting AI in-memory — adeguato per singolo nodo
-- `MIN_VOTES=1` nell'ambiente attuale (test) — portare a 3 in produzione
-- Le API key vanno nelle variabili d'ambiente, mai committate
+Dettagli su endpoint, enum di stato, regole di business e scelte implementative → **[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)**
 
 ---
 
-## Autore
+## 📝 Note di sviluppo
+
+- `ddl-auto=validate` in produzione — gli indici DB vanno creati manualmente (o passa a `update` al primo avvio)
+- `MIN_VOTES=1` nel file corrente (ambiente di test) — portare a 3 in produzione
+- Le API key vanno nelle variabili d'ambiente, **mai committate**
+
+---
+
+## 👤 Autore
 
 **Walid Dalal** — [github.com/WalidDalal](https://github.com/WalidDalal)
 
