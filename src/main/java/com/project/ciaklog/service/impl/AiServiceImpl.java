@@ -120,21 +120,9 @@ public class AiServiceImpl implements AiService {
                     ] }
                     """.formatted(libraryProfile, request.getMessage());
         } else {
-            // Fix (🟡 AI — 2 bug con la stessa causa): questo prompt (messaggi
-            // successivi al primo) chiedeva SOLO un array di titoli, senza un
-            // campo "reply" — quindi il modello non aveva nessun modo di
-            // rispondere a parole a una domanda informativa (es. "quanti film
-            // ho in visione?"), né di spiegare che una domanda è fuori tema:
-            // poteva solo restituire titoli o un array vuoto. Risultato: 1)
-            // "quanti film ho in visione" veniva interpretato come "consigliami
-            // dei titoli dalla mia lista" e il modello ne restituiva 3 seguendo
-            // l'abitudine dei consigli, senza mai dire il totale reale; 2) una
-            // domanda fuori tema tornava array vuoto, che il codice sotto
-            // trasformava SEMPRE nel messaggio generico "Non ho trovato
-            // suggerimenti validi" invece di spiegare che l'assistente risponde
-            // solo a domande su film/serie. Stesso schema { reply, titles } del
-            // primo messaggio, con l'aggiunta di istruzioni per le domande
-            // informative sulla libreria (usa i dati forniti, conta per davvero).
+            // Il prompt per i messaggi successivi al primo usa lo stesso
+            // schema { reply, titles } del primo, con istruzioni aggiuntive
+            // per rispondere a domande sulla libreria dell'utente
             prompt = """
                     Sei l'assistente AI di CiakLog, un'app di tracking film/serie TV.
                     Profilo cinematografico dell'utente:
@@ -184,19 +172,15 @@ public class AiServiceImpl implements AiService {
             // per i messaggi successivi e nei fallback (nessun motivo disponibile)
             Map<String, String> reasons = new java.util.LinkedHashMap<>();
 
-            // Fix (🟡 AI): prima solo isFirstMessage usava questo parsing
-            // (reply + titles con motivo); i messaggi successivi avevano un
-            // ramo diverso che leggeva un semplice array di titoli, senza
-            // reply — ora che entrambi i prompt (sopra) chiedono lo stesso
-            // schema JSON, il parsing è unico per i due casi.
+            // Il parsing è unico per primo messaggio e successivi, dato che
+            // entrambi i prompt chiedono lo stesso schema { reply, titles }
             try {
                 String cleaned = rawResponse.replaceAll("```json|```", "").trim();
                 JsonNode root = mapper.readTree(cleaned);
                 reply = root.path("reply").asText(isFirstMessage ? "Ciao! Ecco alcuni suggerimenti per te:" : "Ecco alcuni titoli che potrebbero piacerti:");
                 final java.util.List<String> titlesList = new java.util.ArrayList<>();
                 root.path("titles").forEach(n -> {
-                    // N può essere sia stringa (formato vecchio/fallback del modello)
-                    // sia oggetto { title, reason } — gestisco entrambi senza far crashare il parsing
+                    // n può essere stringa (fallback del modello) o oggetto { title, reason }
                     String title = n.isObject() ? n.path("title").asText() : n.asText();
                     String reason = n.isObject() ? n.path("reason").asText(null) : null;
                     if (title != null && !title.isBlank()) {
@@ -206,29 +190,17 @@ public class AiServiceImpl implements AiService {
                 });
                 titles = titlesList;
             } catch (Exception e) {
-                // Fallback: tratta come array di titoli
                 reply = "Ecco alcuni titoli che potrebbero piacerti:";
                 titles = parseTitlesFromResponse(rawResponse);
             }
 
             List<TmdbSearchResultResponse> suggestions = resolveTitlesOnTmdb(titles, reasons);
 
-            // Questo controllo sovrascriveva SEMPRE il reply quando non c'erano
-            // suggerimenti — ma da quando il prompt del primo messaggio istruisce il
-            // modello a lasciare "titles" vuoto di proposito per saluti/small talk
-            // (con una risposta naturale nel campo "reply"), un semplice "ciao"
-            // otteneva comunque il messaggio generico "Non ho trovato suggerimenti
-            // validi" al posto del saluto vero e proprio del modello. Ora si
-            // sovrascrive solo se il modello AVEVA proposto dei titoli (falliti a
-            // risolversi su TMDB) — se erano vuoti di proposito, il reply resta intatto
-            // Fix (🟡 AI): prima questa condizione sovrascriveva SEMPRE il reply
-            // per i messaggi non-primi quando "titles" era vuoto — ma ora anche
-            // il prompt dei messaggi successivi lascia "titles" vuoto di
-            // proposito per domande informative, fuori tema o saluti (con la
-            // vera risposta nel campo "reply", non in "titles"). La regola è
-            // unica per entrambi i casi ora: si sovrascrive solo se il modello
-            // AVEVA proposto dei titoli che poi non si sono risolti su TMDB —
-            // mai quando erano vuoti di proposito.
+            // Il reply si sovrascrive solo se il modello AVEVA proposto titoli
+            // che poi non si sono risolti su TMDB — mai quando "titles" è
+            // vuoto di proposito (saluti, domande informative, fuori tema),
+            // altrimenti si perderebbe la risposta vera del modello nel
+            // campo "reply" per un generico "non ho trovato suggerimenti"
             if (suggestions.isEmpty() && !titles.isEmpty()) {
                 reply = "Non ho trovato suggerimenti validi, prova a riformulare la richiesta.";
             }
@@ -322,11 +294,8 @@ public class AiServiceImpl implements AiService {
 
         if (pendingReports.hasContent()) {
             sb.append("Ultime segnalazioni in attesa:\n");
-            // Da quando esistono anche segnalazioni su risposte (ReviewComment),
-            // r.getReview() può essere null — causava un NullPointerException (500)
-            // ogni volta che una sola segnalazione pendente puntava a una risposta
-            // invece che a una recensione. Già successo una volta, ripristinato dopo
-            // essere sparito in un giro di modifiche successive — occhio a non perderlo di nuovo
+            // r.getReview() può essere null quando la segnalazione punta a
+            // una risposta (ReviewComment) invece che a una recensione
             pendingReports.forEach(r -> {
                 if (r.getReview() != null) {
                     sb.append("  - ")
@@ -409,19 +378,11 @@ public class AiServiceImpl implements AiService {
                     .build();
         }
 
-        // Fix (🔴 FIX — "Consiglio del giorno" che sparisce dopo il primo
-        // giro): se la rigenerazione (per cache scaduta) va a buon fine
-        // SENZA eccezioni ma produce zero suggerimenti (l'LLM non ne
-        // propone, o nessuno si risolve su TMDB — capita, non è raro con
-        // un LLM esterno), il codice sovrascriveva comunque la cache
-        // buona precedente con questo risultato vuoto, perdendola per le
-        // successive 24h. Se c'era già una cache valida (anche solo
-        // scaduta per l'orario, non invalida di per sé), meglio tenere
-        // quella piuttosto che buttarla per un tentativo fallito — si
-        // riproverà a rigenerare al prossimo giro comunque, dato che
-        // generatedAt non viene toccato in questo caso.
+        // Se la rigenerazione produce zero suggerimenti (LLM/TMDB falliscono
+        // a volte), non sovrascrivere una cache buona precedente con un
+        // risultato vuoto — si riproverà al prossimo giro
         if (suggestions.isEmpty() && existingCache != null) {
-            log.warn("Rigenerazione raccomandazione giornaliera per {} ha prodotto 0 suggerimenti — mantengo la cache precedente invece di sovrascriverla", username);
+            log.warn("Rigenerazione raccomandazione giornaliera per {} ha prodotto 0 suggerimenti — mantengo la cache precedente", username);
             return toDailyDTO(existingCache);
         }
 
@@ -766,20 +727,11 @@ public class AiServiceImpl implements AiService {
         return callGroq(prompt, false);
     }
 
-    // Fix (🟡 FIX — Assistente AI, titoli mancanti "a volte"): il body della
-    // richiesta a Groq non specificava mai response_format — per le chiamate
-    // che si aspettano il JSON { reply, titles } (chat utente e getDaily),
-    // il modello poteva occasionalmente restituire testo extra prima/dopo il
-    // JSON o deviare leggermente dal formato. In quel caso il parsing
-    // principale falliva e si cadeva nel fallback parseTitlesFromResponse,
-    // che tratta l'intera risposta come un array — ma sull'oggetto
-    // { reply, titles } questo produce spazzatura (itera i VALORI
-    // dell'oggetto: il testo del "reply" finisce trattato come se fosse un
-    // titolo di film), che poi non si risolve mai su TMDB e fa sparire i
-    // suggerimenti veri. Le chiamate che si aspettano testo semplice
-    // (chatAdmin, structureReview/Comment, movieQuestion, generateNarrative)
-    // continuano a passare jsonMode=false, dato che quel prompt chiede
-    // esplicitamente "NON restituire JSON, solo testo naturale".
+    // response_format json_object per le chiamate che si aspettano
+    // { reply, titles } (chat, getDaily) — riduce il rischio che il modello
+    // devii dal formato atteso. Le chiamate a testo semplice (chatAdmin,
+    // structureReview/Comment, movieQuestion, generateNarrative) passano
+    // jsonMode=false.
     private String callGroq(String prompt, boolean jsonMode) throws Exception {
         Map<String, Object> bodyMap = new java.util.LinkedHashMap<>();
         bodyMap.put("model", GROQ_MODEL);
@@ -835,12 +787,9 @@ public class AiServiceImpl implements AiService {
         try {
             String cleaned = rawResponse.replaceAll("```json|```", "").trim();
             JsonNode root = mapper.readTree(cleaned);
-            // Fix: questo fallback trattava SEMPRE la risposta come array nudo —
-            // ma lo schema atteso da chat() è { reply, titles }, un oggetto. Se
-            // root è un oggetto, iterare direttamente su di esso itera sui suoi
-            // VALORI (Jackson), quindi il testo di "reply" finiva aggiunto come
-            // se fosse un titolo di film. Ora si legge il campo "titles" quando
-            // presente, come nel parsing principale.
+            // Questo fallback trattava sempre la risposta come array nudo,
+            // ma lo schema atteso da chat() è l'oggetto { reply, titles } —
+            // ora legge il campo "titles" quando presente
             JsonNode arr = root.has("titles") ? root.path("titles") : root;
             List<String> titles = new ArrayList<>();
             arr.forEach(node -> {
@@ -861,11 +810,9 @@ public class AiServiceImpl implements AiService {
         try {
             String cleaned = rawResponse.replaceAll("```json|```", "").trim();
             JsonNode root = mapper.readTree(cleaned);
-            // Fix: il prompt ora chiede { "titles": [...] } (oggetto, non più
-            // array nudo) per essere compatibile con response_format
-            // json_object di Groq — qui si legge il campo "titles" se
-            // presente, con fallback al vecchio formato ad array puro per
-            // compatibilità con risposte già in cache/salvate.
+            // Il prompt chiede { "titles": [...] } (oggetto) per essere
+            // compatibile con response_format json_object di Groq, con
+            // fallback all'array puro per compatibilità con dati già in cache
             JsonNode arr = root.has("titles") ? root.path("titles") : root;
             arr.forEach(node -> {
                 String title = node.isObject() ? node.path("title").asText() : node.asText();
@@ -890,14 +837,9 @@ public class AiServiceImpl implements AiService {
             return "Libreria vuota — nessun dato disponibile, fornisci suggerimenti generici.";
         }
 
-        // Fix (🟡 AI — conteggio impreciso, es. "3 film in visione" quando in
-        // realtà sono 13): prima il modello vedeva SOLO la lista qui sotto,
-        // troncata a LIBRARY_PROFILE_LIMIT titoli — se doveva rispondere a una
-        // domanda sul totale, non aveva modo di saperlo con certezza (e in
-        // pratica tendeva a "suggerire" 3 titoli invece di contare per davvero).
-        // Ora i totali reali per stato (calcolati con COUNT, non con la lista
-        // troncata) vengono dati esplicitamente in cima, così il modello può
-        // rispondere con il numero vero anche quando la lista sotto è parziale.
+        // Totali reali per stato (COUNT, non la lista troncata sotto) dati
+        // esplicitamente in cima, così il modello può rispondere con il
+        // numero vero anche quando la lista sotto è parziale
         long watching = watchEntryRepository.countByUserAndStatus(user, WatchStatus.WATCHING);
         long toWatch = watchEntryRepository.countByUserAndStatus(user, WatchStatus.TO_WATCH);
         long watched = watchEntryRepository.countByUserAndStatus(user, WatchStatus.WATCHED);

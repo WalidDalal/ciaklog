@@ -60,26 +60,15 @@ public class Review {
     @Builder.Default
     private boolean hiddenByAuthor = false;
 
-    // Nascosta perché l'autore è stato sospeso (temporaneamente o
-    // permanentemente) — flag indipendente da hiddenByAuthor apposta: alla
-    // riabilitazione si azzera SOLO questo, senza toccare eventuali
-    // nascondimenti che l'utente aveva scelto lui stesso prima della
-    // sospensione (altrimenti riabilitare "ri-mostrerebbe" anche quelle).
-    // Come hiddenByAuthor, non è una violazione formale né tocca lo status
-    // di moderazione — è visibile solo all'Admin, mai al pubblico.
+    // Nascosta perché l'autore è sospeso — flag indipendente da
+    // hiddenByAuthor: alla riabilitazione si azzera solo questo, senza
+    // toccare eventuali nascondimenti scelti dall'utente stesso
     @Column(name = "hidden_by_suspension", nullable = false)
     @Builder.Default
     private boolean hiddenBySuspension = false;
 
-    // Fix (dashboard admin — recensioni di utenti eliminati): stesso
-    // principio di hiddenBySuspension, flag indipendente e separato — un
-    // utente che elimina l'account (soft-delete, dati anonimizzati) non
-    // deve restare visibile al pubblico con le sue recensioni/risposte, ma
-    // l'Admin deve poterle ancora vedere (già mostrate con l'username
-    // anonimizzato "deleted_xxxxx", impostato in deleteAccount()).
-    // A differenza di hiddenBySuspension, qui non esiste un "reinstate":
-    // l'eliminazione dell'account è irreversibile, quindi questo flag non
-    // viene mai riportato a false una volta impostato.
+    // Stesso principio di hiddenBySuspension, ma per account eliminati —
+    // irreversibile, non esiste un "reinstate" che lo riporti a false
     @Column(name = "hidden_by_deletion", nullable = false)
     @Builder.Default
     private boolean hiddenByDeletion = false;

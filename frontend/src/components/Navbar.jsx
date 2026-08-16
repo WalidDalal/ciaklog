@@ -16,12 +16,9 @@ function Navbar() {
   const { theme, toggle: toggleTheme } = useThemeStore()
   const logged = !!token
 
-  // Fix (Home — "Consiglio del giorno" ridisegnato, v2): niente più popover
-  // ("nuvoletta") staccato dal resto — ispirato a "Mi sento fortunato" di
-  // Google, ma adattato: qui abbiamo 3 consigli non 1, quindi l'icona ✨
-  // dentro la barra di ricerca porta DIRETTAMENTE a uno di essi (un click,
-  // una destinazione), e cliccandola di nuovo scorre al successivo dei 3
-  // invece di ripetere sempre lo stesso.
+  // "Consiglio del giorno" — icona ✨ nella barra di ricerca porta
+  // direttamente a uno dei 3 consigli del giorno, scorrendo tra i tre a
+  // ogni click successivo (ispirato a "Mi sento fortunato" di Google)
   const [dailyPick, setDailyPick] = useState(null)
   const [dailyPickIndex, setDailyPickIndex] = useState(0)
 
@@ -42,8 +39,7 @@ function Navbar() {
   }
 
   const handleSearch = (e) => {
-    // Fix (🟡 minimo 2 caratteri non coerente): allineato allo stesso
-    // controllo di SearchPage.jsx — prima qui bastava "non vuoto".
+    // Minimo 2 caratteri, coerente con SearchPage.jsx
     if (e.key === 'Enter' && search.trim().length >= 2) {
       navigate(`/search?q=${encodeURIComponent(search.trim())}`)
       setSearch('')
@@ -97,11 +93,8 @@ function Navbar() {
           </span>
         </Link>
 
-        {/* Fix: barra ricerca + pulsante AI raggruppati in un unico
-            contenitore flex — così il nav (che usa justify-content:
-            space-between tra i suoi figli diretti) li tratta come UN blocco
-            solo, e il pulsante resta sempre attaccato alla barra invece di
-            allontanarsi quando c'è spazio extra a disposizione */}
+        {/* Barra ricerca + pulsante AI in un unico contenitore flex, così
+            restano vicini (il nav usa space-between tra i suoi figli diretti) */}
         <div style={{ flex: 1, maxWidth: '540px', margin: '0 32px', display: 'flex', alignItems: 'center', gap: '10px' }}>
           {/* Barra ricerca */}
           <div style={{ flex: 1, position: 'relative' }}>
@@ -123,10 +116,6 @@ function Navbar() {
                 boxSizing: 'border-box',
               }}
             />
-            {/* Fix: lente spostata a destra e resa cliccabile (equivale a
-                Invio) — è la posizione/comportamento che ci si aspetta di
-                solito per il tasto di ricerca, prima era solo decorativa a
-                sinistra */}
             <button onClick={submitSearch} title="Cerca" aria-label="Cerca"
                     style={{ position: 'absolute', right: '6px', top: '50%', transform: 'translateY(-50%)', width: '30px', height: '30px', display: 'flex', alignItems: 'center', justifyContent: 'center', backgroundColor: 'transparent', border: 'none', borderRadius: '50%', cursor: 'pointer', color: 'var(--text-dark)', fontSize: '14px' }}
                     onMouseEnter={e => e.currentTarget.style.backgroundColor = 'var(--accent-subtle)'}
@@ -135,18 +124,15 @@ function Navbar() {
             </button>
           </div>
 
-          {/* Fix: pulsante "consiglio del giorno" — fuori dalla pillola di
-              ricerca (per non confondersi con l'icona di invio, che è la
-              lente a destra), ma dentro lo stesso contenitore così resta
-              vicino invece di allontanarsi. Un click porta direttamente a
-              uno dei 3 consigli del giorno, scorrendo tra i tre a ogni
-              click successivo. */}
+          {/* Fuori dalla pillola di ricerca (per non confondersi con l'icona
+              di invio), ma nello stesso contenitore per restare vicino */}
           {dailyPick?.suggestions?.length > 0 && (
               <button onClick={goToDailyPick} title="Fatti consigliare dall'AI" aria-label="Fatti consigliare dall'AI"
                       style={{ flexShrink: 0, width: '36px', height: '36px', display: 'flex', alignItems: 'center', justifyContent: 'center', backgroundColor: 'var(--bg-hover)', border: '1px solid var(--border-soft)', borderRadius: '50%', cursor: 'pointer', fontSize: '16px' }}
                       onMouseEnter={e => { e.currentTarget.style.backgroundColor = 'var(--accent-subtle)'; e.currentTarget.style.borderColor = 'var(--border-cta)' }}
                       onMouseLeave={e => { e.currentTarget.style.backgroundColor = 'var(--bg-hover)'; e.currentTarget.style.borderColor = 'var(--border-soft)' }}>
                 ✨
+
               </button>
           )}
         </div>

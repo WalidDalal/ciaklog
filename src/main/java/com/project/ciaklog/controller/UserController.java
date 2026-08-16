@@ -19,16 +19,10 @@ public class UserController {
 
     private final UserService userService;
 
-    // Pubblico — profilo pubblico di qualsiasi utente
-    // Fix (dashboard admin — "il profilo" nella sospensione/eliminazione):
-    // le recensioni/risposte erano già nascoste (hiddenBySuspension /
-    // hiddenByDeletion), ma questo endpoint restava permitAll SENZA alcun
-    // controllo sullo status dell'utente — chiunque, anche da guest, poteva
-    // ancora aprire il profilo pubblico di un utente sospeso o eliminato
-    // (avatar, generi preferiti, "sto guardando", conteggio recensioni —
-    // tutti calcolati da dati mai toccati dalla sospensione/eliminazione).
-    // @AuthenticationPrincipal qui può essere null (endpoint permitAll, il
-    // filtro JWT valorizza il principal solo se arriva un token valido).
+    // Pubblico — profilo di qualsiasi utente. @AuthenticationPrincipal può
+    // essere null (permitAll, il filtro JWT valorizza il principal solo
+    // se arriva un token valido). Un profilo non ACTIVE (sospeso/eliminato)
+    // è visibile solo ad admin o all'interessato stesso — vedi getPublicProfile
     @GetMapping("/{username}")
     public ResponseEntity<UserProfileResponse> getPublicProfile(
             @PathVariable String username,
