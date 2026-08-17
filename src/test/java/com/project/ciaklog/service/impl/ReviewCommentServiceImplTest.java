@@ -126,7 +126,7 @@ class ReviewCommentServiceImplTest {
     }
 
     @Test
-    @DisplayName("Deve continuare application-test.properties permettere la modifica normale di una risposta visibile su una recensione visibile")
+    @DisplayName("Deve continuare a permettere la modifica normale di una risposta visibile su una recensione visibile")
     void deveModificareNormalmenteSeTuttoVisibile() {
         ReviewComment comment = ReviewComment.builder()
                 .id(UUID.randomUUID())

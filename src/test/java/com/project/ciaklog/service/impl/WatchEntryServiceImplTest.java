@@ -103,7 +103,7 @@ class WatchEntryServiceImplTest {
     }
 
     @Test
-    @DisplayName("Deve continuare application-test.properties rimuovere normalmente un titolo senza nessuna recensione attiva")
+    @DisplayName("Deve continuare a permettere di rimuovere normalmente un titolo senza nessuna recensione attiva")
     void deveRimuovereSeNessunaRecensioneAttiva() {
         when(reviewRepository.existsByUserAndTmdbIdAndContentTypeAndStatusNot(
                 utente, voceLibreria.getTmdbId(), voceLibreria.getContentType(), ReviewStatus.REMOVED))
