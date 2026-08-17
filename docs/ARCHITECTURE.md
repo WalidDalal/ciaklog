@@ -1,4 +1,3 @@
-[ARCHITECTURE.md](https://github.com/user-attachments/files/31124901/ARCHITECTURE.md)
 # 🏗️ CiakLog — Documentazione tecnica
 
 Questo documento approfondisce l'architettura, gli endpoint API, le regole di business e le scelte implementative del progetto. Per una panoramica generale vedi la [README](../README.md).

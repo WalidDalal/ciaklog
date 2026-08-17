@@ -20,14 +20,17 @@ Vantaggio rispetto ai competitor (Letterboxd, Trakt, Simkl): nessuno offre un as
 
 ## 📸 Screenshot
 
-<!-- TODO: sostituire con screenshot/GIF reali dell'app.
-     Consigliati: Home, dettaglio film, Chat AI, Wrapped, pannello admin. -->
-
 | Home | Chat AI |
 |---|---|
-| _screenshot qui_ | _screenshot qui_ |
+| ![Home](docs/screenshots/home.png) | ![Chat AI](docs/screenshots/chat-ai.png) |
 
----
+| Dettaglio film | Recensioni e risposte |
+|---|---|
+| ![Dettaglio film](docs/screenshots/film-detail.png) | ![Recensioni](docs/screenshots/film-reviews.png) |
+
+| CiakLog Wrapped | Pannello Admin |
+|---|---|
+| ![Wrapped](docs/screenshots/wrapped.png) | ![Admin](docs/screenshots/admin.png) |
 
 ## Funzionalità principali
 
