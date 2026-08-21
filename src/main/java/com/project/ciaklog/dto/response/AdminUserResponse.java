@@ -8,7 +8,7 @@ import lombok.Getter;
 import java.util.UUID;
 
 // DTO snello per la tabella Gestione Utenti (Admin) — niente bio/generi/sta-guardando,
-// che richiederebbero query aggiuntive per ogni riga (vedi Fix Controller #7).
+// che richiederebbero query aggiuntive per ogni riga.
 @Getter
 @Builder
 public class AdminUserResponse {

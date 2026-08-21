@@ -29,12 +29,10 @@ public interface UserRepository extends JpaRepository<User, UUID> {
     // Top 5 utenti per score — esclude gli admin
     List<User> findTop5ByRoleNotOrderByScoreDesc(Role role);
 
-    // La ricerca utenti nella dashboard admin non era mai collegata
-    // al backend — il controller riceveva `search` ma non lo passava al
-    // service. Cerca su username O email, case-insensitive
+    // Cerca su username O email, case-insensitive
     Page<User> findByUsernameContainingIgnoreCaseOrEmailContainingIgnoreCase(
             String username, String email, Pageable pageable);
-    // Utenti in stato SUSPENDED (2ª violazione,
-    // sospensione temporanea) — candidati a riammissione manuale via reinstateUser()
+    // Utenti SUSPENDED (2ª violazione, sospensione temporanea) — candidati
+    // a riammissione manuale via reinstateUser()
     long countByStatus(UserStatus status);
 }

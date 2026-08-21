@@ -27,9 +27,8 @@ public interface ReviewReactionRepository extends JpaRepository<ReviewReaction, 
     @Query("SELECT r.type AS type, COUNT(r) AS count FROM ReviewReaction r WHERE r.reviewComment = :comment GROUP BY r.type")
     List<ReactionCount> countByReviewCommentGroupedByType(@Param("comment") ReviewComment comment);
 
-    // Conteggio totale
-    // reazioni ricevute — calcolato al volo via COUNT, MAI un contatore salvato
-    // a parte (deciso)
+    // Conteggio totale reazioni ricevute — calcolato al volo via COUNT,
+    // mai un contatore salvato a parte
     long countByReview(Review review);
 
     long countByReviewComment(ReviewComment reviewComment);

@@ -5,10 +5,8 @@ import lombok.Getter;
 
 import java.util.List;
 
-// Prima il backend ignorava silenziosamente il parametro `page`
-// (nemmeno dichiarato nel metodo), quindi la ricerca prendeva sempre e solo la
-// prima pagina di TMDB (fissa a 20 risultati) — sembrava un tetto fisso di
-// 40/20 quando in realtà mancava solo la paginazione vera
+// Include page/totalPages/totalResults: la ricerca ora pagina davvero
+// invece di prendere sempre la prima pagina fissa di TMDB
 @Getter
 @Builder
 public class TmdbSearchResponse {

@@ -42,9 +42,7 @@ public class ReportController {
     @PreAuthorize("hasRole('ADMIN')")
     public ResponseEntity<Page<ReportResponse>> getReports(
             @RequestParam(required = false) ReportStatus status,
-            // Fix (dashboard admin — filtro per tipo bersaglio): il filtro
-            // recensioni/risposte ora è un parametro di query, applicato
-            // lato backend prima della paginazione (vedi ReportServiceImpl)
+            // Filtro recensioni/risposte — applicato lato backend prima della paginazione
             @RequestParam(required = false) ReportTargetType targetType,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "20") int size) {

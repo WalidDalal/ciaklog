@@ -6,15 +6,10 @@ import java.time.Instant;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicInteger;
 
-// Il login non aveva nessun
-// rate-limit, quindi era possibile tentare password a raffica senza limiti
-// (brute-force). Implementazione semplice in memoria (niente Redis/infra
-// esterna richiesta) — accettabile per la scala attuale dell'app; se in
-// futuro il backend gira su più istanze, questo contatore andrebbe spostato
-// su uno store condiviso (es. Redis), perché ogni istanza avrebbe il suo.
-//
-// Regola: max 5 tentativi falliti per email in una finestra di 15 minuti,
-// poi blocco fino a fine finestra. Un login riuscito azzera il contatore.
+// Rate-limit per il login (max 5 tentativi falliti per email in 15 min,
+// poi blocco fino a fine finestra). In memoria, niente Redis — se in
+// futuro il backend gira su più istanze, va spostato su uno store
+// condiviso, perché ogni istanza avrebbe il suo contatore.
 @Component
 public class LoginRateLimiter {
 

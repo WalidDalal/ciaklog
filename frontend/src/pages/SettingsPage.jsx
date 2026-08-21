@@ -16,10 +16,9 @@ const CARD_STYLE = {
   borderRadius: '12px', padding: '28px', marginBottom: '20px',
 }
 
-// Fix (Impostazioni — colore profilo): stessa palette/logica di ProfilePage.jsx
-// (colorForUsername), qui duplicata perché non condivisa in un modulo comune.
-// Il colore va modificato da qui O da "Modifica profilo" in ProfilePage — stesso
-// campo profileColor sul backend, cambia solo da dove lo apri.
+// Stessa palette/logica di ProfilePage.jsx, duplicata perché non condivisa
+// in un modulo comune. Il colore è modificabile anche da qui, oltre che
+// da "Modifica profilo" — stesso campo profileColor sul backend.
 const AVATAR_COLORS = ['var(--accent)', '#3b82f6', '#22c55e', '#f59e0b', '#8b5cf6', '#ec4899', '#14b8a6', '#eab308']
 function colorForUsername(name) {
   if (!name) return AVATAR_COLORS[0]
@@ -37,20 +36,15 @@ function SettingsPage() {
 
   const [username, setUsername] = useState(user?.username || '')
   const [bio, setBio] = useState('')
-  // Fix (Impostazioni — colore profilo): mancava del tutto qui, si poteva
-  // cambiare solo dalla pagina Profilo pubblico ("Modifica profilo"). Stesso
-  // campo (profileColor), stesso salvataggio via PUT /users/me.
+  // Stesso campo (profileColor) e stesso salvataggio (PUT /users/me) di ProfilePage
   const [profileColor, setProfileColor] = useState('')
 
-  // Tengo i valori originali per poterli
-  // ripristinare se l'utente annulla senza salvare, invece di avere sempre
-  // tutto editabile
+  // Valori originali, per ripristinarli se l'utente annulla senza salvare
   const [originalBio, setOriginalBio] = useState('')
   const [originalProfileColor, setOriginalProfileColor] = useState('')
   const [editingProfile, setEditingProfile] = useState(false)
 
-  // Card riepilogo account, dati già
-  // disponibili dalla stessa chiamata usata per la bio, nessun endpoint nuovo
+  // Dati già disponibili dalla stessa chiamata usata per la bio, nessun endpoint nuovo
   const [accountSummary, setAccountSummary] = useState(null)
 
   // Carica bio + riepilogo dal backend al mount (non sono nel JWT)
@@ -75,9 +69,7 @@ function SettingsPage() {
   const [newPassword, setNewPassword] = useState('')
   const [confirmPassword, setConfirmPassword] = useState('')
 
-  // La sezione password era l'unica sempre aperta,
-  // diversa dalle altre card che seguono il pattern Modifica/Annulla —
-  // ora è chiusa di default e si apre solo cliccando "Modifica"
+  // Chiusa di default, come le altre card (pattern Modifica/Annulla)
   const [editingPassword, setEditingPassword] = useState(false)
 
   const [loadingProfile, setLoadingProfile] = useState(false)
@@ -96,19 +88,16 @@ function SettingsPage() {
     setLoadingProfile(true)
     try {
       // profileColor: '' significa esplicitamente "torna al colore
-      // automatico" per il backend (vedi UpdateCredentialsRequest), quindi va
-      // mandato così com'è — trasformarlo in null significherebbe "non
-      // modificare", cioè ignorare la scelta "Automatico" dell'utente.
+      // automatico" per il backend — va mandato così com'è, non trasformato
+      // in null (che significherebbe "non modificare")
       const payload = { bio, profileColor }
       if (username !== user?.username) payload.username = username
       const res = await api.put('/users/me', payload)
       if (res.data?.token) {
         updateToken(res.data.token)
       }
-      // Questo form non tocca mai la password, quindi un 204 (nessun
-      // token) qui significa solo "è cambiata la bio" — non serve rilogin.
-      // Prima si assumeva sempre "password cambiata" e si forzava il logout
-      // anche per un semplice edit della bio.
+      // Questo form non tocca mai la password — un 204 (nessun token)
+      // significa solo "è cambiata la bio", non serve rilogin
       toast.show('Profilo aggiornato!', 'success')
       setOriginalBio(bio)
       setOriginalProfileColor(profileColor)
@@ -120,8 +109,7 @@ function SettingsPage() {
     }
   }
 
-  // Ripristina i valori originali senza
-  // salvare nulla, e richiude il form
+  // Ripristina i valori originali senza salvare, e richiude il form
   const handleCancelProfile = () => {
     setUsername(user?.username || '')
     setBio(originalBio)
@@ -132,12 +120,8 @@ function SettingsPage() {
   const handlePasswordSubmit = async (e) => {
     e.preventDefault()
     if (newPassword !== confirmPassword) { toast.show('Le password non coincidono'); return }
-    // Fix (disallineamento con la registrazione): qui si controllava solo la
-    // lunghezza (8+ caratteri) — RegisterPage controlla anche maiuscola,
-    // minuscola e numero (stesso pattern richiesto dal backend, vedi
-    // UpdateCredentialsRequest.newPassword). Una password come "aaaaaaaa"
-    // passava questo controllo lato client per poi essere rifiutata dal
-    // backend con un errore generico, invece di essere segnalata subito qui.
+    // Stessa regola del backend (8+ caratteri, maiuscola, minuscola, numero),
+    // allineata a RegisterPage — segnalata subito qui invece che dal backend
     if (!/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d).{8,}$/.test(newPassword)) {
       toast.show('La password deve contenere almeno 8 caratteri, una maiuscola, una minuscola e un numero')
       return
@@ -202,8 +186,7 @@ function SettingsPage() {
           </div>
         </div>
 
-        {/* Fix (Impostazioni — pagina povera): card riepilogo account,
-            dati già disponibili (membro dal, punteggio, recensioni scritte) */}
+        {/* Card riepilogo account — dati già disponibili (membro dal, punteggio, recensioni) */}
         {accountSummary && (
           <div style={CARD_STYLE}>
             <div style={{ display: 'flex', justifyContent: 'space-around', textAlign: 'center', padding: '20px 0' }}>
@@ -220,8 +203,7 @@ function SettingsPage() {
                 <div style={{ color: 'var(--text-dark)', fontSize: '12px', marginTop: '2px' }}>Membro dal</div>
               </div>
             </div>
-            {/* Fix (Impostazioni, idea facoltativa a costo zero): riusa la pagina
-                profilo già esistente, dà un motivo in più per passare da qui */}
+            {/* Riusa la pagina profilo già esistente */}
             <div style={{ textAlign: 'center', borderTop: '1px solid var(--border-soft)', paddingTop: '14px' }}>
               <Link to={`/profile/${user?.username}`} style={{ color: 'var(--accent)', fontSize: '13px', fontWeight: '600' }}>
                 🔗 Vedi il tuo profilo pubblico
@@ -236,9 +218,7 @@ function SettingsPage() {
             <h2 style={{ color: 'var(--text)', fontSize: '17px', fontWeight: '700', margin: 0 }}>
               👤 Modifica profilo
             </h2>
-            {/* Fix: pattern Modifica/Annulla — i campi restano di sola lettura
-                (già visibili nella card avatar sopra) finché non clicchi Modifica,
-                invece di avere sempre tutto editabile */}
+            {/* Pattern Modifica/Annulla: sola lettura finché non clicchi Modifica */}
             {!editingProfile && (
               <button
                 type="button"
@@ -399,9 +379,7 @@ function SettingsPage() {
                   {showNew ? '🙈' : '👁️'}
                 </button>
               </div>
-              {/* Fix (disallineamento con RegisterPage): stesso indicatore live
-                  già usato in registrazione — qui prima non c'era nulla, solo
-                  un controllo silenzioso sulla lunghezza al submit. */}
+              {/* Stesso indicatore live usato in RegisterPage */}
               {newPassword.length > 0 && (
                 <div style={{ display: 'flex', gap: '10px', marginTop: '8px', flexWrap: 'wrap' }}>
                   {[
@@ -468,11 +446,9 @@ function SettingsPage() {
           )}
         </div>
 
-        {/* ── Zona pericolosa ── */}
-        {/* Fix: rimosso il bottone di logout duplicato — c'è già in Navbar,
-            sempre accessibile da ogni pagina. Il logout inoltre non è
-            un'azione "pericolosa/irreversibile" come l'eliminazione account,
-            non aveva senso raggrupparli insieme */}
+        {/* Zona pericolosa: solo eliminazione account. Il logout è già in
+            Navbar (accessibile ovunque) e non è "pericoloso/irreversibile"
+            come l'eliminazione, non ha senso raggrupparli insieme */}
         <div style={{ ...CARD_STYLE, borderColor: '#3a1a1a', marginBottom: 0 }}>
           <h2 style={{ color: 'var(--accent)', fontSize: '17px', fontWeight: '700', marginBottom: '20px' }}>
             🚨 Zona pericolosa
