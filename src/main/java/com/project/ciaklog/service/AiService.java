@@ -30,23 +30,18 @@ public interface AiService {
     // specifico (trama, cast, ecc.), stateless, separata dalla chat generale
     MovieQuestionResponse answerMovieQuestion(String username, MovieQuestionRequest dto);
 
-    // Metodo generico per generare testo libero dall'AI
-    // dato un prompt già pronto — evita di duplicare la logica di chiamata a
-    // Groq (retry, gestione errori) in ogni nuovo service che ha bisogno di AI.
-    // Ritorna stringa vuota (non lancia eccezione) se l'AI non risponde: un
-    // testo narrativo mancante non deve mai far fallire l'intera funzionalità
-    // che lo richiede (es. il Wrapped deve funzionare anche senza la frase AI).
+    // Metodo generico per generare testo libero dall'AI dato un prompt già
+    // pronto — evita di duplicare la logica di chiamata a Groq (retry,
+    // gestione errori) in ogni nuovo service. Ritorna stringa vuota (non
+    // lancia eccezione) se l'AI non risponde.
     String generateNarrative(String prompt);
 
-    // SOLO su richiesta
-    // esplicita dell'utente sulla PROPRIA recensione con voto basso — mai
-    // automatica. Tono leggero, offre una prospettiva alternativa senza
-    // essere condiscendente né insistere se l'utente non lo chiede.
+    // Solo su richiesta esplicita dell'utente sulla propria recensione con
+    // voto basso — mai automatica
     ReviewOpinionResponse getAiOpinionOnReview(String username, UUID reviewId);
 
-    // Una
-    // frase breve al posto del solito messaggio piatto quando non c'è nulla
-    // da mostrare (libreria vuota, ricerca senza risultati, ecc.). Riusa
-    // generateNarrative() — stringa vuota se l'AI non risponde, mai un errore
+    // Frase breve al posto del solito messaggio piatto quando non c'è nulla
+    // da mostrare (libreria vuota, ricerca senza risultati) — riusa
+    // generateNarrative()
     String getEmptyStateTip(String context);
 }

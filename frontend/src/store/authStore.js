@@ -24,10 +24,8 @@ const useAuthStore = create((set, get) => ({
     const user = userFromToken(token)
     localStorage.setItem('token', token)
     set({ user, token })
-    // La chat (Zustand, in memoria) non era mai legata all'utente
-    // loggato — cambiando account nella stessa sessione del browser (es. da
-    // Admin a un utente normale) i messaggi della chat precedente restavano
-    // visibili finché non si ricaricava manualmente la pagina
+    // Svuota la chat (in memoria, non legata all'utente) — altrimenti
+    // cambiando account nella stessa sessione i messaggi restano visibili
     useChatStore.getState().clear()
     return user
   },

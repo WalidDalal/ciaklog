@@ -1,12 +1,7 @@
 import { Link } from 'react-router-dom'
 
-// Prima questo componente renderizzava una intera <section> con il suo
-// proprio sfondo poster + gradiente, annidata dentro la hero già esistente in
-// HomePage.jsx (che ha già sfondo poster + gradiente propri). Il risultato
-// erano "2 poster in più a sinistra", visibili solo in home guest, perché lo
-// sfondo poster di questo componente finiva confinato dentro la colonna di
-// testo (maxWidth 620px) della hero esterna. Ora espone solo testo + CTA e
-// riusa lo sfondo già presente nella hero di HomePage.
+// Solo testo + CTA — lo sfondo poster/gradiente è già gestito dalla hero
+// esterna in HomePage.jsx
 function HeroSection() {
   return (
     <>
@@ -20,7 +15,7 @@ function HeroSection() {
         ricevi consigli su misura.
       </p>
       <div style={{ display: 'flex', gap: '16px' }}>
-        {/* Fix: CTA semplificata a un solo bottone -> login (che ha già il link alla registrazione) */}
+        {/* CTA singola: login (che ha già il link alla registrazione) */}
         <Link to="/login">
           <button style={{
             padding: '14px 40px', backgroundColor: 'var(--accent)',

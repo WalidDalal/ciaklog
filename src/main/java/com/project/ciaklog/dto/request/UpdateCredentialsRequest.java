@@ -19,14 +19,8 @@ public class UpdateCredentialsRequest {
 
     private String currentPassword;
 
-    // Fix (disallineamento con la registrazione): questo campo non aveva
-    // NESSUN controllo di robustezza — RegisterRequest.password richiede lo
-    // stesso pattern (8+ caratteri, maiuscola, minuscola, numero), ma qui si
-    // poteva impostare una nuova password di 1 carattere senza che nessuna
-    // validazione lo impedisse (UserServiceImpl.updateCredentials la cifra e
-    // basta, nessun controllo aggiuntivo lato service). Stesso @Pattern di
-    // RegisterRequest — Jakarta Validation non applica @Pattern a valori
-    // null, quindi resta valido lasciare il campo vuoto quando non si vuole
+    // Stesso @Pattern di RegisterRequest — non applicato a valori null,
+    // quindi resta valido lasciare il campo vuoto quando non si vuole
     // cambiare la password.
     @Pattern(
             regexp = "^(?=.*[a-z])(?=.*[A-Z])(?=.*\\d).{8,}$",

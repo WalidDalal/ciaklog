@@ -5,13 +5,8 @@ import api from '../services/api'
 import useAuthStore from '../store/authStore'
 import useToastStore from '../store/toastStore'
 
-// Fix (Profilo — "immagini rosse"): l'avatar grande era sempre var(--accent)
-// (rosso) per chiunque, fisso. Richiesto un colore diverso per utente, ma
-// "casuale, non assegnato da te" — quindi non una lista di colori scelti a
-// mano per singolo utente, ma un hash dello username che sceglie da una
-// piccola palette: stesso utente = sempre lo stesso colore (utile per
-// riconoscerlo a colpo d'occhio), ma quale colore tocchi a chi non è deciso
-// a mano, deriva dai caratteri dello username stesso.
+// Colore avatar derivato via hash dallo username — stesso utente sempre
+// lo stesso colore, ma quale colore tocca non è scelto a mano
 const AVATAR_COLORS = ['var(--accent)', '#3b82f6', '#22c55e', '#f59e0b', '#8b5cf6', '#ec4899', '#14b8a6', '#eab308']
 function colorForUsername(name) {
   if (!name) return AVATAR_COLORS[0]
@@ -58,10 +53,8 @@ function ProfilePage() {
           setEditColor(profileRes.data.profileColor || '')
           const data = reviewsRes.data
           setReviews(data.content || data || [])
-          // Stesso problema di AdminPage — con PageSerializationMode.VIA_DTO
-          // i metadati di paginazione sono annidati sotto `.page.`, non in cima.
-          // Prima "data.page" leggeva l'oggetto metadata invece del numero pagina
-          // corrente (0, appena richiesta), e "data.totalPages" era sempre undefined
+          // Con PageSerializationMode.VIA_DTO i metadati di paginazione
+          // sono annidati sotto `.page.`, non in cima
           setHasMoreReviews(data.page?.totalPages ? 0 < data.page.totalPages - 1 : false)
         })
         .catch(() => {})
@@ -131,8 +124,7 @@ function ProfilePage() {
       <div style={{ backgroundColor: 'var(--bg)', height: '100vh', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
         <Navbar />
 
-        {/* Fix: la parte superiore (avatar, bio, stats) resta fissa; solo la lista
-            sotto (in visione + recensioni) scrolla */}
+        {/* Header (avatar, bio, stats) resta fisso; solo la lista sotto scrolla */}
         <div style={{ flex: 1, display: 'flex', flexDirection: 'column', maxWidth: '900px', width: '100%', margin: '0 auto', padding: '0 24px', boxSizing: 'border-box', overflow: 'hidden' }}>
 
           {/* ── Header profilo (fisso) ── */}
@@ -236,8 +228,7 @@ function ProfilePage() {
                       <h1 style={{ fontSize: '28px', fontWeight: '800', color: 'var(--text)' }}>
                         {profile.username || username}
                       </h1>
-                      {/* Fix (styling): badge generi accanto al nome — più rapido da vedere
-                          a colpo d'occhio rispetto a metterli sotto, nella riga stats */}
+                      {/* Badge generi accanto al nome, più rapido da vedere che sotto */}
                       {profile.topGenres?.length > 0 && (
                           <div style={{ display: 'flex', gap: '6px', alignItems: 'center', flexWrap: 'wrap' }}>
                             {profile.topGenres.slice(0, 3).map(g => (
@@ -251,10 +242,8 @@ function ProfilePage() {
                       )}
                     </div>
 
-                    {/* Fix (Profilo — posizione bottone Modifica, secondo giro): prima stava
-                        alla sinistra dei generi, sulla stessa riga dello username — spostato
-                        qui sotto, su una riga propria, così non si confonde con lo username/
-                        generi come elementi "informativi" mentre Modifica è un'azione */}
+                    {/* Su riga propria: Modifica è un'azione, non un'informazione come
+                        username/generi accanto */}
                     {isOwn && (
                         <button
                             onClick={() => setEditing(true)}
@@ -283,25 +272,15 @@ function ProfilePage() {
                         </p>
                     )}
 
-                    {/* Fix (Profilo — contatore recensioni duplicato): qui c'era un
-                        blocco "Stats" con "N recensioni" basato sul totale reale
-                        (profile.totalReviews), ma sotto, nell'header della sezione
-                        Recensioni, c'è un secondo contatore (reviews.length) che invece
-                        cresce 10 alla volta man mano che si clicca "Carica altre
-                        recensioni" — due numeri diversi per lo stesso concetto,
-                        confusionario (es. "22 recensioni" qui sopra ma "10" appena sotto
-                        finché non carichi tutto). Rimosso questo, il secondo resta: è
-                        quello corretto per riflettere cosa è effettivamente visibile in
-                        pagina in quel momento. */}
+                    {/* Il conteggio recensioni resta solo nell'header della sezione
+                        Recensioni sotto (reviews.length) — un secondo contatore qui,
+                        basato sul totale reale, avrebbe dato due numeri diversi per
+                        lo stesso concetto */}
                   </>
               )}
             </div>
 
-            {/* Fix (Profilo): il bottone Wrapped era un cerchietto anonimo — solo
-                un'emoji, capibile solo passandoci sopra col mouse (title). Aggiunta
-                un'etichetta visibile sotto, niente più tooltip-only. "Modifica" è
-                stato spostato accanto allo username qui sotto: è lì che agisce
-                davvero (username + bio), non ha senso vicino al Wrapped. */}
+            {/* Etichetta visibile sotto l'icona Wrapped, non solo un tooltip al passaggio */}
             {isOwn && !editing && (
                 <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '4px', flexShrink: 0 }}>
                   <Link to="/wrapped" style={{
@@ -324,8 +303,6 @@ function ProfilePage() {
           {watching.length > 0 && (
               <div style={{ marginBottom: '40px' }}>
                 <h2 style={{ color: 'var(--text-muted)', fontSize: '12px', fontWeight: '700', textTransform: 'uppercase', letterSpacing: '1px', marginBottom: '12px' }}>
-                  {/* Fix (Profilo — "togliere le emoji", secondo giro): tolta anche
-                      l'emoji del titolo sezione, non solo quella per ogni riga */}
                   In visione
                 </h2>
                 <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
@@ -335,8 +312,6 @@ function ProfilePage() {
                         borderRadius: '8px', padding: '10px 16px',
                         display: 'flex', alignItems: 'center', gap: '10px',
                       }}>
-                        {/* Fix (Profilo — "togliamo ste emoji con i film/serie visti"):
-                            rimossa l'icona ▶️ ripetuta su ogni titolo, era solo rumore visivo */}
                         <div>
                           <div style={{ color: 'var(--text)', fontWeight: '600', fontSize: '14px' }}>{w.title || w}</div>
                           {w.season && <div style={{ color: 'var(--text-dark)', fontSize: '12px' }}>Stagione {w.season}</div>}
@@ -349,16 +324,8 @@ function ProfilePage() {
 
           {/* ── Recensioni ── */}
           <div>
-            {/* Fix (Profilo — "tornato il problema", la causa vera): l'header
-                mostrava reviews.length, cioè quante recensioni sono caricate
-                finora in pagina (10, poi 20 dopo un click su "Carica altre") —
-                un numero che CAMBIA mentre carichi, invece del totale reale.
-                Il fix precedente aveva tolto il contatore statico in alto
-                pensando risolvesse la confusione tra due numeri diversi, ma il
-                problema vero era proprio questo: il numero qui doveva essere
-                il totale reale fin da subito, non "quanti ne ho scaricati
-                finora". Stessa causa, stesso fix già fatto in Dettaglio
-                Film/Serie per "Recensioni della community (N)". */}
+            {/* Il totale reale (profile.totalReviews), non reviews.length —
+                che cambia mentre carichi le pagine successive */}
             <h2 style={{ color: 'var(--text)', fontSize: '18px', fontWeight: '700', marginBottom: '20px' }}>
               🎬 Recensioni
               <span style={{ color: 'var(--text-dark)', fontSize: '14px', fontWeight: '400', marginLeft: '8px' }}>
@@ -412,11 +379,7 @@ function ProfilePage() {
                         </span>
                             </div>
 
-                            {/* Fix (Profilo — emoji nel rating, trovata dopo diversi giri):
-                                non era la sezione "In Visione" ma questa — 5 clapperboard 🎬
-                                come "stelle" più una faccina in base al voto, mentre ovunque
-                                nel resto dell'app (Home, Admin, Wrapped) il voto si mostra con
-                                ★/☆ semplici. Allineato allo stesso stile, tolta la faccina. */}
+                            {/* Stesso stile ★/☆ usato in Home, Admin, Wrapped */}
                             <div style={{ display: 'flex', gap: '2px', marginBottom: r.text ? '6px' : '0', alignItems: 'center' }}>
                               <span style={{ color: 'var(--gold)', fontSize: '13px' }}>
                                 {'★'.repeat(Math.max(0, Math.min(5, Math.round(r.rating || 0))))}{'☆'.repeat(5 - Math.max(0, Math.min(5, Math.round(r.rating || 0))))}

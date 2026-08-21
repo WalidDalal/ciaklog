@@ -8,10 +8,7 @@ import lombok.Getter;
 public class ChartUserResponse {
     private String username;
 
-    // Fix (🟡 avatar tutti dello stesso colore in classifica): mancava questo
-    // campo — il frontend usava un indice di posizione nel podio al posto del
-    // vero colore profilo, e con pochi pareggi quell'indice era quasi sempre
-    // 0 per tutti, risultando nello stesso colore per (quasi) tutti gli utenti.
+    // Colore profilo reale, usato dal frontend per l'avatar in classifica
     private String profileColor;
 
     // Punteggio persistito su User.score — aggiornato ad ogni azione rilevante (recensione, violazione, sospensione)

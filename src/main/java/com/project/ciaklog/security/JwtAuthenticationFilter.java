@@ -51,11 +51,9 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
             try {
                 userDetails = userDetailsService.loadUserByUsername(username);
             } catch (org.springframework.security.core.userdetails.UsernameNotFoundException e) {
-                // Un token JWT
-                // valido ma con un utente non più risolvibile (es. account
-                // cancellato dopo l'emissione del token) lasciava propagare
-                // l'eccezione fuori dal filtro, risultando in un errore generico
-                // (500) invece di un 401 pulito e prevedibile per il frontend
+                // Token JWT valido ma utente non più risolvibile (es. account
+                // cancellato dopo l'emissione del token) — 401 pulito invece
+                // di lasciare propagare l'eccezione (500 generico)
                 log.warn("Token valido ma utente non trovato: {}", username);
                 response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
                 response.setContentType("application/json");

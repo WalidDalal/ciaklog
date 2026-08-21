@@ -11,12 +11,8 @@ const SUGGESTIONS = [
   "Film d'animazione per adulti",
 ]
 
-// Fix (🟡 AI — suggerimenti sbagliati per l'admin): prima si mostravano
-// SEMPRE i chip sopra (di natura cinematografica, per gli utenti) anche
-// nella chat gestionale dell'admin — che invece risponde solo a domande su
-// utenti/segnalazioni/violazioni/statistiche (vedi il prompt dedicato in
-// AiServiceImpl.chatAdmin), quindi quei suggerimenti erano semplicemente
-// fuori contesto e non funzionanti per lui.
+// Chip diversi per la chat gestionale dell'admin (risponde solo su
+// utenti/segnalazioni/violazioni/statistiche — vedi AiServiceImpl.chatAdmin)
 const ADMIN_SUGGESTIONS = [
   'Quanti utenti sono sospesi?',
   'Quante segnalazioni sono in attesa?',
@@ -57,9 +53,7 @@ export function ChatCore({ compact = false, initialPrompt = null }) {
     setLoading(true)
 
     try {
-      // Gli admin devono usare l'endpoint gestionale /ai/chat/admin —
-      // prima veniva sempre chiamato /ai/chat, protetto con hasRole('USER'),
-      // che un admin non possiede: la richiesta falliva sempre.
+      // Gli admin usano l'endpoint gestionale, protetto separatamente
       const endpoint = isAdmin ? '/ai/chat/admin' : '/ai/chat'
       const res = await api.post(endpoint, {
         message: text.trim(),
@@ -67,11 +61,8 @@ export function ChatCore({ compact = false, initialPrompt = null }) {
         sessionHistory: messages.slice(-10),
       })
       setSessionId(res.data.sessionId)
-      // Il frontend usava role: 'AI', ma l'enum MessageRole del backend
-      // accetta solo USER/ASSISTANT — al primo giro andava bene (il messaggio
-      // non torna mai indietro), ma dal secondo messaggio in poi 'AI' finiva
-      // nella sessionHistory rimandata al backend, che falliva la deserializzazione
-      // JSON (500 "Errore interno") su OGNI messaggio successivo al primo
+      // role deve essere USER/ASSISTANT — l'enum MessageRole del backend
+      // non accetta altri valori (finisce nella sessionHistory rimandata)
       addMessage({
         role: 'ASSISTANT',
         content: res.data.reply,

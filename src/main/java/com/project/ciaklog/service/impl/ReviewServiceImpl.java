@@ -43,43 +43,21 @@ public class ReviewServiceImpl implements ReviewService {
 
         ContentType contentType = dto.getContentType();
 
-        // Fix (🔴 FIX — segnalato dall'utente, verifica precedente sbagliata:
-        // avevo controllato solo questo check Java, non il vincolo DB):
-        // deleteReview fa un soft delete (status → REMOVED, la RIGA RESTA
-        // nel DB). Il vincolo unique su reviews è (user_id, tmdb_id,
-        // content_type) — SENZA lo status. Quindi anche se questo controllo
-        // permette correttamente di ricreare la recensione (esclude REMOVED),
-        // il successivo Review.builder()... + save() sotto costruiva sempre
-        // una riga NUOVA con un ID nuovo, che va in conflitto con la vecchia
-        // riga REMOVED ancora presente sulla stessa tripla (user, tmdb,
-        // content_type) → 500 per violazione del vincolo unique a livello DB
-        // (MySQL/InnoDB non supporta indici unique parziali/condizionali
-        // come Postgres, quindi non si può escludere REMOVED dal vincolo).
-        // Fix corretto: se esiste già una riga (necessariamente REMOVED, dato
-        // il controllo sopra), la si RESUSCITA aggiornandola invece di
-        // inserirne una nuova — stessa riga/ID, stesso vincolo, nessun
-        // conflitto.
+        // Il vincolo unique su reviews è (user_id, tmdb_id, content_type)
+        // SENZA lo status — MySQL/InnoDB non supporta indici unique
+        // parziali. Se esiste già una riga REMOVED (soft-delete), va
+        // resuscitata con un update invece di inserirne una nuova,
+        // altrimenti va in conflitto col vincolo.
         if (reviewRepository.existsByUserAndTmdbIdAndContentTypeAndStatusNot(user, dto.getTmdbId(), contentType, ReviewStatus.REMOVED)) {
             throw new DuplicateResourceException("Hai già recensito questo contenuto");
         }
 
-        // Fix (🔴 regola violata, trovato nei test funzionali: "non può mai
-        // esistere un'entry WATCHED senza recensione, né una recensione senza
-        // entry WATCHED"): prima si richiedeva che l'entry fosse GIÀ WATCHED
-        // per poter recensire — costringendo un passaggio a due tempi (segna
-        // Visto, POI recensisci, magari su una pagina diversa) che lasciava
-        // una finestra in cui l'entry restava WATCHED senza recensione per
-        // sempre, se l'utente cambiava pagina prima di scrivere la
-        // recensione. Ora è questo metodo stesso a far scattare il passaggio
-        // a WATCHED, DOPO aver validato tutto (testo/rating), nella stessa
-        // transazione: se la validazione fallisce non cambia nulla, se la
-        // recensione va a buon fine l'entry diventa WATCHED nello stesso
-        // istante — non esiste più uno stato intermedio salvato sul DB.
-        // Basta che il contenuto sia in libreria (in un qualunque stato),
-        // non più che sia già WATCHED. Il passaggio diretto a WATCHED tramite
-        // l'endpoint di update status separato e tramite l'aggiunta diretta
-        // alla libreria sono stati bloccati (vedi WatchEntryServiceImpl) —
-        // l'unico modo per arrivare a WATCHED è passare da qui.
+        // Non può mai esistere un'entry WATCHED senza recensione, né una
+        // recensione senza entry WATCHED — questo metodo stesso fa scattare
+        // il passaggio a WATCHED, dopo la validazione, nella stessa
+        // transazione. Basta che il contenuto sia in libreria in un
+        // qualunque stato; il passaggio diretto a WATCHED tramite update
+        // status o aggiunta diretta è bloccato altrove (WatchEntryServiceImpl).
         WatchEntry entry = watchEntryRepository
                 .findByUserAndTmdbIdAndContentType(user, dto.getTmdbId(), contentType)
                 .orElseThrow(() -> new BusinessRuleException("Aggiungi questo contenuto alla libreria prima di recensirlo"));
@@ -150,10 +128,8 @@ public class ReviewServiceImpl implements ReviewService {
         review.setStatus(ReviewStatus.REMOVED);
         reviewRepository.save(review);
 
-        // Fix (chiarito dopo: non "torna a TO_WATCH" ma "nessuno stato,
-        // esce del tutto dalla libreria" — né Da vedere né In visione):
-        // eliminando la recensione, l'entry WATCHED viene rimossa
-        // completamente invece di essere retrocessa a un altro stato.
+        // Eliminando la recensione, l'entry WATCHED viene rimossa
+        // completamente invece di retrocedere a un altro stato
         WatchEntry entry = watchEntryRepository
                 .findByUserAndTmdbIdAndContentType(user, review.getTmdbId(), review.getContentType())
                 .orElse(null);
@@ -192,15 +168,8 @@ public class ReviewServiceImpl implements ReviewService {
 
     @Override
     public ReviewResponse getMyReviewForMedia(String username, Long tmdbId, ContentType contentType) {
-        // Fix (Dettaglio Film/Serie): indipendente dalla paginazione, vedi
-        // commento sull'interfaccia ReviewService per il motivo.
-        // Fix (bug in produzione — 500/LazyInitializationException): usa la
-        // variante con JOIN FETCH r.user (vedi commento sulla query nel
-        // repository) — toDTO() legge r.getUser().getUsername(), non lo
-        // "user" passato qui come secondo argomento, quindi serve che
-        // r.getUser() sia già inizializzato quando si esce da questo metodo
-        // (non è @Transactional, la sessione Hibernate si chiude alla fine
-        // della query).
+        // Usa la variante con JOIN FETCH r.user (vedi repository) — non
+        // essendo @Transactional, r.getUser() deve arrivare già inizializzato
         User user = getUser(username);
         return reviewRepository.findByUserAndTmdbIdAndContentTypeFetchUser(user, tmdbId, contentType)
                 .map(r -> toDTO(r, user))

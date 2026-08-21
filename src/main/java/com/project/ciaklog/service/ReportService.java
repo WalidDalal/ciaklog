@@ -23,11 +23,9 @@ public interface ReportService {
     // stessa penalità di un report approvato (deciso)
     ReportResponse adminHide(String adminUsername, ReportRequest dto);
 
-    // Fix (dashboard admin — archiviazione automatica): quando un utente
-    // diventa DELETED o PERMANENTLY_SUSPENDED, tutte le segnalazioni PENDING
-    // sui SUOI contenuti (come autore, non come segnalante) passano ad
-    // ARCHIVED — il contenuto è già nascosto per sempre, non c'è più nulla
-    // da decidere. Chiamato da UserServiceImpl.deleteAccount() e da
-    // AdminServiceImpl (sospensione manuale + automatica da violazioni).
+    // Quando un utente diventa DELETED o PERMANENTLY_SUSPENDED, le
+    // segnalazioni PENDING sui suoi contenuti passano ad ARCHIVED — il
+    // contenuto è già nascosto per sempre. Chiamato da
+    // UserServiceImpl.deleteAccount() e AdminServiceImpl.
     void archivePendingReportsForUnavailableAuthor(com.project.ciaklog.entity.User author);
 }

@@ -61,13 +61,8 @@ function StatusActions({ entry, onStatusChange, onDelete, onSeasonChange, deleti
     if (status === 'WATCHING') {
         return (
             <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                {/* Fix: prima non c'era modo di aggiornare la stagione corrente
-                    senza rimuovere e riaggiungere il titolo da capo (solo serie TV) */}
-                {/* Fix (Libreria — altezze): lo stepper stagione esiste solo per le
-                    serie TV, ma la sua assenza sui film accorciava la card, spostando
-                    in alto i bottoni sotto e lasciando spazio vuoto nelle serie accanto
-                    nella stessa riga della griglia. Ora lo spazio è sempre riservato
-                    (22px, l'altezza dei pulsanti +/-), invisibile per i film. */}
+                {/* Stepper stagione, solo serie TV — spazio sempre riservato (22px)
+                    anche per i film, altrimenti le righe della griglia si scompongono */}
                 <div style={{ display: 'flex', alignItems: 'center', gap: '6px', height: '22px', visibility: (entry.contentType || entry.mediaType) === 'TV' ? 'visible' : 'hidden' }}>
                     <span style={{ color: 'var(--text-dark)', fontSize: '11px' }}>Stagione</span>
                     <button
@@ -144,7 +139,7 @@ function LibraryPage() {
 
     const [allEntries, setAllEntries] = useState([])
     const [loading, setLoading] = useState(true)
-    // Il voto dato non era mai mostrato in libreria — mappa tmdbId_contentType -> rating
+    // Mappa tmdbId_contentType -> rating, per mostrare il voto dato in libreria
     const [ratingMap, setRatingMap] = useState({})
     // Legge il filtro dall'URL se viene da HomePage con ?filter=
     const [filter, setFilter] = useState(searchParams.get('filter') || 'WATCHING')
@@ -152,19 +147,14 @@ function LibraryPage() {
     const [confirmDelete, setConfirmDelete] = useState(null) // id da eliminare
     const toast = useToastStore()
 
-    // Frase
-    // breve al posto del solito messaggio piatto — fallback silenzioso se
-    // l'AI non risponde (il messaggio statico esistente resta comunque)
+    // Frase breve al posto del messaggio piatto — fallback silenzioso se l'AI non risponde
     const [emptyTip, setEmptyTip] = useState('')
 
     useEffect(() => {
         setLoading(true)
-        // Fix (Libreria — cap fisso a 200): prima si caricava una sola pagina da
-        // 200 elementi — un utente con più di 200 titoli salvati perdeva
-        // silenziosamente filtri/conteggi oltre quella soglia. Ora si caricano
-        // TUTTE le pagine (200 alla volta) finché il backend non segnala che è
-        // l'ultima, accumulandole — la UI resta invariata (filtro/conteggio
-        // client-side), ma senza più un tetto arbitrario.
+        // Carica TUTTE le pagine (200 alla volta) finché il backend non
+        // segnala che è l'ultima, accumulandole — così non c'è un tetto
+        // fisso di titoli caricabili
         const loadAllEntries = async () => {
             let page = 0
             let all = []
@@ -187,9 +177,8 @@ function LibraryPage() {
         loadAllEntries()
 
         if (user?.username) {
-            // Stesso motivo del loop sopra: se non lo si pagina del tutto, oltre
-            // le prime 200 recensioni scritte manca il badge voto sulle card
-            // WATCHED corrispondenti (cosmetico, ma stessa causa).
+            // Stesso motivo del loop sopra — pagina tutte le recensioni per
+            // non perdere il badge voto oltre le prime 200
             const loadAllMyReviews = async () => {
                 let page = 0
                 let all = []
@@ -261,9 +250,8 @@ function LibraryPage() {
             setAllEntries(prev => prev.filter(e => e.id !== id))
             toast.show('Rimosso dalla libreria', 'success')
         } catch (err) {
-            // Mostrava sempre "Errore durante la rimozione" generico — ora
-            // con la nuova regola (non si rimuove un titolo già recensito) serve
-            // mostrare il motivo vero, non un messaggio muto
+            // Mostra il motivo vero dal backend (es. titolo già recensito),
+            // non un messaggio generico muto
             toast.show(err.response?.data?.error || 'Errore durante la rimozione')
         } finally {
             setDeletingId(null)
@@ -366,10 +354,8 @@ function LibraryPage() {
                                         </div>
                                     </Link>
 
-                                    {/* Fix: voto dato (se presente) — visibile solo per contenuti Visto e recensiti.
-                                        Prima appariva solo condizionalmente, spostando i bottoni sotto a
-                                        altezze diverse tra le card della stessa riga della griglia — ora lo
-                                        spazio è sempre riservato quando lo status è WATCHED */}
+                                    {/* Voto dato, se presente — spazio sempre riservato quando lo
+                                        status è WATCHED, altrimenti le card della griglia si scompongono */}
                                     {entry.status === 'WATCHED' && (
                                         <div style={{ marginBottom: '10px', minHeight: '17px', transform: 'scale(0.72)', transformOrigin: 'left center' }}>
                                             {ratingMap[`${entry.tmdbId}_${entry.contentType || entry.mediaType}`] && (

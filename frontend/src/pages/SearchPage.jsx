@@ -18,10 +18,8 @@ function SearchPage() {
   const [query, setQuery] = useState(searchParams.get('q') || '')
   const [type, setType] = useState(searchParams.get('type') || 'all')
 
-  // Prima il backend ignorava il parametro page — sempre e solo la prima
-  // pagina di TMDB (20 risultati fissi, 40 con "Tutti" = movie+tv separati).
-  // Ora teniamo pagina + hasMore + totale REALE, separati per movie/tv perché
-  // "Tutti" combina due endpoint TMDB indipendenti con paginazioni proprie
+  // Pagina + hasMore + totale REALE, separati per movie/tv perché "Tutti"
+  // combina due endpoint TMDB indipendenti con paginazioni proprie
   const [moviePage, setMoviePage] = useState(1)
   const [tvPage, setTvPage] = useState(1)
   const [movieHasMore, setMovieHasMore] = useState(false)
@@ -29,9 +27,7 @@ function SearchPage() {
   const [totalResults, setTotalResults] = useState(0)
   const { token } = useAuthStore()
 
-  // Frase
-  // breve al posto del solito messaggio piatto — solo per utenti loggati
-  // (l'endpoint richiede autenticazione), fallback silenzioso altrimenti
+  // Frase breve al posto del messaggio piatto — solo per utenti loggati
   const [emptyTip, setEmptyTip] = useState('')
 
   const q = searchParams.get('q') || ''
@@ -44,12 +40,8 @@ function SearchPage() {
       .catch(() => setEmptyTip(''))
   }, [token, loading, q, results.length])
 
-  // Fix (🟡 minimo 2 caratteri non coerente): qui non c'era ALCUN controllo di
-  // lunghezza minima — solo "non vuoto" (q.trim()). Questo è il vero punto
-  // d'ingresso della ricerca (parte ogni volta che "q" nell'URL cambia, sia
-  // arrivando da fuori sia da dentro la pagina), quindi il controllo va qui:
-  // sistemato una volta sola invece che duplicato (e disallineabile di nuovo
-  // in futuro) nei singoli punti che possono cambiare "q".
+  // Minimo 2 caratteri — questo è il vero punto d'ingresso della ricerca
+  // (parte ogni volta che "q" nell'URL cambia), controllo qui una volta sola
   useEffect(() => {
     if (!q.trim() || q.trim().length < 2) { setResults([]); setLoading(false); return }
     setLoading(true)
@@ -187,8 +179,7 @@ function SearchPage() {
         {!loading && results.length > 0 && (
           <>
             <p style={{ color: 'var(--text-muted)', fontSize: '14px', marginBottom: '20px' }}>
-              {/* Fix: prima mostrava solo results.length (max 40/20, il tetto fisso
-                  di TMDB) — ora mostra il totale reale disponibile su TMDB */}
+              {/* Totale reale disponibile su TMDB, non il tetto fisso di risultati caricati */}
               {results.length} di {totalResults} risultati per "<span style={{ color: 'var(--text)' }}>{q}</span>"
             </p>
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(160px, 1fr))', gap: '20px' }}>
@@ -215,8 +206,7 @@ function SearchPage() {
                           {(item.contentType || item.mediaType) === 'MOVIE' ? '🎬' : '📺'}
                         </span>
                       </div>
-                      {/* Fix: prima il voto TMDB spariva del tutto se mancante — un
-                          "–" esplicito è più chiaro di una riga che appare/scompare */}
+                      {/* "–" esplicito se il voto TMDB manca, invece di far sparire la riga */}
                       <div style={{ color: item.tmdbRating ? 'var(--gold)' : 'var(--text-dark)', fontSize: '12px', marginTop: '4px' }}>
                         {item.tmdbRating ? `⭐ ${item.tmdbRating.toFixed(1)}` : '⭐ –'}
                       </div>
@@ -226,8 +216,7 @@ function SearchPage() {
               ))}
             </div>
 
-            {/* Fix: prima non c'era nessun modo di andare oltre il tetto fisso — ora
-                "carica altri" richiede la pagina successiva a TMDB finché ce ne sono */}
+            {/* "Carica altri" richiede la pagina successiva a TMDB finché ce ne sono */}
             {hasMore && (
               <div style={{ textAlign: 'center', marginTop: '32px' }}>
                 <button

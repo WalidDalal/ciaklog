@@ -53,13 +53,8 @@ public class WatchEntryServiceImpl implements WatchEntryService {
             validateWatchingLimit(user);
         }
 
-        // Fix (🔴 regola violata, trovato nei test funzionali — terzo varco
-        // oltre a updateStatus): qui si poteva scegliere WATCHED come stato
-        // INIZIALE già alla creazione della voce in libreria, bypassando del
-        // tutto sia updateStatus sia createReview — stesso identico problema
-        // (entry WATCHED senza nessuna recensione, per sempre). Stessa regola
-        // applicata qui: l'unico modo per arrivare a WATCHED è passare da
-        // ReviewServiceImpl.createReview.
+        // L'unico modo per arrivare a WATCHED è passare da
+        // ReviewServiceImpl.createReview — stessa regola di updateStatus
         if (dto.getStatus() == WatchStatus.WATCHED) {
             throw new BusinessRuleException(
                     "Non puoi aggiungere un contenuto già come Visto — aggiungilo come Da vedere o In visione, poi scrivi una recensione per segnarlo Visto");
@@ -105,14 +100,8 @@ public class WatchEntryServiceImpl implements WatchEntryService {
             validateWatchingLimit(user);
         }
 
-        // Fix (🔴 regola violata, trovato nei test funzionali): questo era il
-        // buco vero e proprio — nulla impediva di passare direttamente a
-        // WATCHED da qui, senza nessuna recensione. Segnavi "Visto" e restava
-        // così per sempre (anche dopo refresh) finché non scrivevi la
-        // recensione, se mai la scrivevi. L'unico modo per arrivare a WATCHED
-        // ora è passare da ReviewServiceImpl.createReview, che fa scattare il
-        // passaggio (e imposta watchedDate) atomicamente insieme alla
-        // recensione stessa — quindi qui il salto diretto è bloccato del tutto.
+        // L'unico modo per arrivare a WATCHED è ReviewServiceImpl.createReview,
+        // che fa scattare il passaggio atomicamente insieme alla recensione
         if (newStatus == WatchStatus.WATCHED && entry.getStatus() != WatchStatus.WATCHED) {
             throw new BusinessRuleException(
                     "Non puoi segnare come Visto senza recensire — scrivi una recensione per completare il passaggio");

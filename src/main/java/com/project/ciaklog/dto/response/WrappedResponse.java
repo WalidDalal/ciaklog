@@ -12,11 +12,9 @@ public class WrappedResponse {
     private long totalWatched;
     private long totalReviews;
 
-    // "Visti" e "Recensioni scritte" sono
-    // sempre uguali una volta corretto il bug di conteggio (un titolo VISTO
-    // richiede una recensione e viceversa, per regola di business) — quindi
-    // ridondanti come due statistiche separate. Aggiunta questa terza, più
-    // interessante: quante risposte hai scritto sotto le recensioni altrui.
+    // "Visti" e "recensioni" sono sempre uguali (un titolo VISTO richiede
+    // una recensione, per regola di business) — questa conta invece quante
+    // risposte l'utente ha scritto sotto le recensioni altrui
     private long interactionsCount;
 
     private String topGenre;       // null se non ci sono abbastanza dati

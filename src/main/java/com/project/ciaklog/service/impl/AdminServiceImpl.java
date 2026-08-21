@@ -57,7 +57,7 @@ public class AdminServiceImpl implements AdminService {
                 .filter(r -> r.getStatus() == ReviewStatus.VISIBLE)
                 .count();
 
-        // Fix N+1: carica tutti i report in una query sola invece di 1 query per review
+        // Carica tutti i report in una query sola invece di 1 per review (evita N+1)
         List<com.project.ciaklog.entity.Report> allReports = reportRepository.findAllByReviewIn(allReviews);
 
         int reportCount = allReports.size();

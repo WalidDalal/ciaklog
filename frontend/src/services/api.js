@@ -5,15 +5,8 @@ const api = axios.create({
   baseURL: import.meta.env.VITE_API_URL || 'http://localhost:8080/api',
 })
 
-// Fix (🟡 nessuna gestione errori di rete — trovato nei test funzionali):
-// l'interceptor gestiva solo `err.response?.data?.details` e 401, ma un
-// errore di rete VERO (backend spento/irraggiungibile, `err.response`
-// undefined, es. ERR_NETWORK) non veniva mai controllato. Ogni pagina ha
-// `.catch(() => {})` sulle sue chiamate — niente crash (bene), ma zero
-// feedback: le sezioni restavano semplicemente vuote, dando l'impressione
-// di un'app rotta invece di comunicare chiaramente "il server non risponde".
-// Throttle a 5s: una pagina può avere decine di chiamate in parallelo, senza
-// questo si spammerebbero altrettanti toast identici tutti insieme.
+// Throttle a 5s: una pagina può avere decine di chiamate in parallelo,
+// senza questo si spammerebbero altrettanti toast identici tutti insieme.
 let lastNetworkErrorToastAt = 0
 function notifyNetworkError() {
   const now = Date.now()
@@ -57,21 +50,16 @@ api.interceptors.response.use(
   err => {
     if (axios.isCancel(err)) return Promise.reject(err)
 
-    // Fix (🟡 nessuna gestione errori di rete): err.response è undefined solo
-    // per errori di rete veri (backend giù, DNS, CORS, timeout) — un errore
-    // HTTP normale (400/404/500...) ha SEMPRE err.response valorizzato,
-    // quindi questo controllo non interferisce con nessuna delle gestioni
-    // sotto (401, details, ecc.), che restano invariate.
+    // err.response è undefined solo per errori di rete veri (backend giù,
+    // DNS, CORS, timeout) — un errore HTTP normale ha sempre err.response
     if (!err.response) {
       notifyNetworkError()
       return Promise.reject(err)
     }
 
-    // Il backend manda il messaggio specifico in `details` (per campo),
-    // ma tutte le pagine leggono solo `err.response?.data?.error`, che è sempre
-    // il generico "Dati non validi". Centralizzato qui una volta sola: se
-    // `details` esiste, riscrive `error` col messaggio specifico prima di
-    // rilanciare, così ogni pagina lo riceve corretto senza essere toccata.
+    // Il backend manda il messaggio specifico in `details` (per campo), ma
+    // le pagine leggono solo `error` — riscritto qui una volta sola invece
+    // che in ogni pagina
     if (err.response?.data?.details) {
       const messages = Object.values(err.response.data.details)
       if (messages.length > 0) {
