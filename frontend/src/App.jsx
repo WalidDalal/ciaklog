@@ -26,26 +26,18 @@ function App() {
                     <Route path="/register" element={<RegisterPage />} />
                     <Route path="/search" element={<SearchPage />} />
                     <Route path="/movie/:id" element={<MovieDetailPage />} />
-                    {/* Fix (attribuzione TMDB — sezione "Crediti" dedicata, richiesta
-                        dai loro Termini d'Uso): pubblica, niente da proteggere. */}
+                    {/* Pubblica: attribuzione TMDB, niente da proteggere */}
                     <Route path="/credits" element={<CreditsPage />} />
-                    {/* Fix: prima /profile/:username era pubblica ma faceva una
-                        Promise.all con /reviews/user/{username} che richiede login —
-                        da sloggato la seconda chiamata falliva (401), Promise.all
-                        falliva tutto insieme, e il catch silenzioso mostrava
-                        "Utente non trovato" anche se l'utente esisteva davvero.
-                        Ora la rotta è protetta: redirect pulito al login, che
-                        torna qui dopo l'accesso (ProtectedRoute + LoginPage
-                        gestiscono già state.from) */}
+                    {/* Protetta: redirect al login se non autenticato (ProtectedRoute
+                        + LoginPage gestiscono state.from per tornare qui dopo) */}
                     <Route path="/profile/:username" element={<ProtectedRoute><ProfilePage /></ProtectedRoute>} />
 
                     {/* Rotte protette — richiedono login */}
                     <Route path="/library" element={<ProtectedRoute><LibraryPage /></ProtectedRoute>} />
                     <Route path="/chat" element={<ProtectedRoute><ChatAiPage /></ProtectedRoute>} />
                     <Route path="/settings" element={<ProtectedRoute><SettingsPage /></ProtectedRoute>} />
-                    {/* Fix (CiakLog Wrapped): protetta come le altre pagine personali —
-                        se un Admin ci arriva, il backend risponde 403 (stesso pattern
-                        di libreria/recensioni/chat, non ha dati da vedere comunque) */}
+                    {/* Protetta come le altre pagine personali — il backend risponde
+                        403 se ci arriva un Admin */}
                     <Route path="/wrapped" element={<ProtectedRoute><WrappedPage /></ProtectedRoute>} />
 
                     {/* Rotte admin */}

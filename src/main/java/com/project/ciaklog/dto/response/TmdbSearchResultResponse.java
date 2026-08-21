@@ -1,13 +1,21 @@
 package com.project.ciaklog.dto.response;
 
 import com.project.ciaklog.entity.ContentType;
+import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Getter;
+import lombok.NoArgsConstructor;
 import lombok.Setter;
 
+// @NoArgsConstructor necessario: @Builder da solo toglie il costruttore
+// vuoto implicito, e Jackson ne ha bisogno per deserializzare questa
+// classe (usato in AiServiceImpl.toDailyDTO per rileggere i suggerimenti
+// salvati in cache) — senza, ogni readValue falliva silenziosamente.
 @Getter
 @Setter
 @Builder
+@NoArgsConstructor
+@AllArgsConstructor
 public class TmdbSearchResultResponse {
     private Long tmdbId;
     private String title;
@@ -16,9 +24,7 @@ public class TmdbSearchResultResponse {
     private Integer releaseYear;
     private Double tmdbRating;
 
-    // "spiegazione del perché" — valorizzato solo quando
-    // il suggerimento viene dalla chat/daily AI, null nella ricerca TMDB normale.
-    // @Setter perché il risultato arriva già costruito da TmdbService e va
-    // solo arricchito con il motivo dopo, non ricreato da capo.
+    // Valorizzato solo quando il suggerimento viene dalla chat/daily AI,
+    // null nella ricerca TMDB normale
     private String reason;
 }

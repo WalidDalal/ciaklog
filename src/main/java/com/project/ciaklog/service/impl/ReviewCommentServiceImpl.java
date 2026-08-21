@@ -22,9 +22,6 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.util.UUID;
 
-// Step 1 della feature "Risposte alle recensioni": solo CRUD base.
-// Moderazione (segnalazioni, auto-hide, cascata, "nascondi direttamente"),
-// punteggio da reazioni e auto-nascondimento autore arrivano negli step successivi.
 @Service
 @RequiredArgsConstructor
 public class ReviewCommentServiceImpl implements ReviewCommentService {
@@ -69,12 +66,9 @@ public class ReviewCommentServiceImpl implements ReviewCommentService {
             throw new ForbiddenException("Non autorizzato a modificare questa risposta");
         }
 
-        // Si poteva modificare
-        // il testo di una risposta anche se già REMOVED/HIDDEN, o se la sua
-        // recensione madre non era più VISIBLE (rimossa/nascosta) — permetterlo
-        // durante una moderazione attiva equivale ad alterare le prove dopo la
-        // segnalazione (per questo esiste lo snapshot reportedText lato admin,
-        // ma è più pulito non permettere proprio la modifica in questi casi)
+        // Non modificabile se già REMOVED/HIDDEN o se la recensione madre
+        // non è più VISIBLE — evita di alterare le prove durante una
+        // moderazione attiva (per questo esiste lo snapshot reportedText)
         if (comment.getStatus() != ReviewStatus.VISIBLE) {
             throw new BusinessRuleException("Non puoi modificare una risposta rimossa o nascosta per moderazione");
         }
@@ -102,8 +96,8 @@ public class ReviewCommentServiceImpl implements ReviewCommentService {
         reviewCommentRepository.save(comment);
     }
 
-    // Toggle reversibile, separato
-    // da status/moderazione — non tocca il punteggio e non genera nessun Report
+    // Toggle reversibile, separato da status/moderazione — non tocca il
+    // punteggio e non genera nessun Report
     @Override
     @Transactional
     public ReviewCommentResponse setHiddenByAuthor(String username, UUID commentId, boolean hidden) {

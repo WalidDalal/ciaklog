@@ -62,4 +62,10 @@ public class ReportResponse {
     // targetEdited indica se le due versioni differiscono, per evidenziarlo in UI
     private String reportedText;
     private boolean targetEdited;
+
+    // Un utente eliminato o sospeso permanentemente resta legato a
+    // segnalazioni passate — non risolte automaticamente (un contenuto può
+    // avere più motivi/segnalanti), il frontend mostra un avviso all'Admin
+    private boolean reporterAccountUnavailable;
+    private boolean targetAuthorAccountUnavailable;
 }

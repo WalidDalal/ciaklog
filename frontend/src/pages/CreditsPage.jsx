@@ -1,22 +1,12 @@
 import Navbar from '../components/Navbar'
 
-// Fix (🔴 attribuzione TMDB — versione completa): i Termini d'Uso dell'API
-// TMDB richiedono 3 cose che il fix precedente (solo un testo in fondo alla
-// pagina Dettaglio + un accenno nel footer di Homepage) non copriva del
-// tutto:
-//   1. Il LOGO TMDB, non solo testo — "You must use the TMDB logo to
-//      identify Your use of TMDB, the TMDB APIs, or TMDB Content."
-//   2. L'attribuzione deve stare in una sezione tipo "About" o "Crediti"
-//      dedicata dell'applicazione — non un punto qualsiasi.
-//   3. La dicitura esatta, in modo prominente (vedi sotto).
-// Questa pagina è quella sezione dedicata. Il logo va scaricato a mano da
-// https://www.themoviedb.org/about/logos-attribution (uno dei formati SVG
-// ufficiali, es. "Primary Full (Blue)") e salvato come
-// frontend/public/tmdb-logo.svg — non l'ho potuto scaricare io: il dominio
-// themoviedb.org non è raggiungibile dal mio ambiente, ed è comunque un
-// asset di loro proprietà da prendere dalla fonte ufficiale, non da
-// ricostruire. Finché il file non c'è, l'<img> sotto mostra solo lo spazio
-// vuoto dell'alt text — non blocca nient'altro.
+// Sezione "Crediti" dedicata, richiesta dai Termini d'Uso di TMDB (logo +
+// dicitura in una sezione apposita, non solo testo sparso in pagina).
+// Il logo va scaricato a mano da
+// https://www.themoviedb.org/about/logos-attribution (formato SVG
+// ufficiale, es. "Primary Full (Blue)") e salvato come
+// frontend/public/tmdb-logo.svg — finché manca, l'<img> sotto mostra solo
+// lo spazio vuoto dell'alt text, non blocca nient'altro.
 function CreditsPage() {
     return (
         <div style={{ backgroundColor: 'var(--bg)', minHeight: '100vh' }}>

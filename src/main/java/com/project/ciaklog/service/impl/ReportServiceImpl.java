@@ -82,8 +82,7 @@ public class ReportServiceImpl implements ReportService {
         Report saved = reportRepository.save(report);
 
         if (review.getStatus() == ReviewStatus.VISIBLE) {
-            // Contava tutte le
-            // segnalazioni storiche, incluse REJECTED da valutazioni passate
+            // Solo le PENDING contano per la soglia — non le REJECTED storiche
             long pendingReports = reportRepository.countByReviewAndStatus(review, ReportStatus.PENDING);
             if (pendingReports >= 2) {
                 review.setStatus(ReviewStatus.HIDDEN);
@@ -116,7 +115,6 @@ public class ReportServiceImpl implements ReportService {
         Report saved = reportRepository.save(report);
 
         if (comment.getStatus() == ReviewStatus.VISIBLE) {
-            // Fix (Logica Moderazione — stessa correzione delle recensioni)
             long pendingReports = reportRepository.countByReviewCommentAndStatus(comment, ReportStatus.PENDING);
             if (pendingReports >= 2) {
                 comment.setStatus(ReviewStatus.HIDDEN);
@@ -130,21 +128,9 @@ public class ReportServiceImpl implements ReportService {
     @Override
     @Transactional(readOnly = true)
     public Page<ReportResponse> getReports(ReportStatus status, ReportTargetType targetType, Pageable pageable) {
-        // Fix (dashboard admin — filtro per tipo bersaglio): filtro applicato
-        // qui, nella query, PRIMA della paginazione — così vale su tutte le
-        // pagine e non solo su quella caricata in un dato momento.
-        //
-        // Fix (dashboard admin — gruppi di segnalazioni spezzati tra le
-        // pagine): prima si paginava direttamente sulle RIGHE di Report (una
-        // per segnalazione), quindi 2 segnalazioni sullo stesso bersaglio
-        // potevano finire su pagine diverse — es. pagina 1 mostra "2
-        // segnalazioni" (parziali) su una review, pagina 2 ne mostra altre
-        // sulla stessa review come se fosse un caso diverso. Ora si carica la
-        // lista completa (filtrata per status/targetType, senza paginazione
-        // DB), si raggruppa per bersaglio (review o commento), si ordina ogni
-        // gruppo per la segnalazione più recente al suo interno, e SOLO A
-        // QUESTO PUNTO si pagina — sui gruppi, non sulle righe. Un gruppo
-        // finisce quindi sempre intero in una sola pagina.
+        // Le segnalazioni vengono raggruppate per bersaglio (review/commento)
+        // e paginate sui GRUPPI, non sulle righe — altrimenti segnalazioni
+        // sullo stesso bersaglio potrebbero finire su pagine diverse.
         List<List<Report>> groups = fetchGroupedReports(status, targetType);
         int totalGroups = groups.size();
         int page = pageable.getPageNumber();
@@ -158,24 +144,15 @@ public class ReportServiceImpl implements ReportService {
         }
 
         List<ReportResponse> dtos = pageContent.stream().map(this::toDTO).collect(Collectors.toList());
-        // Fix (🔴 FIX — "6 recensioni, pagina 1 di 2"): PageImpl standard
-        // ricalcola DA SOLO il totale nel costruttore se rileva
-        // offset+pageSize > total (qui: 0+10 > 6, essendo 6 il numero di
-        // GRUPPI) — assume che total fosse sbagliato e lo sovrascrive con
-        // offset + content.size(). Ma "content" qui è la lista delle RIGHE
-        // di segnalazione appiattite dai gruppi di questa pagina (es. 12
-        // righe per 6 gruppi, se alcune recensioni hanno più di una
-        // segnalazione approvata) — non una riga per gruppo. Quell'euristica
-        // di PageImpl assume invece content.size() <= pageSize, quindi
-        // "corregge" il nostro totale corretto (6 gruppi) con uno sbagliato
-        // (12, il numero di righe), dando ceil(12/10)=2 pagine invece di 1.
-        // GroupedReportPage ignora quel ricalcolo e riespone sempre il vero
-        // totale di gruppi passato esplicitamente.
+        // GroupedReportPage bypassa il ricalcolo automatico che PageImpl fa
+        // nel suo costruttore quando offset+pageSize > total: qui "total" è
+        // il numero di GRUPPI, ma "content" può contenere più righe di
+        // quante sono le pagine (gruppi con più segnalazioni), facendo
+        // scattare quel ricalcolo sbagliato.
         return new GroupedReportPage<>(dtos, pageable, totalGroups);
     }
 
-    // Estratto da getReports() — stessa identica logica di fetch + raggruppamento
-    // per bersaglio, riusata anche da getReportsSummary() per non duplicarla
+    // Riusata da getReportsSummary() per non duplicare fetch + raggruppamento
     private List<List<Report>> fetchGroupedReports(ReportStatus status, ReportTargetType targetType) {
         List<Report> all;
         if (targetType == ReportTargetType.REVIEW) {
@@ -211,11 +188,8 @@ public class ReportServiceImpl implements ReportService {
         return groups;
     }
 
-    // Card admin — totale segnalazioni (righe) + totale bersagli distinti
-    // (gruppi), per lo status/tipo filtrato in dashboard, indipendente dalla
-    // paginazione — così la card può mostrare "N segnalazioni totali di X
-    // elementi" invece del solo numero di pagina, per qualunque filtro attivo
-    // (non solo PENDING, come faceva prima la card operativa)
+    // Conteggio segnalazioni (righe) e bersagli distinti (gruppi), per la
+    // card operativa in dashboard — indipendente dalla paginazione
     @Override
     @Transactional(readOnly = true)
     public com.project.ciaklog.dto.response.ReportSummaryResponse getReportsSummary(ReportStatus status, ReportTargetType targetType) {
@@ -242,11 +216,8 @@ public class ReportServiceImpl implements ReportService {
         report.setResolvedBy(admin);
         report.setResolvedAt(LocalDateTime.now());
 
-        // Quando le segnalazioni sullo stesso bersaglio
-        // hanno motivi diversi, l'admin sceglie quale è quello valido — lo
-        // applichiamo qui a QUESTO report così tutti quelli approvati insieme
-        // nello stesso gruppo finiscono coerenti sullo stesso motivo (invece
-        // di lasciare che sia il primo trovato più avanti a "vincere" a caso)
+        // Se le segnalazioni nello stesso gruppo hanno motivi diversi,
+        // l'admin sceglie quello valido per tutte
         if (newStatus == ReportStatus.APPROVED && finalReasonCategory != null) {
             report.setReasonCategory(finalReasonCategory);
         }
@@ -309,13 +280,9 @@ public class ReportServiceImpl implements ReportService {
         reviewCommentRepository.saveAll(comments);
     }
 
-    // Il -15 base resta identico a
-    // prima, ma ora si aggiunge indietro 1 punto per ogni reazione ricevuta
-    // dal contenuto rimosso — un contenuto molto apprezzato dalla community
-    // pesa meno nella sanzione. Contate al volo (COUNT), MAI un contatore
-    // salvato a parte (deciso). Il bonus si applica SOLO alla 1a violazione:
-    // il -20 di sospensione e lo 0 di sospensione permanente restano sanzioni
-    // sull'utente nel suo complesso, non sul singolo contenuto rimosso
+    // -15 alla prima violazione, con un punto di sconto per reazione ricevuta
+    // dal contenuto rimosso (contate al volo, non un contatore salvato).
+    // Il bonus si applica solo alla 1a violazione, non alle sanzioni sull'utente.
     private void penalizeOffender(User offender, long reactionBonus) {
         offender.setViolationCount(offender.getViolationCount() + 1);
 
@@ -324,6 +291,11 @@ public class ReportServiceImpl implements ReportService {
             offender.setScore(0);
             userRepository.save(offender);
             hideAllContentForSuspendedUser(offender);
+            // Sospensione permanente = irreversibile, quindi archiviamo le
+            // segnalazioni PENDING rimaste sui suoi contenuti (vedi
+            // AdminServiceImpl.suspendUser per lo stesso passaggio sulla via
+            // manuale). Non succede alla sospensione temporanea sotto.
+            archivePendingReportsForUnavailableAuthor(offender);
         } else if (offender.getViolationCount() == 2) {
             offender.setStatus(UserStatus.SUSPENDED);
             offender.setScore(Math.max(0, offender.getScore() - 20));
@@ -336,12 +308,9 @@ public class ReportServiceImpl implements ReportService {
         }
     }
 
-    // Trovato in revisione: questa era la SECONDA via per sospendere un
-    // utente (raggiungendo la soglia di violazioni approvando segnalazioni),
-    // separata da AdminServiceImpl.suspendUser (sospensione manuale diretta)
-    // — solo quest'ultima nascondeva in blocco recensioni/risposte
-    // dell'utente sospeso, questa via restava scoperta e le lasciava
-    // visibili. Stessa logica, stesso flag hiddenBySuspension.
+    // Nasconde recensioni/risposte di un utente sospeso — usata sia qui
+    // (sospensione da violazioni) sia da AdminServiceImpl (sospensione
+    // manuale), stesso flag hiddenBySuspension
     private void hideAllContentForSuspendedUser(User user) {
         List<Review> ownReviews = reviewRepository.findAllByUser(user);
         for (Review r : ownReviews) {
@@ -361,8 +330,7 @@ public class ReportServiceImpl implements ReportService {
     }
 
     // "Nascondi direttamente" — crea un Report con reporter = admin, già
-    // risolto APPROVED. Riusa al 100% la logica esistente (penalità, cascata,
-    // audit trail nella stessa dashboard) invece di duplicarla altrove.
+    // risolto APPROVED, riusando la stessa logica (penalità, cascata, audit)
     @Override
     @Transactional
     public ReportResponse adminHide(String adminUsername, ReportRequest dto) {
@@ -440,6 +408,32 @@ public class ReportServiceImpl implements ReportService {
         return saved;
     }
 
+    @Override
+    @Transactional
+    public void archivePendingReportsForUnavailableAuthor(User author) {
+        List<Review> reviews = reviewRepository.findAllByUser(author);
+        if (!reviews.isEmpty()) {
+            List<Report> pending = reportRepository.findAllByReviewInAndStatus(reviews, ReportStatus.PENDING);
+            pending.forEach(r -> {
+                r.setStatus(ReportStatus.ARCHIVED);
+                r.setResolvedAt(LocalDateTime.now());
+                // resolvedBy resta null: non è una decisione di un admin,
+                // è una conseguenza automatica della sparizione dell'account
+            });
+            reportRepository.saveAll(pending);
+        }
+
+        List<ReviewComment> comments = reviewCommentRepository.findAllByAuthor(author);
+        if (!comments.isEmpty()) {
+            List<Report> pending = reportRepository.findAllByReviewCommentInAndStatus(comments, ReportStatus.PENDING);
+            pending.forEach(r -> {
+                r.setStatus(ReportStatus.ARCHIVED);
+                r.setResolvedAt(LocalDateTime.now());
+            });
+            reportRepository.saveAll(pending);
+        }
+    }
+
     private User getUser(String username) {
         return userRepository.findByUsername(username)
                 .orElseThrow(() -> new ResourceNotFoundException("Utente non trovato"));
@@ -454,7 +448,10 @@ public class ReportServiceImpl implements ReportService {
                 .status(r.getStatus())
                 .createdAt(r.getCreatedAt())
                 .resolvedAt(r.getResolvedAt())
-                .resolvedByUsername(r.getResolvedBy() != null ? r.getResolvedBy().getUsername() : null);
+                .resolvedByUsername(r.getResolvedBy() != null ? r.getResolvedBy().getUsername() : null)
+                // Un account sparito resta legato a segnalazioni passate;
+                // non risolviamo automaticamente, ma diamo il contesto all'Admin
+                .reporterAccountUnavailable(r.getReporter().getStatus() != UserStatus.ACTIVE);
 
         if (r.getReview() != null) {
             Review review = r.getReview();
@@ -467,6 +464,9 @@ public class ReportServiceImpl implements ReportService {
                     .reviewRating(review.getRating())
                     .targetRemoved(review.getStatus() == ReviewStatus.REMOVED)
                     .targetHidden(review.getStatus() == ReviewStatus.HIDDEN)
+                    // Autore eliminato/sospeso permanentemente: contenuto già
+                    // nascosto per sempre, ma la decisione resta all'Admin
+                    .targetAuthorAccountUnavailable(review.getUser().getStatus() != UserStatus.ACTIVE)
                     .reportedText(r.getReportedText())
                     .targetEdited(r.getReportedText() != null && !r.getReportedText().equals(review.getText()));
         } else {
@@ -482,6 +482,7 @@ public class ReportServiceImpl implements ReportService {
                     .commentText(comment.getText())
                     .targetRemoved(comment.getStatus() == ReviewStatus.REMOVED)
                     .targetHidden(comment.getStatus() == ReviewStatus.HIDDEN)
+                    .targetAuthorAccountUnavailable(comment.getAuthor().getStatus() != UserStatus.ACTIVE)
                     .reportedText(r.getReportedText())
                     .targetEdited(r.getReportedText() != null && !r.getReportedText().equals(comment.getText()));
         }
@@ -489,14 +490,9 @@ public class ReportServiceImpl implements ReportService {
         return builder.build();
     }
 
-    // Fix (🔴 FIX — "6 recensioni, pagina 1 di 2"): sottoclasse di PageImpl
-    // che ignora il ricalcolo automatico del totale fatto dal costruttore di
-    // PageImpl (vedi commento sopra, nel punto in cui viene istanziata) e
-    // riespone sempre il vero numero di gruppi passato esplicitamente, sia
-    // in getTotalElements() sia in getTotalPages() (quest'ultimo ricalcolato
-    // qui con la dimensione pagina RICHIESTA — pageable.getPageSize() — e
-    // non con getSize()/content.size() come farebbe l'implementazione
-    // originale ereditata).
+    // Bypassa il ricalcolo automatico del totale che PageImpl fa nel suo
+    // costruttore quando offset+pageSize > total, e riespone sempre il vero
+    // numero di gruppi passato esplicitamente.
     private static class GroupedReportPage<T> extends PageImpl<T> {
         private final long realTotal;
 

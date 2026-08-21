@@ -78,22 +78,13 @@ function UserDrawer({ user: u, onClose, onSuspend, onReinstate, loading = false 
 
           {loading && <div style={{ color: 'var(--text-dark)', fontSize: '13px', marginBottom: '16px' }}>Caricamento dettagli...</div>}
 
-          {/* Fix (dashboard admin): cliccando su un Admin comparivano comunque
-              violazioni/recensioni/segnalazioni ricevute/profilo pubblico —
-              dati che per un Admin non hanno senso (non produce contenuti
-              moderabili) e che restavano visibili "per abitudine" invece di
-              essere nascosti come le azioni di sospensione lo erano già. */}
+          {/* Per un Admin non ha senso mostrare violazioni/recensioni/segnalazioni */}
           {u.role === 'ADMIN' ? (
               <div style={{ backgroundColor: 'var(--bg-hover)', borderRadius: '8px', padding: '16px', color: 'var(--text-muted)', fontSize: '13px', lineHeight: 1.6 }}>
                 🛡️ Account Admin — nessuna statistica di moderazione o azione disponibile per questo tipo di account.
               </div>
           ) : (
             <>
-              {/* Fix (dashboard admin — trovato in revisione): il motivo della
-                  sospensione manuale veniva raccolto dal form ma mai salvato —
-                  il drawer mostrava solo un violationCount incrementato senza
-                  nessun dettaglio (es. "1" senza sapere il perché, visto che
-                  non c'è nessun report/violazione associata a spiegarlo). */}
               {u.status === 'SUSPENDED' && u.suspensionReason && (
                   <div style={{ backgroundColor: 'var(--bg-hover)', borderLeft: '3px solid #f59e0b', borderRadius: '0 8px 8px 0', padding: '12px 14px', marginBottom: '16px', fontSize: '13px', color: 'var(--text-muted)' }}>
                     <strong style={{ color: '#f59e0b' }}>🔒 Sospensione manuale da admin</strong> — {u.suspensionReason}
@@ -214,26 +205,17 @@ function AdminPage() {
 
   const [reports, setReports] = useState([])
   const [reportsLoading, setReportsLoading] = useState(false)
-  // Fix (🔴 FIX — "torna alla dashboard admin" dalla pagina 2+): reportsPage
-  // era un useState semplice, non sincronizzato con l'URL come reportFilter
-  // ed expandedReport qui sotto. "Torna alla dashboard admin" (MovieDetailPage,
-  // navigate(-1)) rimonta AdminPage da zero: filtro ed elemento espanso
-  // sopravvivevano perché letti dall'URL al mount, reportsPage no — tornava
-  // sempre a 0 (pagina 1) anche se prima si era in pagina 2 o successive.
-  // Stessa sincronizzazione URL già usata per gli altri due stati.
+  // reportsPage sincronizzato con l'URL come reportFilter/expandedReport
+  // sotto, così sopravvive al remount di AdminPage (es. tornando indietro
+  // da MovieDetailPage)
   const [reportsPage, setReportsPageState] = useState(() => {
     const p = parseInt(searchParams.get('reportsPage'), 10)
     return Number.isFinite(p) && p >= 0 ? p : 0
   })
   const setReportsPage = (updater) => {
-    // Fix (🔴 FIX — "Cannot update a component (BrowserRouter) while
-    // rendering a different component"): setSearchParams veniva chiamato
-    // DENTRO la funzione di update passata a setReportsPageState — le
-    // funzioni updater di uno state devono essere pure, nessun side-effect
-    // al loro interno. React può invocarle in momenti in cui aggiornare un
-    // ALTRO componente (qui il BrowserRouter, tramite setSearchParams) non è
-    // sicuro, da cui il warning. Ora si calcola "next" fuori da qualsiasi
-    // updater e si chiamano i due setter in sequenza, normalmente.
+    // "next" va calcolato fuori dall'updater: gli updater di stato devono
+    // essere puri, chiamare setSearchParams al loro interno (side-effect
+    // su un altro componente, il BrowserRouter) causa un warning React
     const next = typeof updater === 'function' ? updater(reportsPage) : updater
     setReportsPageState(next)
     setSearchParams(sp => { sp.set('reportsPage', String(next)); return sp }, { replace: true })
@@ -261,18 +243,9 @@ function AdminPage() {
 
   const loadStats = async () => {
     try {
-      // Fix (dashboard admin — card "Segnalazioni in attesa"): mostrava lo
-      // stesso numero sia come valore principale sia come "elementi" (es.
-      // "1 su 1 elemento" anche quando 3 utenti diversi avevano segnalato la
-      // STESSA recensione) — il valore principale veniva letto da
-      // page.totalElements dell'endpoint paginato /reports, che conta i
-      // GRUPPI (bersagli distinti), non le singole segnalazioni; "elementi"
-      // veniva ricalcolato a parte ma sugli stessi dati raggruppati, quindi
-      // finiva sempre uguale. Il nuovo endpoint /reports/summary distingue
-      // esplicitamente le due cose: totalReports = righe di segnalazione
-      // (es. 3, un utente per volta), totalTargets = bersagli distinti (es.
-      // 1, la stessa recensione) — così il valore principale è quello giusto
-      // (3) invece del gruppo (1) duplicato in entrambi i punti.
+      // /reports/summary distingue totalReports (righe di segnalazione) da
+      // totalTargets (bersagli distinti) — prima entrambi i valori della
+      // card venivano dallo stesso dato raggruppato e finivano sempre uguali
       const usersReq = api.get('/admin/users', { params: { page: 0, size: 1 } })
       const summaryReq = api.get('/reports/summary', { params: { status: 'PENDING' } })
       const [usersRes, summaryRes] = await Promise.all([usersReq, summaryReq])
@@ -298,40 +271,19 @@ function AdminPage() {
     finally { setUsersLoading(false) }
   }, [usersPage, userSearch, usersSortBy, usersSortDir])
 
-  // Fix (dashboard admin — filtro per tipo bersaglio): prima non c'era modo
-  // di vedere solo le segnalazioni su recensioni o solo quelle su risposte,
-  // in nessuna delle 3 sezioni (In attesa/Approvate/Rifiutate). Dichiarato
-  // qui sopra (prima di loadReports) perché ora è un parametro della
-  // richiesta al backend, non più un filtro applicato dopo sui dati caricati.
-  const [targetTypeFilter, setTargetTypeFilterState] = useState('ALL') // ALL | REVIEW | COMMENT
-  // Stesso motivo di setReportFilter sopra: cambiare filtro senza tornare a
-  // pagina 0 poteva lasciarti su una pagina 3 che con il nuovo filtro non
-  // esiste nemmeno più (es. 2 sole pagine di risultati filtrati).
+  // ALL | REVIEW | COMMENT — parametro della richiesta al backend
+  const [targetTypeFilter, setTargetTypeFilterState] = useState('ALL')
   const setTargetTypeFilter = (f) => { setTargetTypeFilterState(f); setReportsPage(0) }
 
-  // Fix (🔴 FIX — "7 elementi ma dice 1 di 2"): loadReports non aveva
-  // nessuna protezione contro le risposte fuori ordine. Cambiando filtro
-  // velocemente (Tutti → Recensioni → Risposte) partono più richieste in
-  // parallelo; se una risposta VECCHIA (es. di "Tutti", magari più lenta)
-  // arriva DOPO quella nuova di "Recensioni", sovrascriveva reportsTotalPages
-  // con un numero che non corrisponde più al contenuto mostrato — contenuto
-  // corretto (l'ultima richiesta), paginazione sbagliata (una richiesta
-  // precedente). Con questo contatore, solo la risposta della richiesta più
-  // recente viene applicata allo stato; le altre vengono scartate.
+  // Contatore per scartare risposte fuori ordine: cambiando filtro
+  // velocemente partono più richieste in parallelo, e una risposta vecchia
+  // può arrivare dopo una più recente — solo l'ultima richiesta partita vince
   const reportsRequestId = useRef(0)
 
   const loadReports = async () => {
     const requestId = ++reportsRequestId.current
     setReportsLoading(true)
     try {
-      // Fix (dashboard admin): prima si caricava sempre tutto con size:500,
-      // senza paginazione reale — come "Utenti totali", ora anche qui pagina
-      // vera (size 10), coerente col resto della dashboard.
-      // Fix (dashboard admin — filtro per tipo bersaglio): il filtro
-      // recensioni/risposte prima veniva applicato lato frontend SOLO sui
-      // report della pagina corrente, quindi "funzionava" solo lì e
-      // spariva cambiando pagina. Ora targetType va al backend, che filtra
-      // PRIMA di paginare — vale su tutte le pagine, in tutte e 3 le sezioni.
       const params = {
         status: reportFilter || 'PENDING',
         page: reportsPage,
@@ -339,15 +291,10 @@ function AdminPage() {
         targetType: targetTypeFilter === 'ALL' ? undefined : targetTypeFilter,
       }
       const res = await api.get('/reports', { params })
-      if (requestId !== reportsRequestId.current) return // risposta di una richiesta superata, ignorala
+      if (requestId !== reportsRequestId.current) return // richiesta superata, ignorala
       const content = res.data.content || res.data
-      // Fix (🔴 FIX — "resto bloccato lì, sparisce anche la navigazione"):
-      // se la pagina richiesta risulta vuota (es. il conteggio dei gruppi è
-      // cambiato tra una richiesta e l'altra, o si è finiti oltre l'ultima
-      // pagina reale) e non siamo già sulla prima pagina, non ha senso
-      // mostrare "Nessuna segnalazione" e lasciare l'utente bloccato lì:
-      // torniamo automaticamente a pagina 1 invece di affidarci solo ai
-      // controlli di navigazione.
+      // Se la pagina richiesta risulta vuota e non siamo già sulla prima,
+      // torniamo automaticamente indietro invece di lasciare l'utente bloccato
       if (content.length === 0 && reportsPage > 0) {
         setReportsPage(0)
         return
@@ -385,13 +332,9 @@ function AdminPage() {
   // di mostrarle come righe separate — così l'admin vede "X — N segnalazioni".
   // Nota: la vera distinzione visiva recensioni/risposte nella dashboard è un
   // pezzo a parte — questa è solo la patch minima per non rompersi con i due target.
-  // Fix (🟡 gruppi spezzati tra le pagine): il backend ora raggruppa per
-  // bersaglio PRIMA di paginare (vedi ReportServiceImpl.getReports) — un
-  // gruppo non arriva mai spezzato su due pagine diverse, quindi questo
-  // raggruppamento qui è solo per la resa visiva (accorpare le righe di uno
-  // stesso bersaglio in una card), non deve più "correggere" nulla.
-  // (targetTypeFilter dichiarato più sopra, prima di loadReports — il filtro
-  // per tipo bersaglio ora è lato backend, qui restano solo raggruppamento)
+  // Il backend raggruppa per bersaglio prima di paginare — un gruppo non
+  // arriva mai spezzato su due pagine. Qui il raggruppamento è solo per la
+  // resa visiva (accorpare le righe di uno stesso bersaglio in una card).
   const reportGroups = useMemo(() => {
     const map = new Map()
     reports.forEach(r => {
@@ -402,21 +345,13 @@ function AdminPage() {
     return Array.from(map.values())
   }, [reports])
 
-  // Approva/rifiuta in blocco tutte le segnalazioni pendenti di una recensione.
-  // Quando i pending del gruppo hanno motivi diversi
-  // (es. SPAM e INAPPROPRIATE_CONTENT), finalReasonCategory è quello scelto
-  // dall'admin tra quelli effettivamente usati — normalizza tutti i report
-  // del gruppo sullo stesso motivo invece di lasciarne "vincere" uno a caso.
-  // Fix (🔴 FIX — contatore non si aggiorna sulle segnalazioni multi-utente):
-  // Promise.all lanciava tutte le PUT in parallelo — per un gruppo con più
-  // segnalazioni pendenti sullo STESSO bersaglio, più richieste concorrenti
-  // finivano per leggere/scrivere lo stesso Review e lo stesso User
-  // (penalizeOffender in ReportServiceImpl) prima che l'una vedesse il
-  // commit dell'altra: un classico lost update — nessun errore visibile,
-  // ma lo stato finale (violationCount, contatori) poteva risultare
-  // incoerente. Con un solo report (caso singolo utente) non c'è
-  // concorrenza, infatti lì il contatore scalava sempre correttamente.
-  // Ora le richieste vengono inviate in sequenza, una alla volta.
+  // Approva/rifiuta in blocco tutte le segnalazioni pendenti di una
+  // recensione, in sequenza (non in parallelo: più richieste concorrenti
+  // sullo stesso bersaglio possono causare un lost update su
+  // violationCount lato backend). Quando i pending del gruppo hanno motivi
+  // diversi, finalReasonCategory è quello scelto dall'admin tra quelli
+  // effettivamente usati — normalizza tutti i report del gruppo sullo
+  // stesso motivo invece di lasciarne "vincere" uno a caso.
   const handleReportGroup = async (group, action, finalReasonCategory) => {
     const pendingIds = group.filter(r => r.status === 'PENDING').map(r => r.id)
     try {
@@ -460,15 +395,7 @@ function AdminPage() {
                 {[
                   { label: 'Utenti totali', value: stats.totalUsers, icon: '👥', color: '#3b82f6' },
                   { label: 'Segnalazioni in attesa', value: stats.totalReports, sub: stats.totalReportTargets != null ? `su ${stats.totalReportTargets} ${stats.totalReportTargets === 1 ? 'elemento' : 'elementi'}` : null, icon: '🚩', color: stats.totalReports > 0 ? '#f59e0b' : '#22c55e' },
-                  /* Fix (dashboard admin): la terza card mostrava sempre "Pagina X/Y"
-                     riferito alla paginazione utenti, anche nel tab Segnalazioni —
-                     dove prima non esisteva paginazione (lista caricata per intero)
-                     e quel numero era fuorviante, sostituito con "Segnalazioni
-                     visualizzate" (ridondante con "Segnalazioni in attesa" qui sopra,
-                     stesso numero in pratica). Ora le Segnalazioni hanno paginazione
-                     vera anche loro, quindi la card è "Pagina" in entrambi i tab,
-                     contestuale a quello attivo — nessuna ridondanza, nessun numero
-                     fuori contesto. */
+                  /* Terza card: "Pagina" contestuale al tab attivo (utenti o segnalazioni) */
                   tab === 'users'
                     ? { label: 'Pagina', value: `${usersPage + 1} / ${usersTotalPages}`, icon: '📄', color: 'var(--text-muted)' }
                     : { label: 'Pagina', value: `${reportsPage + 1} / ${reportsTotalPages}`, icon: '📄', color: 'var(--text-muted)' },
@@ -479,20 +406,16 @@ function AdminPage() {
                         <span style={{ color: 'var(--text-dark)', fontSize: '13px' }}>{s.label}</span>
                       </div>
                       <div style={{ color: s.color, fontWeight: '800', fontSize: '28px' }}>{s.value}</div>
-                      {/* Fix (dashboard admin — trovato in revisione): "N segnalazioni"
-                          da solo può fuorviare — potrebbero essere tutte sulla STESSA
-                          recensione. Sotto il numero, quanti elementi distinti coinvolge. */}
+                      {/* "N segnalazioni" da solo può fuorviare — potrebbero
+                          essere tutte sulla STESSA recensione */}
                       {s.sub && <div style={{ color: 'var(--text-dark)', fontSize: '12px', marginTop: '2px' }}>{s.sub}</div>}
                     </div>
                 ))}
               </div>
           )}
 
-          {/* Fix (dashboard admin — "accanto a Utenti/Segnalazioni", cioè i TAB,
-              non le card statistiche sopra — chiarito dopo il primo tentativo):
-              il filtro Stato ora sta nella stessa riga dei bottoni tab
-              👥 Utenti / 🚩 Segnalazioni, a destra, solo quando il tab
-              Segnalazioni è attivo (dove il filtro ha senso). */}
+          {/* Filtro Stato nella stessa riga dei tab, a destra, solo quando
+              il tab Segnalazioni è attivo */}
           <div style={{ display: 'flex', alignItems: 'center', gap: '16px', marginBottom: '28px', flexWrap: 'wrap' }}>
             <div style={{ display: 'flex', gap: '8px' }}>
               {[{ label: '👥 Utenti', value: 'users' }, { label: '🚩 Segnalazioni', value: 'reports' }].map(t => (
@@ -507,12 +430,8 @@ function AdminPage() {
               ))}
             </div>
 
-            {/* Fix (dashboard admin — "al centro della riga", non a destra):
-                era con justify-content:'space-between', che con solo 2 elementi
-                (tab a sinistra, filtro) spinge il filtro sul bordo destro
-                invece che al centro. Ora il filtro sta in un blocco flex:1 con
-                justify-content centrato, quindi cade più o meno a metà dello
-                spazio rimasto dopo i tab. */}
+            {/* Filtro centrato: flex:1 con justify-content centrato invece
+                di space-between (che con 2 elementi lo spingerebbe al bordo) */}
             {tab === 'reports' && (
                 <div style={{ flex: '1 1 auto', display: 'flex', justifyContent: 'center' }}>
                   <div>
@@ -524,6 +443,9 @@ function AdminPage() {
                         { label: '⏳ In attesa', value: 'PENDING' },
                         { label: '✅ Approvate', value: 'APPROVED' },
                         { label: '❌ Rifiutate', value: 'REJECTED' },
+                        // Contenuti già nascosti per sempre (autore eliminato o
+                        // sospeso permanentemente) — nessuna decisione da prendere
+                        { label: '🗄️ Archiviate', value: 'ARCHIVED' },
                       ].map(f => (
                           <button key={f.value} onClick={() => setReportFilter(f.value)} style={{
                             padding: '6px 16px', borderRadius: '20px', fontSize: '13px',
@@ -562,8 +484,7 @@ function AdminPage() {
                       <table style={{ width: '100%', borderCollapse: 'collapse' }}>
                         <thead>
                         <tr style={{ borderBottom: '1px solid var(--border)' }}>
-                          {/* Fix (dashboard admin — ordinamento colonne): intestazioni cliccabili,
-                              default alfabetico su Username, click cambia campo/reinverte direzione */}
+                          {/* Intestazioni cliccabili: click cambia campo/reinverte direzione */}
                           {[
                             { label: 'Username', field: 'username' },
                             { label: 'Stato', field: 'status' },
@@ -585,17 +506,9 @@ function AdminPage() {
                         </tr>
                         </thead>
                         <tbody>
-                        {/* Fix (dashboard admin — trovato in revisione): gli admin comparivano
-                            sempre per primi per puro caso (coincidenza di username/dati nel
-                            seed), dando l'impressione che l'ordinamento non funzionasse per
-                            loro. FIX VERO (backend, AdminController): il ruolo è ora il
-                            criterio di ordinamento primario applicato PRIMA della
-                            paginazione, quindi `users` arriva già con gli admin in cima su
-                            TUTTE le pagine, insieme, mai spezzati tra una pagina e l'altra.
-                            Tolto il riordino qui: era un cerotto lato frontend che sistemava
-                            solo la pagina già arrivata (se i 2 admin finivano su pagine
-                            diverse, ognuno restava fissato in cima alla propria pagina
-                            separatamente). Tenuto solo il bordo separatore visivo sotto. */}
+                        {/* Il ruolo è il criterio di ordinamento primario applicato dal
+                            backend prima della paginazione — gli admin arrivano già in
+                            cima su tutte le pagine, mai spezzati tra una e l'altra */}
                         {users.map((u, i, arr) => (
                             <tr key={u.username} style={{
                               borderBottom: '1px solid var(--border)',
@@ -607,9 +520,8 @@ function AdminPage() {
                               <td style={{ padding: '14px 16px' }}>
                                 <button onClick={() => openUserDrawer(u)} style={{ backgroundColor: 'transparent', border: 'none', color: 'var(--text)', fontWeight: '600', fontSize: '14px', cursor: 'pointer', padding: 0, textAlign: 'left', display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
                                   {u.username}
-                                  {/* Fix (dashboard admin, notato durante il fix sospensioni): senza
-                                      etichetta il "—" nella colonna Azioni per gli Admin sembra un bug
-                                      invece di una scelta voluta — un piccolo badge chiarisce subito perché */}
+                                  {/* Badge admin: senza, il "—" nella colonna Azioni
+                                      sembrerebbe un bug invece di una scelta voluta */}
                                   {u.role === 'ADMIN' && (
                                       <span style={{ padding: '2px 8px', borderRadius: '10px', fontSize: '10px', fontWeight: '700', backgroundColor: 'var(--accent-subtle)', color: 'var(--accent)', border: '1px solid #e5091444' }}>
                                         🛡️ ADMIN
@@ -634,9 +546,7 @@ function AdminPage() {
                           </span>
                               </td>
                               <td style={{ padding: '14px 16px' }}>
-                                {/* Fix (dashboard admin): un Admin non può sospendere né sé
-                                    stesso né altri Admin — per le righe Admin non ha senso
-                                    mostrare nessuna azione di moderazione */}
+                                {/* Nessuna azione di moderazione su un altro Admin */}
                                 {u.role === 'ADMIN' ? (
                                     <span style={{ color: 'var(--border-soft)', fontSize: '13px' }}>—</span>
                                 ) : (
@@ -686,12 +596,8 @@ function AdminPage() {
           {/* ── TAB SEGNALAZIONI ── */}
           {tab === 'reports' && (
               <div>
-                {/* Fix (dashboard admin — "spostiamo il primo filtro nella riga di
-                    utenti/segnalazioni"): il filtro Stato non è più qui — è stato
-                    spostato su, nella stessa riga delle card statistiche
-                    (Utenti totali / Segnalazioni in attesa), centrato accanto a
-                    loro. Resta qui invece il filtro "Tipo di contenuto", che
-                    l'utente non ha chiesto di spostare. */}
+                {/* Filtro Stato spostato sopra, accanto alle card statistiche.
+                    Qui resta solo il filtro "Tipo di contenuto" */}
                 <div style={{ marginBottom: '24px' }}>
                   <div style={{ fontSize: '11px', fontWeight: '700', color: 'var(--text-dark)', textTransform: 'uppercase', letterSpacing: '0.03em', marginBottom: '6px' }}>
                     Tipo di contenuto — vale in tutte e 3 le sezioni sopra
@@ -725,13 +631,8 @@ function AdminPage() {
                       {reportGroups.map(group => {
                         const first = group[0]
                         const isComment = first.targetType === 'COMMENT'
-                        // Fix (🔴 FIX — "other" senza descrizione nella segnalazione): il
-                        // motivo finale (dopo la risoluzione) è normalizzato su TUTTI i
-                        // report del gruppo (vedi resolveReport/finalReasonCategory), ma
-                        // reasonText resta quello scritto dal singolo segnalante — "first"
-                        // è solo il report più recente del gruppo, non necessariamente
-                        // quello che ha davvero scritto OTHER con la descrizione. Cerchiamo
-                        // nel gruppo il primo report che abbia un reasonText valorizzato.
+                        // "first" non è per forza chi ha scritto OTHER —
+                        // cerca nel gruppo il report giusto con reasonText
                         const otherReasonText = group.find(r => r.reasonCategory === 'OTHER' && r.reasonText)?.reasonText
                         const groupKey = isComment ? `comment_${first.reviewCommentId}` : `review_${first.reviewId}`
                         const authorUsername = isComment ? first.commentAuthorUsername : first.reviewAuthorUsername
@@ -750,20 +651,10 @@ function AdminPage() {
                               <div style={{ padding: '16px 20px', display: 'flex', alignItems: 'center', gap: '12px', cursor: 'pointer' }}
                                    onClick={() => setExpandedReport(expanded ? null : groupKey)}
                               >
-                        {/* Fix: distingue recensione/risposta — la vera dashboard dedicata è un pezzo a parte */}
                         <span style={{ padding: '3px 8px', borderRadius: '4px', fontSize: '11px', fontWeight: '600', backgroundColor: isComment ? '#1a2d2d' : '#2d1a2d', color: isComment ? '#4dd0c8' : '#c084fc', flexShrink: 0 }}>
                           {isComment ? '💬 Risposta' : '📝 Recensione'}
                         </span>
-                        {/* Fix (dashboard admin — motivo mostrato, non conteggio): su
-                            Pendenti ha senso vedere "N segnalazioni" (ancora da valutare,
-                            magari con motivi diversi tra loro). Su Approvate/Rifiutate la
-                            decisione è già presa su UN motivo solo (quello scelto
-                            dall'admin, o l'unico presente) — mostrare ancora "3
-                            segnalazioni" lì è fuorviante, quindi mostriamo quel motivo. */}
-                        {/* Fix (Light Mode): questi 3 badge avevano lo sfondo hardcoded
-                            (#2d1a1a, un rosso scuro fisso) invece di var(--accent-subtle),
-                            già usata correttamente qui sopra per il badge categoria (riga
-                            535) — restavano scuri anche in Light Mode. */}
+                        {/* Pendenti: mostra il numero. Approvate/Rifiutate: il motivo (già deciso) */}
                         {reportFilter === 'PENDING' ? (
                             <span style={{ padding: '3px 10px', borderRadius: '4px', fontSize: '12px', fontWeight: '600', backgroundColor: 'var(--accent-subtle)', color: 'var(--accent)', border: '1px solid #e5091444', flexShrink: 0 }}>
                               {group.length} {group.length === 1 ? 'segnalazione' : 'segnalazioni'}
@@ -777,13 +668,8 @@ function AdminPage() {
                         )}
                                 <span style={{ color: 'var(--text)', fontSize: '14px', flex: 1 }}>
                           {isComment ? 'Risposta' : 'Recensione'} di <strong>{authorUsername || '—'}</strong>
-                          {/* Fix (🟡 nomi segnalanti visibili anche a tendina chiusa): questa
-                              riga sommario è sempre visibile (fa parte dell'header cliccabile,
-                              non della sezione "{expanded && (...)}" più sotto) — elencare i
-                              nomi qui li mostrava anche prima di aprire il dettaglio. Ora mostra
-                              solo il conteggio ("segnalata da 3 utenti"); i nomi restano visibili
-                              solo dentro il dettaglio espanso (riga ~833), dove l'admin li vede
-                              uno per uno insieme al motivo di ciascuna segnalazione. */}
+                          {/* Solo il conteggio qui (header sempre visibile) — i nomi
+                              stanno nel dettaglio espanso più sotto */}
                           {group.length > 1 && reportFilter === 'PENDING' && (
                               <span style={{ color: 'var(--text-dark)' }}> — segnalata da {group.length} utenti</span>
                           )}
@@ -795,22 +681,20 @@ function AdminPage() {
                               {expanded && (
                                   <div style={{ padding: '0 20px 20px', borderTop: '1px solid var(--border-soft)' }}>
 
-                                    {/* Fix (dashboard admin — banner "nascosta"): indica se il bersaglio
-                                        ha già raggiunto la soglia di auto-nascondimento (altre 2+
-                                        segnalazioni PENDING), utile per capire a colpo d'occhio lo stato
-                                        prima ancora di leggere il testo */}
+                                    {/* Soglia di auto-nascondimento già raggiunta (2+ PENDING) */}
                                     {first.targetHidden && (
                                         <div style={{ display: 'flex', alignItems: 'center', gap: '8px', backgroundColor: 'rgba(245,158,11,0.1)', border: '1px solid #f59e0b44', borderRadius: '6px', padding: '8px 12px', margin: '16px 0 0', color: '#f59e0b', fontSize: '12px', fontWeight: '600' }}>
                                           🔶 {isComment ? 'Questa risposta è' : 'Questa recensione è'} già nascosta automaticamente (soglia di segnalazioni raggiunta) — invisibile agli altri utenti in attesa della tua decisione.
                                         </div>
                                     )}
 
-                                    {/* Fix (dashboard admin — versione segnalata): l'etichetta "versione
-                                        al momento della segnalazione" ha senso SOLO se il testo è stato
-                                        davvero modificato dopo — altrimenti è solo rumore che fa sembrare
-                                        "vecchio" un testo che in realtà è ancora quello attuale. Quando
-                                        c'è una modifica reale, mostriamo le due versioni affiancate
-                                        (vecchia a sinistra, nuova a destra) invece che una sopra l'altra. */}
+                                    {reportFilter === 'ARCHIVED' && (
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', backgroundColor: 'rgba(107,114,128,0.15)', border: '1px solid #6b728044', borderRadius: '6px', padding: '8px 12px', margin: '16px 0 0', color: '#9ca3af', fontSize: '12px', fontWeight: '600' }}>
+                                          🗄️ Archiviata automaticamente — l'autore di {isComment ? 'questa risposta' : 'questa recensione'} non è più un account attivo (eliminato o sospeso permanentemente), il contenuto è già nascosto per sempre.
+                                        </div>
+                                    )}
+
+                                    {/* Etichetta versioni solo se il testo è stato davvero modificato */}
                                     {first.reportedText && first.targetEdited && !first.targetRemoved && contentText ? (
                                         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', margin: '16px 0' }}>
                                           <div style={{ backgroundColor: 'var(--bg-card)', borderLeft: '3px solid #e50914', borderRadius: '0 8px 8px 0', padding: '14px 16px' }}>
@@ -851,15 +735,10 @@ function AdminPage() {
                                         </div>
                                     )}
 
-                                    {/* Fix (dashboard admin, Step 6): prima non c'era nessun modo di vedere
-                                        l'elemento nel suo contesto reale — solo il testo estratto qui.
-                                        Il target passato via query param viene evidenziato ed è raggiunto
-                                        con lo scroll automatico su MovieDetailPage; adminRef=1 fa comparire
-                                        lì un bottone "torna alla dashboard" che usa la history (back), così
-                                        filtro/tab/gruppo aperto/scroll di questa pagina restano intatti */}
-                                    {/* Fix (dashboard admin): se la segnalazione è stata approvata,
-                                        il contenuto è stato rimosso e il link non porterebbe più a
-                                        nulla — mostriamo una nota invece del collegamento morto */}
+                                    {/* "Vedi nel contesto" evidenzia ed esegue lo scroll fino al
+                                        target su MovieDetailPage; adminRef=1 mostra lì un bottone
+                                        "torna alla dashboard" che usa la history */}
+                                    {/* Contenuto già rimosso: nessun link, solo una nota */}
                                     {first.tmdbId && (
                                         first.targetRemoved ? (
                                             <div style={{ marginBottom: '16px', fontSize: '13px', color: 'var(--text-dark)' }}>
@@ -883,6 +762,12 @@ function AdminPage() {
                                           <div key={r.id} style={{ backgroundColor: 'var(--bg-hover)', borderRadius: '8px', padding: '10px 14px' }}>
                                             <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: (r.reasonText && r.reasonCategory !== 'OTHER') ? '4px' : 0 }}>
                                               <span style={{ color: 'var(--text)', fontSize: '13px', fontWeight: '600' }}>{r.reporterUsername}</span>
+                                              {/* Non blocca né altera la segnalazione — solo contesto:
+                                                  chi ha segnalato non è più un account attivo, il motivo
+                                                  potrebbe comunque essere valido, valuta tu */}
+                                              {r.reporterAccountUnavailable && (
+                                                  <span title="Account eliminato o sospeso permanentemente" style={{ fontSize: '12px', cursor: 'help' }}>⚠️</span>
+                                              )}
                                               <span style={{ padding: '1px 8px', borderRadius: '4px', fontSize: '11px', fontWeight: '600', backgroundColor: 'var(--accent-subtle)', color: 'var(--accent)', border: '1px solid #e5091444' }}>
                                                 {r.reasonCategory === 'OTHER' ? (r.reasonText || 'Altro') : r.reasonCategory}
                                               </span>
@@ -906,10 +791,8 @@ function AdminPage() {
 
                                     {pendingCount > 0 && (
                                         <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-                                          {/* Fix (dashboard admin): motivi diversi tra le segnalazioni
-                                              pendenti dello stesso bersaglio — l'admin sceglie qual è
-                                              quello valido, dalla lista di quelli usati dagli utenti,
-                                              invece che uno venga scelto a caso in automatico */}
+                                          {/* Motivi diversi tra le pendenti dello stesso bersaglio:
+                                              l'admin sceglie quello valido */}
                                           {needsReasonChoice && (
                                               <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
                                                 <span style={{ color: 'var(--text-muted)', fontSize: '13px' }}>Motivo valido:</span>
@@ -937,12 +820,6 @@ function AdminPage() {
                                           </div>
                                         </div>
                                     )}
-                                    {/* Fix (dashboard admin): il filtro backend ritorna solo
-                                        segnalazioni dello status selezionato, quindi pendingCount
-                                        è sempre 0 quando si è nei filtri Approvate/Rifiutate — il
-                                        messaggio compariva su OGNI card in quei filtri, ripetendo
-                                        l'ovvio. Ha senso solo nel filtro Pendenti (caso limite: un
-                                        gruppo appena risolto prima del refresh della lista). */}
                                     {pendingCount === 0 && reportFilter === 'PENDING' && (
                                         <div style={{ color: 'var(--text-dark)', fontSize: '13px' }}>
                                           Tutte le segnalazioni di questa recensione sono state gestite.
@@ -956,21 +833,50 @@ function AdminPage() {
                     </div>
                 )}
 
-                {/* Fix: rimossa la condizione extra "|| reportsPage > 0" che
-                    avevo aggiunto per evitare di restare bloccati su una
-                    pagina vuota — causava però il problema opposto: la
-                    navigazione restava visibile anche con una sola pagina
-                    vera, se reportsPage era rimasto a un valore non-zero
-                    (es. nell'URL, da un test precedente con più dati).
-                    L'auto-recovery in loadReports (torna a pagina 1 se la
-                    pagina richiesta risulta vuota) basta da solo. */}
                 {reportsTotalPages > 1 && (
-                    <div style={{ display: 'flex', justifyContent: 'center', gap: '12px', marginTop: '24px', alignItems: 'center' }}>
+                    <div style={{ display: 'flex', justifyContent: 'center', gap: '6px', marginTop: '24px', alignItems: 'center', flexWrap: 'wrap' }}>
                       <button onClick={() => setReportsPage(p => Math.max(0, p - 1))} disabled={reportsPage === 0}
-                              style={{ padding: '8px 16px', backgroundColor: 'transparent', border: '1px solid var(--border-soft)', borderRadius: '6px', color: reportsPage === 0 ? 'var(--border-soft)' : 'var(--text)', cursor: reportsPage === 0 ? 'default' : 'pointer' }}>←</button>
-                      <span style={{ color: 'var(--text-muted)', fontSize: '14px' }}>Pagina {reportsPage + 1} di {reportsTotalPages}</span>
+                              style={{ padding: '8px 12px', backgroundColor: 'transparent', border: '1px solid var(--border-soft)', borderRadius: '6px', color: reportsPage === 0 ? 'var(--border-soft)' : 'var(--text)', cursor: reportsPage === 0 ? 'default' : 'pointer' }}>←</button>
+
+                      {/* Numeri di pagina cliccabili, con "…" quando sono
+                          troppe per stare a schermo */}
+                      {(() => {
+                        const pages = []
+                        const cur = reportsPage // 0-based
+                        const last = reportsTotalPages - 1
+                        const addPage = p => pages.push(p)
+                        const addEllipsis = key => pages.push(`ellipsis-${key}`)
+
+                        addPage(0)
+                        if (cur - 1 > 1) addEllipsis('start')
+                        for (let p = Math.max(1, cur - 1); p <= Math.min(last - 1, cur + 1); p++) addPage(p)
+                        if (cur + 1 < last - 1) addEllipsis('end')
+                        if (last > 0) addPage(last)
+
+                        return pages.map(p => {
+                          if (typeof p === 'string') {
+                            return <span key={p} style={{ color: 'var(--text-dark)', fontSize: '14px', padding: '0 4px' }}>…</span>
+                          }
+                          const isCurrent = p === cur
+                          return (
+                              <button key={p} onClick={() => setReportsPage(p)} disabled={isCurrent}
+                                      style={{
+                                        minWidth: '34px', padding: '8px 10px',
+                                        backgroundColor: isCurrent ? 'var(--accent)' : 'transparent',
+                                        border: `1px solid ${isCurrent ? 'var(--accent)' : 'var(--border-soft)'}`,
+                                        borderRadius: '6px',
+                                        color: isCurrent ? '#fff' : 'var(--text)',
+                                        fontWeight: isCurrent ? '700' : '400',
+                                        cursor: isCurrent ? 'default' : 'pointer',
+                                      }}>
+                                {p + 1}
+                              </button>
+                          )
+                        })
+                      })()}
+
                       <button onClick={() => setReportsPage(p => Math.min(reportsTotalPages - 1, p + 1))} disabled={reportsPage >= reportsTotalPages - 1}
-                              style={{ padding: '8px 16px', backgroundColor: 'transparent', border: '1px solid var(--border-soft)', borderRadius: '6px', color: reportsPage >= reportsTotalPages - 1 ? 'var(--border-soft)' : 'var(--text)', cursor: reportsPage >= reportsTotalPages - 1 ? 'default' : 'pointer' }}>→</button>
+                              style={{ padding: '8px 12px', backgroundColor: 'transparent', border: '1px solid var(--border-soft)', borderRadius: '6px', color: reportsPage >= reportsTotalPages - 1 ? 'var(--border-soft)' : 'var(--text)', cursor: reportsPage >= reportsTotalPages - 1 ? 'default' : 'pointer' }}>→</button>
                     </div>
                 )}
               </div>

@@ -23,21 +23,13 @@ function ReplyThread({ reviewId, reviewText, reviewOwnerUsername, token, current
   const [loaded, setLoaded] = useState(false)
   const [loading, setLoading] = useState(false)
   const [comments, setComments] = useState([])
-  // Fix (Dettaglio Film/Serie — risposte troncate a 50): stesso bug delle
-  // recensioni, versione risposte — caricate con size:50 fisso e nessun
-  // "carica altre". Stesso pattern di fix: paginazione vera + bottone.
+  // Paginazione vera (size:50 fisso prima, senza "carica altre" — stesso pattern delle recensioni)
   const [commentsPage, setCommentsPage] = useState(0)
   const [commentsTotalPages, setCommentsTotalPages] = useState(1)
   const [commentsTotalElements, setCommentsTotalElements] = useState(0)
-  // Fix (🔴 "Risposte (N)" sparisce dopo un refresh — trovato nei test
-  // funzionali): il conteggio veniva popolato solo dentro loadComments(),
-  // chiamata SOLO quando l'utente espande manualmente il thread (o con
-  // autoExpand) — dopo un refresh "loaded" torna false e il numero sparisce
-  // finché non riespandi. Ora un fetch leggero e separato (size:1, prende
-  // solo il totale dai metadati di paginazione, non la lista intera) parte
-  // subito al mount, indipendentemente dall'espansione — il numero resta
-  // sempre visibile, senza dover caricare tutte le risposte in anticipo per
-  // ogni singola recensione della pagina.
+  // Fetch leggero separato (size:1, solo il totale dai metadati) al mount,
+  // indipendente dall'espansione — senza, il conteggio spariva dopo un
+  // refresh finché non si riespandeva manualmente il thread
   const [countLoaded, setCountLoaded] = useState(false)
   const [loadingMoreComments, setLoadingMoreComments] = useState(false)
   const [showComposer, setShowComposer] = useState(false)
@@ -119,10 +111,8 @@ function ReplyThread({ reviewId, reviewText, reviewOwnerUsername, token, current
     if (!loaded) loadComments()
   }
 
-  // Fix (🔴 "Risposte (N)" sparisce dopo un refresh): fetch leggero e
-  // indipendente dall'espansione, vedi commento su countLoaded sopra.
-  // size:1 basta — serve solo `page.totalElements` dai metadati di
-  // paginazione, non i dati dei commenti stessi.
+  // Fetch indipendente dall'espansione — size:1 basta, serve solo
+  // page.totalElements dai metadati di paginazione
   useEffect(() => {
     api.get(`/reviews/${reviewId}/comments`, { params: { page: 0, size: 1 } })
       .then(r => setCommentsTotalElements(r.data.page?.totalElements ?? r.data.totalElements ?? 0))
@@ -149,7 +139,7 @@ function ReplyThread({ reviewId, reviewText, reviewOwnerUsername, token, current
     try {
       const res = await api.post(`/reviews/${reviewId}/comments`, { text: text.trim() })
       setComments(prev => [...prev, res.data])
-      // Fix (Dettaglio Film/Serie): stesso motivo del fix sul conteggio recensioni.
+      // Aggiorna il conteggio locale invece di rifare il fetch
       setCommentsTotalElements(prev => prev + 1)
       setText('')
       setShowComposer(false)
@@ -193,26 +183,15 @@ function ReplyThread({ reviewId, reviewText, reviewOwnerUsername, token, current
     }
   }
 
-  // Il backend filtra già le risposte nascoste
-  // dagli AUTORI DIVERSI dal viewer — l'unico caso in cui hiddenByAuthor=true
-  // arriva qui è la propria risposta nascosta (solo tu la vedi). Il badge
-  // "Risposte (N)" contava anche quella, dando l'impressione che nascondere
-  // non avesse effetto: il conteggio ora riflette solo ciò che è pubblico.
-  // Fix (Dettaglio Film/Serie — risposte troncate a 50): questo conteggio
-  // usava comments.filter(...).length, cioè solo le risposte caricate finora
-  // in pagina — con la paginazione vera (20 alla volta) avrebbe mostrato "20"
-  // anche con 60 risposte totali. Ora usa commentsTotalElements (il totale
-  // reale dal backend), con lo stesso aggiustamento di 1 già usato per le
-  // recensioni per la propria risposta nascosta (unico caso in cui il totale
-  // del backend include qualcosa che il conteggio pubblico non deve contare,
-  // per un viewer non-Admin).
+  // Il backend filtra già le risposte nascoste dagli autori diversi dal
+  // viewer — l'unico caso in cui hiddenByAuthor=true arriva qui è la
+  // propria risposta nascosta (solo tu la vedi), quindi va scorporata dal
+  // totale reale (commentsTotalElements) per il badge pubblico
   const myHiddenComment = comments.find(c => c.authorUsername === currentUsername && c.hiddenByAuthor)
   const visibleCommentsCount = Math.max(0, commentsTotalElements - (myHiddenComment && !isAdmin ? 1 : 0))
 
-  // La risposta di chi ha scritto la recensione
-  // era in mezzo alle altre in ordine cronologico, poco visibile. La
-  // portiamo sempre in cima (comments arriva già ordinato per data asc dal
-  // backend, quindi il sort è stabile e non tocca l'ordine tra le altre)
+  // La risposta dell'autore della recensione va sempre in cima (comments
+  // arriva già ordinato per data asc dal backend, sort stabile)
   const sortedComments = reviewOwnerUsername
       ? [...comments].sort((a, b) => (b.authorUsername === reviewOwnerUsername) - (a.authorUsername === reviewOwnerUsername))
       : comments
@@ -229,25 +208,19 @@ function ReplyThread({ reviewId, reviewText, reviewOwnerUsername, token, current
 
           {!loading && sortedComments.map(c => (
             <div key={c.id} id={`comment-${c.id}`} style={{ backgroundColor: 'var(--bg-hover)', borderRadius: '8px', padding: '10px 14px', marginLeft: '16px', border: highlightCommentId === c.id ? '2px solid #3b82f6' : (c.hiddenBySuspension ? '2px solid #ef4444' : (c.hiddenByDeletion ? '2px solid #6b7280' : (c.status === 'HIDDEN' ? '2px solid #f59e0b' : '2px solid transparent'))), boxShadow: highlightCommentId === c.id ? '0 0 0 4px rgba(59,130,246,0.15)' : 'none' }}>
-              {/* Fix (Dettaglio — banner moderazione, stessa logica delle recensioni):
-                  visibile qui solo se sei Admin, il backend la esclude per chiunque altro */}
+              {/* Visibile solo se Admin, il backend esclude per chiunque altro */}
               {c.status === 'HIDDEN' && (
                   <div style={{ display: 'flex', alignItems: 'center', gap: '6px', backgroundColor: 'rgba(245,158,11,0.1)', border: '1px solid #f59e0b44', borderRadius: '5px', padding: '5px 10px', marginBottom: '8px', color: '#f59e0b', fontSize: '11px', fontWeight: '600' }}>
                     🔶 Nascosta per segnalazioni — in attesa di decisione
                   </div>
               )}
-              {/* Fix (dashboard admin — banner distinto per sospensione): richiesto
-                  esplicitamente un banner diverso da quello per segnalazioni, per
-                  distinguere "nascosta perché l'autore è sospeso" da "nascosta in
-                  attesa di decisione su una segnalazione" — colore/testo diversi */}
+              {/* Distinto dal banner "segnalazioni": qui è per sospensione dell'autore */}
               {c.hiddenBySuspension && (
                   <div style={{ display: 'flex', alignItems: 'center', gap: '6px', backgroundColor: 'rgba(239,68,68,0.1)', border: '1px solid #ef444444', borderRadius: '5px', padding: '5px 10px', marginBottom: '8px', color: '#ef4444', fontSize: '11px', fontWeight: '600' }}>
                     🔒 Nascosta — l'autore è sospeso
                   </div>
               )}
-              {/* Fix (dashboard admin — recensioni/risposte di utenti eliminati):
-                  stesso principio del banner sospensione, distinto perché qui è
-                  irreversibile (nessuna riabilitazione possibile) */}
+              {/* Irreversibile, distinto dal banner sospensione */}
               {c.hiddenByDeletion && (
                   <div style={{ display: 'flex', alignItems: 'center', gap: '6px', backgroundColor: 'rgba(107,114,128,0.15)', border: '1px solid #6b728044', borderRadius: '5px', padding: '5px 10px', marginBottom: '8px', color: '#9ca3af', fontSize: '11px', fontWeight: '600' }}>
                     🗑️ Nascosta — l'autore ha eliminato l'account
@@ -269,7 +242,7 @@ function ReplyThread({ reviewId, reviewText, reviewOwnerUsername, token, current
                   {c.authorUsername === currentUsername ? (
                     <>
                       <button onClick={() => { setEditingId(c.id); setEditText(c.text) }} style={{ fontSize: '11px', color: 'var(--text-dark)', backgroundColor: 'transparent', border: 'none', cursor: 'pointer' }}>Modifica</button>
-                      {/* Fix (auto-nascondimento autore): toggle reversibile, distinto dall'eliminazione */}
+                      {/* Toggle reversibile, distinto dall'eliminazione */}
                       <button onClick={() => handleToggleCommentHidden(c)} disabled={togglingHiddenId === c.id} style={{ fontSize: '11px', color: 'var(--text-dark)', backgroundColor: 'transparent', border: 'none', cursor: 'pointer' }}>
                         {togglingHiddenId === c.id ? '...' : (c.hiddenByAuthor ? '👁️ Mostra' : '🙈 Nascondi')}
                       </button>
@@ -304,9 +277,7 @@ function ReplyThread({ reviewId, reviewText, reviewOwnerUsername, token, current
                   {c.hiddenByAuthor && c.authorUsername === currentUsername && (
                     <p style={{ color: 'var(--text-dark)', fontSize: '11px', fontStyle: 'italic', marginBottom: '4px' }}>🙈 Nascosta — solo tu la vedi</p>
                   )}
-                  {/* Fix (dashboard admin — commenti nascosti): l'Admin ora riceve anche
-                      le risposte nascoste dagli altri autori (bypass lato query) — qui
-                      lo segnaliamo chiaramente, per non farlo sembrare un contenuto normale */}
+                  {/* L'Admin riceve anche le risposte nascoste da altri autori — va segnalato */}
                   {c.hiddenByAuthor && c.authorUsername !== currentUsername && isAdmin && (
                     <p style={{ color: '#f59e0b', fontSize: '11px', fontStyle: 'italic', marginBottom: '4px' }}>🙈 Nascosta dall'autore — visibile solo a te come Admin</p>
                   )}
@@ -325,8 +296,7 @@ function ReplyThread({ reviewId, reviewText, reviewOwnerUsername, token, current
             <p style={{ color: 'var(--text-dark)', fontSize: '12px', marginLeft: '16px' }}>Nessuna risposta ancora.</p>
           )}
 
-          {/* Fix (Dettaglio Film/Serie — risposte troncate a 50): bottone per
-              caricare le pagine successive, stesso pattern delle recensioni. */}
+          {/* Carica le pagine successive, stesso pattern delle recensioni */}
           {!loading && commentsPage + 1 < commentsTotalPages && (
             <button onClick={loadMoreComments} disabled={loadingMoreComments} style={{
               marginLeft: '16px', alignSelf: 'flex-start', padding: '5px 12px',
@@ -631,16 +601,10 @@ function MovieDetailPage() {
 
   const [detail, setDetail] = useState(null)
   const [reviews, setReviews] = useState([])
-  // Fix (Dettaglio Film/Serie — recensioni troncate a 20): prima si
-  // caricavano tutte le recensioni in un colpo solo senza page/size, quindi
-  // il backend applicava il default di Spring (20) e oltre sparivano senza
-  // nessun "carica altre". Ora paginazione vera, 10 alla volta come in
-  // Profilo, con bottone per caricarne altre.
+  // Paginazione vera, 10 alla volta come in Profilo, con bottone per caricarne altre
   const [reviewsPage, setReviewsPage] = useState(0)
   const [reviewsTotalPages, setReviewsTotalPages] = useState(1)
-  // Il conteggio in testata ("Recensioni della community (N)") deve riflettere
-  // il totale reale, non solo quante ne sono state caricate finora in pagina —
-  // vedi uso più sotto, vicino a "visibleReviewsCount".
+  // Il totale reale, non solo quante caricate finora — vedi "visibleReviewsCount" più sotto
   const [reviewsTotalElements, setReviewsTotalElements] = useState(0)
   const [loadingMoreReviews, setLoadingMoreReviews] = useState(false)
   const [watchEntry, setWatchEntry] = useState(null)
@@ -688,9 +652,7 @@ function MovieDetailPage() {
     Promise.all([
       api.get(`/tmdb/${mediaType}/${id}`),
       api.get(`/reviews/media/${mediaType}/${id}`, { params: { page: 0, size: 10, sort: 'createdAt,desc' } }),
-      // Fix (Dettaglio Film/Serie): "myReview" non si cerca più dentro le
-      // recensioni caricate in pagina (potrebbe non esserci, essendo ora
-      // paginate) — endpoint dedicato, indipendente dalla paginazione.
+      // Endpoint dedicato, indipendente dalla paginazione delle recensioni
       token ? api.get(`/reviews/media/${mediaType}/${id}/mine`).catch(() => ({ data: null })) : Promise.resolve({ data: null }),
     ]).then(([detailRes, reviewsRes, mineRes]) => {
       setDetail(detailRes.data)
@@ -764,10 +726,8 @@ function MovieDetailPage() {
       } else {
         const res = await api.post('/reviews', { tmdbId: Number(id), contentType: mediaType, rating, text: text.trim() || null })
         setMyReview(res.data); setReviews(prev => [res.data, ...prev])
-        // Fix (Dettaglio Film/Serie): il conteggio in testata ora si basa sul
-        // totale dal backend (reviewsTotalElements), non più sulla sola
-        // lista caricata — va incrementato a mano qui, altrimenti resterebbe
-        // indietro di 1 finché non si ricarica la pagina.
+        // Il conteggio si basa sul totale dal backend, non sulla lista
+        // caricata — va incrementato a mano qui
         setReviewsTotalElements(prev => prev + 1)
         setReviewSuccess('Recensione pubblicata!')
         setWatchEntry(prev => prev ? { ...prev, status: 'WATCHED' } : null)
@@ -807,13 +767,10 @@ function MovieDetailPage() {
     try {
       await api.delete(`/reviews/${myReview.id}`)
       setReviews(prev => prev.filter(r => r.id !== myReview.id))
-      // Fix (Dettaglio Film/Serie): stesso motivo dell'incremento in
-      // handleSubmitReview, ma al contrario.
       setReviewsTotalElements(prev => Math.max(0, prev - 1))
       setMyReview(null)
-      // Fix (chiarito dopo: non "torna a Da vedere" ma "nessuno stato, esce
-      // del tutto dalla libreria" — coerente col backend che ora elimina
-      // l'entry invece di retrocederla). Con watchEntry null, il form mostra
+      // Nessuno stato: esce del tutto dalla libreria (il backend elimina
+      // l'entry invece di retrocederla). watchEntry null → il form mostra
       // "Aggiungi alla libreria" invece dei pulsanti Da vedere/In visione.
       setWatchEntry(null)
       setRating(0); setText(''); setEditMode(false)
@@ -842,9 +799,7 @@ function MovieDetailPage() {
     }
   }
 
-  // Fix (Dettaglio Film/Serie — recensioni troncate a 20): carica la
-  // pagina successiva e la accoda a quelle già visibili, stesso pattern di
-  // "Carica altre recensioni" già usato in Profilo.
+  // Carica la pagina successiva e la accoda, stesso pattern usato in Profilo
   const loadMoreReviews = async () => {
     if (loadingMoreReviews || reviewsPage + 1 >= reviewsTotalPages) return
     setLoadingMoreReviews(true)
@@ -880,12 +835,8 @@ function MovieDetailPage() {
       : (normalizedTmdb ?? normalizedCiak)
   const ciakLogVotes = detail.ciakLogVoteCount ?? detail.numeroVotiCiakLog
   const isMovie = (detail.contentType ?? mediaType) === 'MOVIE'
-  // Fix (🔴 regola violata, coerenza col backend): richiedeva già
-  // status === 'WATCHED', ma ora WATCHED si raggiunge SOLO scrivendo una
-  // recensione (vedi ReviewServiceImpl.createReview) — con questo gate
-  // sarebbe stato impossibile scrivere la prima recensione in assoluto,
-  // cane che si morde la coda. Ora basta che il titolo sia in libreria, in
-  // un qualunque stato — la recensione stessa lo farà diventare Visto.
+  // Basta che il titolo sia in libreria, in un qualunque stato — WATCHED si
+  // raggiunge scrivendo la recensione stessa (ReviewServiceImpl.createReview)
   const canReview = token && !isAdmin && !!watchEntry
 
   return (
@@ -922,8 +873,7 @@ function MovieDetailPage() {
         />
       )}
 
-      {/* Fix (AI più centrale): modal "Chiedi su questo film" — separato dal
-          widget flottante della chat generale, stateless (nessuna cronologia) */}
+      {/* Modal "Chiedi su questo film" — separato dal widget flottante della chat generale, stateless */}
       {showMovieQA && (
         <div style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(0,0,0,0.6)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 200 }}
           onClick={() => setShowMovieQA(false)}>
@@ -975,9 +925,7 @@ function MovieDetailPage() {
         </div>
       )}
 
-      {/* Fix (dashboard admin, Step 6): usa la history (back), non un link fisso
-          a /admin — così tab/filtro/gruppo aperto/scroll della dashboard restano
-          esattamente come li aveva lasciati l'admin, non ripartono da capo */}
+      {/* Usa la history (back), non un link fisso — tab/filtro/scroll della dashboard restano com'erano */}
       {cameFromAdmin && (
         <div style={{ maxWidth: '1100px', margin: '16px auto 0', padding: '0 64px' }}>
           <button
@@ -1015,9 +963,7 @@ function MovieDetailPage() {
               padding: '8px 16px', backgroundColor: 'var(--bg-hover)', border: '1px solid var(--accent)',
               borderRadius: '20px', color: 'var(--accent)', fontSize: '13px', fontWeight: '600', cursor: 'pointer',
             }}>
-              {/* Fix (🟡 "Chiedi su questo film" fisso anche per le serie TV):
-                  usa mediaType, già disponibile nel componente (da ?type= in
-                  URL), invece del testo fisso "film". */}
+              {/* mediaType da ?type= in URL, non testo fisso "film" */}
               💬 Chiedi su {mediaType === 'TV' ? 'questa serie' : 'questo film'}
             </button>
           )}
@@ -1029,8 +975,7 @@ function MovieDetailPage() {
           )}
 
           <div style={{ marginBottom: '28px' }}>
-            {/* Fix (Dettaglio — voto combinato, deciso): media grande in evidenza,
-                con le due fonti separate mostrate più piccole sotto */}
+            {/* Media grande in evidenza, fonti separate più piccole sotto */}
             {combinedRating != null && (
               <div style={{ marginBottom: '10px' }}>
                 <div style={{ color: 'var(--gold)', fontWeight: '800', fontSize: '38px', lineHeight: 1 }}>
@@ -1040,9 +985,7 @@ function MovieDetailPage() {
               </div>
             )}
 
-            {/* Fix: prima la riga spariva del tutto quando mancava il voto — un "–"
-                esplicito comunica meglio "non ancora votato" di una sezione che
-                sparisce silenziosamente (o, peggio, di uno "0" che sembra un voto reale) */}
+            {/* "–" esplicito invece di sparire o mostrare "0" come voto reale */}
             <div style={{ display: 'flex', gap: '24px' }}>
               <div>
                 <div style={{ color: 'var(--text-dark)', fontSize: '11px', marginBottom: '2px' }}>TMDB</div>
@@ -1058,9 +1001,7 @@ function MovieDetailPage() {
               </div>
             </div>
 
-            {/* Fix (🔴 attribuzione TMDB — versione completa): il testo qui da
-                solo non basta ai loro requisiti (serve anche il logo, in una
-                sezione "Crediti" dedicata) — link alla sezione vera, CreditsPage.jsx. */}
+            {/* Link alla sezione Crediti vera (logo TMDB, CreditsPage.jsx) */}
             <Link
               to="/credits"
               style={{ display: 'block', color: 'var(--text-dark)', fontSize: '11px', marginTop: '10px', textDecoration: 'none' }}
@@ -1074,15 +1015,8 @@ function MovieDetailPage() {
           {/* Bottoni libreria — nascosti per ADMIN */}
           {!isAdmin && (
             <>
-              {/* Fix (🟡 "quella scrittina piccola non fa capire" — trovato nei
-                  test funzionali): "Salvato come: Visto" in testo piccolo grigio
-                  sotto i bottoni passava facilmente inosservato, specialmente
-                  ora che WATCHED non è più tra i pulsanti cliccabili (nessun
-                  pulsante "attivo" evidenziato lo segnalava più). Quando lo
-                  stato è WATCHED, mostro un badge grande e verde al posto della
-                  riga di pulsanti — non cliccabile (coerente col fatto che ora
-                  ci si arriva solo scrivendo una recensione, e si esce da
-                  WATCHED solo eliminandola). */}
+              {/* WATCHED: badge grande verde, non cliccabile — ci si arriva solo
+                  scrivendo una recensione, si esce solo eliminandola */}
               {watchEntry?.status === 'WATCHED' ? (
                 <div style={{
                   display: 'inline-flex', alignItems: 'center', gap: '8px',
@@ -1094,11 +1028,7 @@ function MovieDetailPage() {
                 </div>
               ) : (
                 <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap', marginBottom: '8px' }}>
-                  {/* Fix (🔴 regola violata): tolto 'WATCHED' da qui — cliccarlo
-                      avrebbe chiamato addToLibrary/updateStatus con status
-                      WATCHED direttamente, percorso ora bloccato lato backend
-                      (WatchEntryServiceImpl). L'unico modo per arrivare a Visto
-                      è scrivere una recensione, vedi il form più sotto. */}
+                  {/* WATCHED tolto da qui: si raggiunge solo scrivendo una recensione, vedi il form più sotto */}
                   {['TO_WATCH', 'WATCHING'].map(s => (
                     <button key={s} onClick={() => handleAddToLibrary(s)} disabled={libraryLoading}
                       title={watchEntry?.status === s ? 'Clicca di nuovo per rimuovere dalla libreria' : ''}
@@ -1119,9 +1049,7 @@ function MovieDetailPage() {
           {detail.cast?.length > 0 && (
             <div style={{ marginTop: '28px' }}>
               <h3 style={{ color: 'var(--text-muted)', fontSize: '13px', fontWeight: '600', textTransform: 'uppercase', letterSpacing: '1px', marginBottom: '12px' }}>Cast</h3>
-              {/* Fix: il backend fornisce già photoPath (da TMDB profile_path) ma
-                  veniva ignorato — il cast appariva solo come pillole di testo,
-                  mai con le foto. Ripristinate, con fallback per gli attori senza foto */}
+              {/* photoPath da TMDB, con fallback per attori senza foto */}
               <div style={{ display: 'flex', gap: '14px', flexWrap: 'wrap' }}>
                 {detail.cast.slice(0, 8).map((actor, i) => {
                   const name = typeof actor === 'string' ? actor : actor.name
@@ -1178,8 +1106,7 @@ function MovieDetailPage() {
                   <h2 style={{ color: 'var(--text)', fontSize: '18px', fontWeight: '700' }}>✏️ La tua recensione</h2>
                   <div style={{ display: 'flex', gap: '8px' }}>
                     <button onClick={() => setEditMode(true)} style={{ padding: '6px 16px', backgroundColor: 'transparent', border: '1px solid var(--border-soft)', borderRadius: '6px', color: 'var(--text-muted)', fontSize: '13px', cursor: 'pointer' }}>Modifica</button>
-                    {/* Fix (auto-nascondimento autore): toggle reversibile, distinto
-                        dall'eliminazione — nasconde/rimostra senza penalità */}
+                    {/* Toggle reversibile, distinto dall'eliminazione — nasconde/rimostra senza penalità */}
                     <button onClick={handleToggleHidden} disabled={togglingHidden} style={{ padding: '6px 16px', backgroundColor: 'transparent', border: '1px solid var(--border-soft)', borderRadius: '6px', color: 'var(--text-muted)', fontSize: '13px', cursor: 'pointer' }}>
                       {togglingHidden ? '...' : (myReview.hiddenByAuthor ? '👁️ Mostra di nuovo' : '🙈 Nascondi')}
                     </button>
@@ -1197,8 +1124,7 @@ function MovieDetailPage() {
                 {myReview.text && <p style={{ color: 'var(--text-muted)', fontSize: '14px', lineHeight: 1.6 }}>{myReview.text}</p>}
                 {reviewSuccess && <p style={{ color: '#4ade80', fontSize: '13px', marginTop: '10px' }}>{reviewSuccess}</p>}
 
-                {/* Fix (AI che replica a una recensione negativa): SOLO su richiesta
-                    esplicita, mai automatica — solo per voti bassi */}
+                {/* Solo su richiesta esplicita, mai automatica — solo per voti bassi */}
                 {myReview.rating <= 2 && (
                   <div style={{ marginTop: '14px' }}>
                     {!aiOpinion && (
@@ -1311,28 +1237,12 @@ function MovieDetailPage() {
         )}
 
         {/* Recensioni community */}
-        {/* Fix: il conteggio qui escludeva sempre la propria recensione (mostrando
-            "1" invece di "2" con 2 recensioni di cui 1 tua), ma la media voti altrove
-            nella pagina la include correttamente — disallineamento tra conteggio e
-            media. Ora il conteggio è sul totale reale, coerente con la media; la
-            lista sotto resta senza la tua per evitare il duplicato visivo (è già
-            mostrata nel blocco "La tua recensione" sopra).
-            Fix (Dettaglio — stesso bug delle risposte): reviews include la TUA
-            recensione anche se l'hai nascosta (per poterla ripristinare), ma il
-            conteggio pubblico non deve contarla — altrimenti nasconderla non
-            sembra avere alcun effetto sul numero mostrato. */}
-        {/* Fix (Dettaglio Film/Serie — recensioni troncate a 20): questo
-            conteggio usava reviews.filter(...).length, cioè solo le recensioni
-            caricate finora in pagina — con la paginazione vera (10 alla volta)
-            avrebbe mostrato "10" anche con 50 recensioni totali, finché non le
-            carichi tutte cliccando "Carica altre". Ora usa reviewsTotalElements
-            (il totale reale dal backend), sottraendo al massimo 1 per la
-            propria recensione nascosta (l'unico caso — per un viewer normale
-            non-Admin — in cui il totale del backend include una recensione che
-            il conteggio pubblico non deve contare, come già gestito nel fix
-            precedente). Per un Admin il totale può includere anche recensioni
-            nascoste di ALTRI autori (bypass admin) — approssimazione accettata,
-            servirebbe un conteggio dedicato lato backend per essere esatto anche lì. */}
+        {/* Conteggio sul totale reale (reviewsTotalElements), coerente con la
+            media voti; sottrae al massimo 1 per la propria recensione
+            nascosta (l'unico caso, per un viewer non-Admin, in cui il totale
+            include qualcosa che il conteggio pubblico non deve contare). Per
+            un Admin il totale può includere anche recensioni nascoste di
+            altri autori — approssimazione accettata. */}
         {(() => {
           const ownHiddenAdjustment = (myReview?.hiddenByAuthor && !isAdmin) ? 1 : 0
           const visibleReviewsCount = Math.max(0, reviewsTotalElements - ownHiddenAdjustment)
@@ -1352,24 +1262,18 @@ function MovieDetailPage() {
           <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
             {otherReviews.map(r => (
               <div key={r.id} id={`review-${r.id}`} style={{ backgroundColor: 'var(--bg-card)', border: highlightReviewId === r.id ? '2px solid #3b82f6' : (r.hiddenBySuspension ? '1px solid #ef4444' : (r.hiddenByDeletion ? '1px solid #6b7280' : (r.status === 'HIDDEN' ? '1px solid #f59e0b' : '1px solid var(--border)'))), borderRadius: '10px', padding: '20px', boxShadow: highlightReviewId === r.id ? '0 0 0 4px rgba(59,130,246,0.15)' : 'none' }}>
-                {/* Fix (Dettaglio — banner moderazione): questa recensione arriva qui
-                    solo se sei Admin (il backend la esclude per chiunque altro) — un
-                    bordo ambra e un banner esplicito evitano che sembri una recensione
-                    normale, distinguendola chiaramente da quelle pubbliche */}
+                {/* Visibile qui solo se Admin (il backend esclude per chiunque altro) */}
                 {r.status === 'HIDDEN' && (
                     <div style={{ display: 'flex', alignItems: 'center', gap: '8px', backgroundColor: 'rgba(245,158,11,0.1)', border: '1px solid #f59e0b44', borderRadius: '6px', padding: '8px 12px', marginBottom: '12px', color: '#f59e0b', fontSize: '12px', fontWeight: '600' }}>
                       🔶 Nascosta per segnalazioni — in attesa di decisione. Visibile solo a te come Admin.
                     </div>
                 )}
-                {/* Fix (dashboard admin — banner distinto per sospensione): stesso
-                    principio dei commenti, colore/testo diverso da quello per
-                    segnalazioni così l'admin riconosce subito il motivo */}
+                {/* Colore/testo distinto dal banner segnalazioni, così l'admin riconosce subito il motivo */}
                 {r.hiddenBySuspension && (
                     <div style={{ display: 'flex', alignItems: 'center', gap: '8px', backgroundColor: 'rgba(239,68,68,0.1)', border: '1px solid #ef444444', borderRadius: '6px', padding: '8px 12px', marginBottom: '12px', color: '#ef4444', fontSize: '12px', fontWeight: '600' }}>
                       🔒 Nascosta — l'autore è sospeso. Visibile solo a te come Admin.
                     </div>
                 )}
-                {/* Fix (dashboard admin — recensioni di utenti eliminati) */}
                 {r.hiddenByDeletion && (
                     <div style={{ display: 'flex', alignItems: 'center', gap: '8px', backgroundColor: 'rgba(107,114,128,0.15)', border: '1px solid #6b728044', borderRadius: '6px', padding: '8px 12px', marginBottom: '12px', color: '#9ca3af', fontSize: '12px', fontWeight: '600' }}>
                       🗑️ Nascosta — l'autore ha eliminato l'account. Visibile solo a te come Admin.
@@ -1425,8 +1329,7 @@ function MovieDetailPage() {
           </div>
         )}
 
-        {/* Fix (Dettaglio Film/Serie — recensioni troncate a 20): bottone per
-            caricare le pagine successive, stesso pattern già usato in Profilo. */}
+        {/* Carica le pagine successive, stesso pattern già usato in Profilo */}
         {reviewsPage + 1 < reviewsTotalPages && (
           <div style={{ textAlign: 'center', marginTop: '20px' }}>
             <button onClick={loadMoreReviews} disabled={loadingMoreReviews} style={{

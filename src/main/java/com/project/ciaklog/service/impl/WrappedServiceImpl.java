@@ -24,10 +24,9 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.stream.Collectors;
 
-// Tutte le statistiche vengono dai dati
-// già esistenti (WatchEntry + Review), nessuna nuova tabella per i numeri —
-// solo il commento narrativo finale passa dall'AI, ed è opzionale (se l'AI
-// non risponde, il Wrapped funziona comunque senza quella riga).
+// Tutte le statistiche vengono dai dati già esistenti (WatchEntry +
+// Review), nessuna nuova tabella per i numeri — solo il commento
+// narrativo finale passa dall'AI, ed è opzionale.
 @Service
 @RequiredArgsConstructor
 public class WrappedServiceImpl implements WrappedService {
@@ -77,14 +76,9 @@ public class WrappedServiceImpl implements WrappedService {
                 .max(Map.Entry.comparingByValue()).orElse(null);
 
         // Titoli per recuperare un nome leggibile dato tmdbId+contentType
-        // (Review non salva il titolo, WatchEntry sì — evita una chiamata TMDB in più)
-        // La mappa titoli usava solo
-        // le entry con status WATCHED. Se dopo aver recensito un titolo il suo stato
-        // cambiava (rimesso "da vedere", rimosso dalla libreria), la entry usciva da
-        // "watched" e la recensione — che esiste ancora — non trovava più un titolo,
-        // facendo sparire silenziosamente la card "titolo preferito/meno amato" anche
-        // con voto e recensione ancora presenti. I titoli ora vengono da TUTTE le
-        // entry dell'utente, indipendentemente dallo stato attuale.
+        // (Review non salva il titolo, WatchEntry sì). Da TUTTE le entry
+        // dell'utente, non solo WATCHED — una recensione resta anche se lo
+        // stato dell'entry cambia dopo (rimessa "da vedere", rimossa).
         List<WatchEntry> allEntries = watchEntryRepository.findAllByUser(user);
         Map<String, String> titleByKey = allEntries.stream()
                 .collect(Collectors.toMap(

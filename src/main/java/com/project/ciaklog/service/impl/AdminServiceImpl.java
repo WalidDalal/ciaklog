@@ -10,6 +10,7 @@ import com.project.ciaklog.repository.ReportRepository;
 import com.project.ciaklog.repository.ReviewRepository;
 import com.project.ciaklog.repository.UserRepository;
 import com.project.ciaklog.service.AdminService;
+import com.project.ciaklog.service.ReportService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -31,6 +32,7 @@ public class AdminServiceImpl implements AdminService {
     private final ReportRepository reportRepository;
     private final com.project.ciaklog.repository.ReviewCommentRepository reviewCommentRepository;
     private final com.project.ciaklog.repository.ManualSuspensionLogRepository manualSuspensionLogRepository;
+    private final ReportService reportService;
 
     @Override
     public Page<AdminUserResponse> listUsers(Pageable pageable, String search) {
@@ -55,7 +57,7 @@ public class AdminServiceImpl implements AdminService {
                 .filter(r -> r.getStatus() == ReviewStatus.VISIBLE)
                 .count();
 
-        // Fix N+1: carica tutti i report in una query sola invece di 1 query per review
+        // Carica tutti i report in una query sola invece di 1 per review (evita N+1)
         List<com.project.ciaklog.entity.Report> allReports = reportRepository.findAllByReviewIn(allReviews);
 
         int reportCount = allReports.size();
@@ -124,10 +126,8 @@ public class AdminServiceImpl implements AdminService {
                 .build();
     }
 
-    // Fix (dashboard admin — privacy): la mail completa non dovrebbe essere
-    // visibile nel drawer admin — solo la prima lettera, poi asterischi,
-    // poi il dominio (es. "m****@esempio.com"). Nessuna reale necessità
-    // amministrativa di vedere l'indirizzo per intero da qui.
+    // La mail completa non deve essere visibile nel drawer admin — solo
+    // la prima lettera, poi asterischi, poi il dominio
     private String maskEmail(String email) {
         if (email == null || !email.contains("@")) return email;
         int at = email.indexOf('@');
@@ -156,12 +156,8 @@ public class AdminServiceImpl implements AdminService {
         if (target.getStatus() == UserStatus.PERMANENTLY_SUSPENDED) {
             throw new BusinessRuleException("Utente già sospeso permanentemente");
         }
-        // Fix (trovato in revisione): non c'era nessun controllo che impedisse
-        // di sospendere di nuovo un utente già SUSPENDED — un admin poteva
-        // farlo ripetutamente, incrementando ogni volta violationCount fino a
-        // farlo scattare a PERMANENTLY_SUSPENDED senza una vera nuova violazione
-        // di mezzo. Per riabilitarlo o valutare un'escalation reale, passa
-        // prima da reinstateUser oppure da una segnalazione approvata.
+        // Impedisce di sospendere di nuovo un utente già SUSPENDED, facendolo
+        // scattare a PERMANENTLY_SUSPENDED senza una vera nuova violazione
         if (target.getStatus() == UserStatus.SUSPENDED) {
             throw new BusinessRuleException("Utente già sospeso — riabilitalo prima di poterlo sospendere di nuovo");
         }
@@ -213,6 +209,12 @@ public class AdminServiceImpl implements AdminService {
             }
         }
         reviewCommentRepository.saveAll(ownComments);
+
+        // Solo la sospensione permanente (irreversibile) archivia le
+        // segnalazioni PENDING rimaste — quella temporanea resta lavorabile
+        if (target.getStatus() == UserStatus.PERMANENTLY_SUSPENDED) {
+            reportService.archivePendingReportsForUnavailableAuthor(target);
+        }
     }
 
     @Override

@@ -17,9 +17,7 @@ function StarRating({ rating }) {
 
 const AVATAR_COLORS = ['var(--accent)', '#3b82f6', '#22c55e', '#f59e0b', '#8b5cf6', '#ec4899']
 
-// Fix (🟡 avatar tutti dello stesso colore in classifica): stessa palette e
-// stessa logica hash già usate correttamente in ProfilePage.jsx/SettingsPage.jsx
-// (colorForUsername) — qui duplicata perché non condivisa in un modulo comune.
+// Stessa palette/logica hash di ProfilePage.jsx/SettingsPage.jsx
 function colorForUsername(username) {
     if (!username) return AVATAR_COLORS[0]
     let hash = 0
@@ -29,15 +27,8 @@ function colorForUsername(username) {
     return AVATAR_COLORS[hash % AVATAR_COLORS.length]
 }
 
-// Fix (🟡 avatar tutti dello stesso colore in classifica): prima il colore
-// veniva scelto con AVATAR_COLORS[index % ...] dove "index" era la posizione
-// nel loop di chiamata (es. indice tra utenti a pari merito nello stesso
-// rank) — con pochi pareggi quell'indice era quasi sempre 0 per ogni utente,
-// risultando nello stesso colore (il primo della palette, rosso) per quasi
-// tutti. Ora usa il vero profileColor dell'utente se disponibile (passato
-// dal backend solo per la classifica, vedi ChartUserResponse), altrimenti
-// lo stesso colore hash-based già usato in Profilo/Impostazioni — mai più
-// legato alla posizione nel loop.
+// Usa il profileColor reale dell'utente se disponibile (ChartUserResponse),
+// altrimenti il colore hash-based di colorForUsername
 function UserAvatar({ username, size = 48, profileColor = null }) {
     const color = profileColor || colorForUsername(username)
     return (
@@ -74,25 +65,9 @@ function TrendingQuoteCard({ item, reviews }) {
     // weeklyReviewCount conta le recensioni degli ultimi 7 giorni (vedi
     // ChartServiceImpl), ma qui si mostravano le ultime 2 recensioni in
     // assoluto — con "1 recensione questa settimana" sopra e sotto 2 card
-    // (una recente + una vecchia). Le card ora rispettano la stessa finestra
-    // di 7 giorni SOLO per il trending vero — il fallback ai titoli popolari
-    // (item.weeklyReviewCount == null) esiste apposta per i casi con poca
-    // attività settimanale, quindi lì mostriamo comunque i commenti disponibili
-    // Fix ("Mostra altri" allungava la card): espandere la card in-place per
-    // mostrare più recensioni la rendeva più alta delle altre nella stessa
-    // riga del carosello — con 2+ recensioni una card cresceva, mentre le
-    // altre con 1 sola recensione restavano basse: incoerente. "Vedi altri"
-    // ora porta al dettaglio del film/serie (la card è già tutta un <Link>,
-    // quindi basta un testo cliccabile senza stopPropagation) invece di
-    // espandere qui — l'altezza della card resta sempre la stessa per tutte.
     const weekAgo = Date.now() - 7 * 24 * 60 * 60 * 1000
-    // Fix (Homepage — "più discussi"): il backend conta come "di questa
-    // settimana" una recensione con createdAt O updatedAt recenti (vedi
-    // ReviewRepository.findTrendingGrouped), ma qui si filtrava solo su
-    // createdAt — una recensione modificata di recente (createdAt vecchio,
-    // updatedAt nuovo) veniva conteggiata nel numero ("2 recensioni questa
-    // settimana") ma spariva dalla lista mostrata sotto. Ora il filtro
-    // guarda entrambe le date, come il backend.
+    // Il backend conta "questa settimana" su createdAt O updatedAt — il
+    // filtro qui deve guardare entrambe le date allo stesso modo
     const filtered = reviews
         .filter(r => r.text && r.text.trim().length > 0)
         .filter(r => {
@@ -101,11 +76,8 @@ function TrendingQuoteCard({ item, reviews }) {
             const updatedRecent = r.updatedAt && new Date(r.updatedAt).getTime() >= weekAgo
             return (!r.createdAt && !r.updatedAt) || createdRecent || updatedRecent
         })
-    // Fix: prima si mostravano sempre e solo le prime 2 (slice(0, 2) fisso),
-    // col numero sopra che diceva "5 recensioni" senza modo di vederle tutte —
-    // solo un cambio di testo, non una vera funzionalità. "Visible" resta
-    // sempre limitato a 2 (mai espanso in-place, vedi fix più sopra), con
-    // "Vedi altri" che porta al dettaglio per leggere il resto.
+    // "Vedi altri" porta al dettaglio invece di espandere in-place — così
+    // tutte le card della riga restano alla stessa altezza
     const visible = filtered.slice(0, 2)
     const hiddenCount = filtered.length - visible.length
     return (
@@ -113,15 +85,6 @@ function TrendingQuoteCard({ item, reviews }) {
             <div style={{
                 backgroundColor: 'var(--bg-nav)', border: '1px solid var(--border)', borderRadius: '14px',
                 overflow: 'hidden', display: 'flex', flexDirection: 'column',
-                // Fix (spazio vuoto sotto "Vedi altri"): height:'100%' qui, anche
-                // con alignItems:'start' sulla griglia (vedi sopra), fa comunque
-                // riempire alla card l'intera altezza della riga — perché il
-                // browser prima calcola l'altezza della riga in base al
-                // contenuto più alto tra le 3 card, POI un figlio con height:100%
-                // si espande a riempirla comunque. Rimosso: ora l'altezza della
-                // card è solo quella del suo contenuto reale (0/1/2 recensioni),
-                // alignItems:'start' evita che venga comunque tirata giù al
-                // livello della più alta della riga.
             }}
                  onMouseEnter={e => e.currentTarget.style.borderColor = 'var(--accent)'}
                  onMouseLeave={e => e.currentTarget.style.borderColor = 'var(--border)'}
@@ -135,10 +98,7 @@ function TrendingQuoteCard({ item, reviews }) {
                     <div style={{ flex: 1, minWidth: 0 }}>
                         <div style={{ color: 'var(--text)', fontWeight: '700', fontSize: '15px', marginBottom: '6px', lineHeight: 1.3 }}>{item.title}</div>
                         <StarRating rating={item.ciakLogAverageRating ?? item.averageRating} />
-                        {/* Fix: quando il fallback (titoli popolari) sostituisce il trending vero,
-                            weeklyReviewCount non esiste su quei dati — mostrarlo comunque dava
-                            "💬  recensioni questa settimana" con un buco vuoto al posto del numero,
-                            che sembrava un errore invece di semplicemente non applicarsi */}
+                        {/* weeklyReviewCount non esiste sui dati di fallback (titoli popolari) */}
                         {item.weeklyReviewCount != null && (
                             <div style={{ color: 'var(--text-dark)', fontSize: '12px', marginTop: '6px' }}>
                                 💬 {item.weeklyReviewCount} {item.weeklyReviewCount === 1 ? 'recensione' : 'recensioni'} questa settimana
@@ -146,16 +106,6 @@ function TrendingQuoteCard({ item, reviews }) {
                         )}
                     </div>
                 </div>
-                {/* Fix (era troppo spazio vuoto): il tentativo precedente
-                    riservava un'altezza minima fissa uguale per tutte, per
-                    pareggiare le card — ma bastava più del necessario, quindi
-                    tutte le card (anche quelle con 1 sola recensione)
-                    mostravano parecchio vuoto sotto. La causa vera era lo
-                    stretch automatico della griglia CSS: risolta mettendo
-                    alignItems:'start' sulla griglia stessa (vedi sopra) — ogni
-                    card ora è alta solo quanto il suo contenuto reale, senza
-                    riempimenti artificiali e senza più lo stretch che le
-                    pareggiava tutte alla più alta della riga. */}
                 <div style={{ padding: '0 16px 16px', display: 'flex', flexDirection: 'column', gap: '10px', flex: 1 }}>
                     {visible.length === 0
                         ? <div style={{ color: 'var(--text-dark)', fontSize: '13px', fontStyle: 'italic', padding: '8px 0' }}>
@@ -270,11 +220,6 @@ function HomePage() {
     const [recentFilms, setRecentFilms] = useState([])
     const [watching, setWatching] = useState([])
     const [toWatch, setToWatch] = useState([])
-    // Fix (🔴 FIX — Homepage loggato/guest): GET /api/ai/daily esisteva nel
-    // backend (AiController, riga 51) ma non era collegato da nessuna parte
-    // in Home — nessuna card lo consumava. Stesso pattern del bug DELETE
-    // /reviews già visto altrove. Aggiunta qui la card "Consiglio del giorno".
-    const [dailyPick, setDailyPick] = useState(null)
     // Conteggio segnalazioni in attesa, mostrato nell'hero
     // al posto del badge "sei #X in classifica" che per l'Admin non ha senso
     const [pendingReportsCount, setPendingReportsCount] = useState(0)
@@ -308,25 +253,16 @@ function HomePage() {
                 .catch(() => {})
         }
 
-        // Conteggio segnalazioni PENDING per la card operativa
-        // nell'hero — solo per Admin, size:1 perché ci serve solo totalElements.
-        // PageSerializationMode.VIA_DTO annida totalElements sotto `.page.`,
-        // non in cima — stesso bug già trovato in AdminPage.jsx/ProfilePage.jsx
+        // Conteggio segnalazioni PENDING per la card operativa nell'hero —
+        // solo per Admin. /reports/summary → totalReports (righe), coerente
+        // con la stessa distinzione usata in AdminPage.jsx.
         if (token && user?.role === 'ADMIN') {
-            api.get('/reports', { params: { status: 'PENDING', size: 1 }, signal })
-                .then(r => setPendingReportsCount(r.data?.page?.totalElements ?? 0))
+            api.get('/reports/summary', { params: { status: 'PENDING' }, signal })
+                .then(r => setPendingReportsCount(r.data?.totalReports ?? 0))
                 .catch(() => {})
 
             api.get('/admin/operational-stats', { signal })
                 .then(r => setOpStats(r.data))
-                .catch(() => {})
-        }
-
-        // Consiglio del giorno — solo utenti normali loggati (endpoint
-        // protetto con hasRole('USER'), un admin riceverebbe 403)
-        if (token && user?.role !== 'ADMIN') {
-            api.get('/ai/daily', { signal })
-                .then(r => setDailyPick(r.data))
                 .catch(() => {})
         }
 
@@ -339,14 +275,8 @@ function HomePage() {
     // nessuno andava mai a recuperare le loro recensioni: 3 titoli, zero
     // commenti sotto, sempre. Ora carica le recensioni per qualunque lista sia
     // effettivamente mostrata (evitando di richiederle due volte se già in cache).
-    // Fix (Homepage — "più discussi", il vero bug): il fix precedente filtrava
-    // l'array ricevuto guardando anche updatedAt, ma l'array stesso veniva
-    // popolato ordinando per createdAt — una recensione modificata di recente
-    // ma scritta tempo fa (createdAt vecchio) non rientrava nemmeno tra le
-    // prime 5 caricate, quindi il filtro non poteva comunque trovarla.
-    // @UpdateTimestamp su Review.updatedAt scatta sia alla creazione che alla
-    // modifica (vedi entity Review), quindi ordinare per updatedAt desc porta
-    // sempre in cima sia le nuove recensioni SIA quelle appena modificate.
+    // L'array è ordinato per updatedAt desc (non createdAt), così porta in
+    // cima sia le recensioni nuove sia quelle appena modificate
     useEffect(() => {
         const itemsShown = trending.length > 0 ? trending : recentFilms
         if (itemsShown.length === 0) return
@@ -367,19 +297,12 @@ function HomePage() {
     // Sezioni community collassate di default per l'Admin
     const isAdmin = user?.role === 'ADMIN'
 
-    // FindIndex+1 ignorava del tutto
-    // il campo "rank" calcolato dal backend (che gestisce i pareggi), usando
-    // la posizione grezza nell'array — con 3 utenti a pari punteggio, il 2°
-    // e il 3° dell'array finivano "3ª" e "4ª posizione" anche se avevano lo
-    // stesso punteggio del 1° tra i tre. Ora usa il rank corretto dal backend.
+    // rank calcolato dal backend (gestisce i pareggi correttamente)
     const myRankIndex = topUsers.findIndex(u => u.username === user?.username)
     const myRank = myRankIndex >= 0 ? (topUsers[myRankIndex].rank ?? myRankIndex + 1) : 0
 
-    // Fix podio: ordine visivo corretto — 2° sinistra, 1° centro, 3° destra
-    // L'ordine visivo [2°,1°,3°] ora si
-    // calcola dinamicamente in base ai gruppi di rank (vedi sezione podio),
-    // non più su indici fissi nell'array — un pareggio poteva lasciare fuori
-    // dal podio un utente con lo stesso punteggio di chi ci stava dentro
+    // Ordine visivo podio [2°,1°,3°] calcolato dai gruppi di rank, non su
+    // indici fissi — un pareggio non lascia fuori dal podio nessuno
     const rankHeights = { 1: 110, 2: 70, 3: 44 } // altezza colonna per rank
     const rankSizes   = { 1: 76,  2: 60, 3: 52 }
 
@@ -417,9 +340,7 @@ function HomePage() {
                 <div style={{ position: 'relative', zIndex: 2, padding: '0 64px', maxWidth: '620px' }}>
                     {logged ? (
                         <>
-                            {/* Fix (Homepage — saluto duplicato): "Bentornato" sopra e "Ciao, username"
-                                sotto dicevano la stessa cosa due volte. L'eyebrow dell'Admin resta
-                                ("Pannello Admin" è un'etichetta di sezione, non un saluto — non è ridondante) */}
+                            {/* Eyebrow Admin resta: è etichetta di sezione, non saluto ridondante */}
                             {user?.role === 'ADMIN' && (
                                 <div style={{ fontSize: '13px', color: 'var(--accent)', fontWeight: '700', marginBottom: '12px', letterSpacing: '1px', textTransform: 'uppercase' }}>👮 Pannello Admin</div>
                             )}
@@ -434,8 +355,7 @@ function HomePage() {
                   </span>
                                 </div>
                             )}
-                            {/* Fix (Home Admin): card operativa al posto del badge classifica,
-                                che per l'Admin non ha senso (è escluso dalla classifica) */}
+                            {/* Card operativa admin al posto del badge classifica (l'Admin è escluso dalla classifica) */}
                             {user?.role === 'ADMIN' && (
                                 <div style={{ display: 'flex', flexWrap: 'wrap', gap: '10px', marginBottom: '24px' }}>
                                     <Link to="/admin?tab=reports&filter=PENDING">
@@ -448,10 +368,7 @@ function HomePage() {
                                             </span>
                                         </div>
                                     </Link>
-                                    {/* Fix (Home Admin, deciso): card operativa leggera, non una
-                                        dashboard ricopiata — solo i numeri utili per decidere cosa
-                                        fare oggi. "Utenti da controllare" = sospesi temporaneamente
-                                        (2ª violazione) in attesa di una decisione manuale */}
+                                    {/* "Utenti da controllare" = sospesi temporaneamente (2ª violazione) in attesa di decisione manuale */}
                                     {opStats && (
                                         <>
                                             <div style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', backgroundColor: 'var(--bg-nav)', border: '1px solid var(--border)', borderRadius: '8px', padding: '8px 14px' }}>
@@ -521,9 +438,7 @@ function HomePage() {
                                                 </div>
                                                 <div style={{ padding: '8px' }}>
                                                     <div style={{ color: 'var(--text)', fontSize: '11px', fontWeight: '600', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{item.title}</div>
-                                                    {/* Fix (Homepage — In visione, stesso problema della Libreria): senza
-                                                        questa riga sempre presente, i film (senza stagione) restavano più
-                                                        bassi delle serie nella stessa fila della scroll orizzontale */}
+                                                    {/* Riga sempre presente: senza, i film (senza stagione) restano più bassi delle serie in fila */}
                                                     <div style={{ color: 'var(--text-dark)', fontSize: '10px', visibility: item.currentSeason ? 'visible' : 'hidden' }}>S{item.currentSeason || 1}</div>
                                                 </div>
                                             </div>
@@ -564,39 +479,7 @@ function HomePage() {
                 </section>
             )}
 
-            {/* ── CONSIGLIO DEL GIORNO (AI) — loggato, solo utenti normali ── */}
-            {logged && user?.role !== 'ADMIN' && dailyPick?.suggestions?.length > 0 && (
-                <section style={{ padding: '0 64px 48px' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '16px' }}>
-                        <h2 style={{ fontSize: '18px', fontWeight: '700' }}>🤖 Consiglio del giorno</h2>
-                        <Link to="/chat" style={{ color: 'var(--accent)', fontSize: '13px', fontWeight: '600' }}>Chiedi altro all'AI →</Link>
-                    </div>
-                    <div style={{ display: 'flex', gap: '12px', overflowX: 'auto', paddingBottom: '4px' }}>
-                        {dailyPick.suggestions.slice(0, 6).map(item => (
-                            <Link to={`/movie/${item.tmdbId}?type=${item.contentType}`} key={`${item.tmdbId}_${item.contentType}`} style={{ flexShrink: 0 }}>
-                                <div style={{ width: '140px', backgroundColor: 'var(--bg-card)', borderRadius: '8px', overflow: 'hidden', border: '1px solid var(--border)' }}
-                                     onMouseEnter={e => e.currentTarget.style.borderColor = 'var(--accent)'}
-                                     onMouseLeave={e => e.currentTarget.style.borderColor = 'var(--border)'}
-                                >
-                                    {item.posterPath
-                                        ? <img src={`https://image.tmdb.org/t/p/w200${item.posterPath}`} alt={item.title} style={{ width: '100%', height: '198px', objectFit: 'cover' }} />
-                                        : <div style={{ width: '100%', height: '198px', backgroundColor: 'var(--border)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '32px' }}>🎬</div>
-                                    }
-                                    <div style={{ padding: '8px' }}>
-                                        <div style={{ color: 'var(--text)', fontSize: '12px', fontWeight: '600', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{item.title}</div>
-                                        {item.reason && (
-                                            <div style={{ color: 'var(--text-muted)', fontSize: '10px', marginTop: '4px', lineHeight: 1.3 }}>{item.reason}</div>
-                                        )}
-                                    </div>
-                                </div>
-                            </Link>
-                        ))}
-                    </div>
-                </section>
-            )}
-
-            {/* Fix (Home Admin): toggle visibile solo per l'Admin — le sezioni
-                community restano disponibili ma collassate di default */}
+            {/* Toggle visibile solo per l'Admin — sezioni community collassate di default */}
             {isAdmin && (
                 <div style={{ padding: '0 64px' }}>
                     <button
@@ -620,23 +503,11 @@ function HomePage() {
             <section style={{ padding: '0 64px 48px' }}>
                 <h2 style={{ fontSize: '22px', fontWeight: '700', marginBottom: '28px' }}>🏆 I più amati dalla community</h2>
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '32px' }}>
-                    {/* Fix (Homepage — podio, richiesto senza riquadro): il contenitore con
-                        bordo/sfondo/padding stringeva il podio, costringendo poster piccoli.
-                        Tolto il riquadro: label direttamente sullo sfondo della pagina, podio
-                        più grande sotto. Ordine classico: 2° a sinistra (un po' più in basso),
-                        1° al centro (più in alto, corona), 3° a destra (ancora più in basso). */}
+                    {/* Podio senza riquadro: 2° a sinistra, 1° al centro (più in alto, corona), 3° a destra */}
                     {[{ label: '🎬 Top Film', data: topFilms, type: 'MOVIE' }, { label: '📺 Top Serie TV', data: topSeries, type: 'TV' }].map(({ label, data, type }) => {
                         const podium = data.length >= 3 ? [data[1], data[0], data[2]] : []
                         return (
                         <div key={type}>
-                            {/* Fix (Homepage — podio, altezze): il 2° a sinistra risultava più
-                                alto del 1° al centro — offsetForRank andava applicato come
-                                margine dall'ALTO (più margine = posizione più bassa), ma il
-                                flex-layout "align-items: flex-start" allineava tutti dall'alto
-                                per default, quindi il margine calcolato prima spingeva nella
-                                direzione sbagliata per il 2°. Semplificato: 2° e 3° alla stessa
-                                altezza, solo il 1° più in alto (meno margine). Label centrata
-                                sopra il podio, non più allineata a sinistra. */}
                             <div style={{ color: 'var(--text-muted)', fontSize: '13px', fontWeight: '700', textTransform: 'uppercase', letterSpacing: '1.5px', marginBottom: '20px', textAlign: 'center' }}>{label}</div>
                             {data.length === 0 ? (
                                 <div style={{ color: 'var(--text-dark)', fontSize: '13px', padding: '12px 0', textAlign: 'center' }}>Ancora poche recensioni — torna presto! 🎬</div>
@@ -645,8 +516,6 @@ function HomePage() {
                                     {podium.map((item, i) => {
                                         const rank = i === 1 ? 1 : (i === 0 ? 2 : 3)
                                         const posterSize = rank === 1 ? 118 : 92
-                                        // Fix (Homepage — podio, altezze v3): 72px era troppo, un
-                                        // filo esagerato — ridotto a 56px
                                         const marginTop = rank === 1 ? 0 : 56
                                         return (
                                             <Link to={`/movie/${item.tmdbId}?type=${type}`} key={item.tmdbId} style={{ marginTop: `${marginTop}px` }}>
@@ -664,11 +533,9 @@ function HomePage() {
                                                                 width: '24px', height: '24px', borderRadius: '50%',
                                                                 display: 'flex', alignItems: 'center', justifyContent: 'center',
                                                                 fontSize: '11px', fontWeight: '800',
-                                                                // Fix (Homepage — podio, contrasto): var(--text) è bianco in
-                                                                // dark mode — illeggibile sullo sfondo argento chiaro del 2°
-                                                                // posto. Il bronzo del 3° è scuro abbastanza da reggere il
-                                                                // bianco, l'argento no: testo sempre scuro fisso per il 2°.
-                                                                color: '#1a1a1a', // Fix: nero fisso per entrambi 2° e 3°, non solo il 2° — bianco/nero misti stonavano
+                                                                // Testo scuro fisso: var(--text) è bianco in dark
+                                                                // mode, illeggibile sullo sfondo argento del 2°
+                                                                color: '#1a1a1a',
                                                                 border: '2px solid var(--bg)',
                                                             }}>{rank}</div>
                                                         )}
@@ -710,9 +577,7 @@ function HomePage() {
             <section style={{ padding: '0 64px 48px' }}>
                 <div style={{ marginBottom: '28px' }}>
                     <h2 style={{ fontSize: '22px', fontWeight: '700', marginBottom: '6px' }}>🔥 Cosa dice la community</h2>
-                    {/* Fix: quando il trending vero è vuoto (poche recensioni questa
-                        settimana) il fallback ai titoli popolari appariva silenzioso,
-                        senza spiegazione — sembrava un errore invece di una scelta */}
+                    {/* Il fallback ai titoli popolari (trending vuoto) va spiegato, non silenzioso */}
                     <p style={{ color: 'var(--text-dark)', fontSize: '14px' }}>
                         {trending.length > 0
                             ? 'I più discussi questa settimana, con le opinioni dei nostri utenti'
@@ -726,12 +591,7 @@ function HomePage() {
             <section style={{ padding: '0 64px 64px' }}>
                 <h2 style={{ fontSize: '22px', fontWeight: '700', marginBottom: '28px' }}>👥 Critici più attivi</h2>
 
-                {/* Fix (Homepage — pareggi nel podio): prima il podio prendeva sempre
-                    esattamente 3 SLOT fissi per indice (topUsers[0],[1],[2]) — con un
-                    pareggio tra 3° e 4° posto (es. punteggi 300-200-120-120), il quarto
-                    utente aveva il rank corretto ("3") ma finiva comunque nella lista
-                    sotto, come se non facesse parte del podio. Ora si raggruppa per
-                    rank: ogni colonna del podio può contenere più utenti a pari merito. */}
+                {/* Raggruppato per rank: ogni colonna del podio può contenere più utenti a pari merito */}
                 {(() => {
                     const byRank = {}
                     topUsers.forEach(u => {
@@ -776,9 +636,8 @@ function HomePage() {
                                                                 width: '18px', height: '18px', borderRadius: '50%',
                                                                 display: 'flex', alignItems: 'center', justifyContent: 'center',
                                                                 fontSize: '9px', fontWeight: '800',
-                                                                // Fix (Homepage — podio critici, stesso contrasto): numero
-                                                                // bianco illeggibile sull'argento chiaro in dark mode
-                                                                color: '#1a1a1a', // Fix: nero fisso per entrambi 2° e 3°, non solo il 2° — bianco/nero misti stonavano
+                                                                // Testo scuro fisso: bianco illeggibile sull'argento in dark mode
+                                                                color: '#1a1a1a',
                                                                 border: '2px solid var(--bg)',
                                                             }}>{rank}</div>
                                                         )}
@@ -809,13 +668,7 @@ function HomePage() {
                     )
                 })()}
 
-                {/* Lista dal 4° in poi.
-                    Fix: usa u.rank invece di un indice sequenziale, per rispettare i
-                    pareggi. Fix: filtra per rank > 3 invece di tagliare l'array
-                    all'indice 3, per non duplicare chi è già nel podio a pari merito.
-                    Fix (segnalato dopo il podio): a parità di rank qui sotto restavano
-                    comunque righe separate — stesso raggruppamento già fatto nel podio,
-                    applicato anche qui: una riga per rank, più utenti dentro se in pareggio. */}
+                {/* Lista dal 4° in poi, raggruppata per rank (una riga per pari merito) */}
                 {(() => {
                     const restByRank = {}
                     topUsers.filter(u => (u.rank ?? 0) > 3).forEach(u => {
@@ -880,12 +733,7 @@ function HomePage() {
                 <div style={{ color: 'var(--text-dark)', fontSize: '13px', textAlign: 'center' }}>
                     <div>Progetto di <span style={{ color: 'var(--text)', fontWeight: '600' }}>Walid Dalal</span></div>
                     <div style={{ marginTop: '2px' }}>© 2026 CiakLog</div>
-                    {/* Fix (🔴 attribuzione TMDB — versione completa): il fix
-                        precedente metteva qui solo un testo, non conforme ai
-                        requisiti reali di TMDB (serve anche il logo, in una
-                        sezione "Crediti" dedicata — vedi CreditsPage.jsx). Questo
-                        link resta come punto d'accesso da qui, ma rimanda alla
-                        sezione vera. */}
+                    {/* Rimanda alla sezione Crediti dedicata (CreditsPage.jsx) */}
                     <Link
                         to="/credits"
                         style={{ display: 'block', marginTop: '6px', color: 'var(--text-dark)', fontSize: '11px', textDecoration: 'none' }}
